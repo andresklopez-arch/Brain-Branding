@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tu negocio está a punto de entrar a la Inteligencia Artificial | Brain Branding</title>
+    
+    <!-- Open Graph / Meta Tags para Vista Previa en Redes Sociales (Facebook, WhatsApp, LinkedIn) -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Tu negocio está a punto de entrar a la Inteligencia Artificial | Brain Branding">
+    <meta property="og:description" content="Conecta tu negocio a la Inteligencia Artificial. Deja atrás el caos de las hojas de cálculo y descubre tu app o sistema a la medida con Brain Branding.">
+    <meta property="og:image" content="https://brain-branding.web.app/logo-branding-v3.jpg">
+    <meta property="og:url" content="https://brain-branding.web.app/">
+    <meta property="og:site_name" content="Brain Branding">
+
+    <!-- Twitter / X Cards -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Tu negocio está a punto de entrar a la Inteligencia Artificial | Brain Branding">
+    <meta name="twitter:description" content="Conecta tu negocio a la Inteligencia Artificial. Deja atrás el caos de las hojas de cálculo y descubre tu app o sistema a la medida con Brain Branding.">
+    <meta name="twitter:image" content="https://brain-branding.web.app/logo-branding-v3.jpg">
+
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;900&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <!-- Sugerencia 2: QR Code library -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <style>
+        :root {
+            --accent: #00e5ff;
+            --accent-glow: rgba(0, 229, 255, 0.5);
+            --bg: #05070a;
+            --text: #ffffff;
+            --card: rgba(255, 255, 255, 0.05);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--bg);
+            background: radial-gradient(circle at center, #05070a 0%, #020305 100%);
+            color: var(--text);
+            font-family: 'Outfit', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            transition: background 2.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* ── COSMOS BACKGROUND (Stars) ── */
+        #star-canvas {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* ── ANIMATION ENGINE ── */
+        .scene {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            text-align: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: scale(1.1);
+            z-index: 10;
+        }
+
+        .scene.active {
+            opacity: 1;
+            visibility: visible;
+            transform: scale(1);
+        }
+
+        .overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.3), var(--bg));
+            z-index: 5;
+        }
+
+        .bg-img {
+            position: absolute;
+            inset: -20px;
+            width: calc(100% + 40px);
+            height: calc(100% + 40px);
+            object-fit: cover;
+            opacity: 0.3;
+            filter: grayscale(100%);
+            transition: filter 2s ease, transform 0.2s ease-out;
+        }
+
+        .active .bg-img {
+            filter: grayscale(0%);
+            transform: scale(1.1);
+        }
+
+        .content {
+            position: relative;
+            z-index: 20;
+            max-width: 900px;
+            transition: transform 0.2s ease-out;
+        }
+
+        .title {
+            font-size: 5.5vw;
+            font-weight: 900;
+            line-height: 1;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+            background: linear-gradient(to bottom, #fff, #888);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));
+        }
+
+        .subtitle {
+            font-size: 1.5vw;
+            opacity: 0.7;
+            font-weight: 400;
+            margin-bottom: 40px;
+            max-width: 700px;
+            margin-inline: auto;
+            line-height: 1.4;
+        }
+
+        @keyframes highlight-shimmer {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+        }
+
+        .highlight {
+            background: linear-gradient(
+                120deg,
+                var(--accent) 0%,
+                #ffffff 25%,
+                var(--accent) 50%,
+                #ffffff 75%,
+                var(--accent) 100%
+            );
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: highlight-shimmer 6s linear infinite;
+            filter: drop-shadow(0 0 15px var(--accent-glow));
+            display: inline-block;
+            font-size: 80%;
+        }
+
+        .cta-btn {
+            background: var(--accent);
+            color: #000;
+            padding: 22px 60px;
+            border-radius: 50px;
+            font-weight: 900;
+            text-transform: uppercase;
+            border: none;
+            cursor: pointer;
+            font-size: 20px;
+            box-shadow: 0 15px 45px var(--accent-glow);
+            transition: all 0.3s ease;
+            letter-spacing: 1px;
+        }
+
+        .cta-btn:hover {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 25px 70px var(--accent-glow);
+        }
+
+        .progress-container {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 100;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .dot.active {
+            background: var(--accent);
+            width: 40px;
+            border-radius: 20px;
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        .logo-branding {
+            width: 486px;
+            margin-bottom: 30px;
+            filter: drop-shadow(0 0 35px rgba(255,255,255,0.35));
+        }
+
+        /* ── Sugerencia 1: MUSIC TOGGLE BUTTON ── */
+        #music-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 200;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 50px;
+            padding: 10px 18px;
+            color: #fff;
+            cursor: pointer;
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+        #music-toggle:hover {
+            background: rgba(0, 229, 255, 0.15);
+            border-color: var(--accent);
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+        #music-toggle .music-icon { font-size: 18px; }
+
+        /* ── Sugerencia 2: LANGUAGE TOGGLE BUTTON (i18n) ── */
+        #lang-toggle {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 200;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 50px;
+            padding: 10px 18px;
+            color: #fff;
+            cursor: pointer;
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+        #lang-toggle:hover {
+            background: rgba(0, 229, 255, 0.15);
+            border-color: var(--accent);
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+        #lang-toggle .flag-icon { font-size: 18px; }
+
+        /* ── Sugerencia 2: QR CODE en escena final ── */
+        .final-layout {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 60px;
+            flex-wrap: wrap;
+        }
+        .final-cta-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .qr-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+        #qr-code {
+            padding: 14px;
+            background: white;
+            border-radius: 18px;
+            box-shadow: 0 0 30px rgba(0, 229, 255, 0.4);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #qr-code:hover {
+            transform: scale(1.06);
+            box-shadow: 0 0 45px rgba(0, 229, 255, 0.7);
+        }
+        .qr-label {
+            font-size: 13px;
+            opacity: 0.6;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        /* ── Sugerencia 3: VERSIÓN MÓVIL (Portrait 9:16) ── */
+        @media (max-width: 768px) and (orientation: portrait) {
+            .title {
+                font-size: clamp(28px, 9vw, 46px);
+                letter-spacing: -1px;
+            }
+            .subtitle {
+                font-size: clamp(14px, 4vw, 18px);
+                margin-bottom: 24px;
+            }
+            .logo-branding { width: min(220px, 60vw); }
+            .scene { padding: 24px 20px; justify-content: center; }
+            .content { max-width: 100%; }
+            .final-layout { flex-direction: column; gap: 24px; }
+            .cta-btn { padding: 16px 36px; font-size: 16px; }
+            #qr-code canvas, #qr-code img { width: 140px !important; height: 140px !important; }
+            .qr-label { font-size: 11px; }
+            .progress-container { bottom: 20px; gap: 10px; }
+            #music-toggle { top: 12px; right: 12px; padding: 8px 14px; font-size: 12px; }
+            #lang-toggle { top: 12px; left: 12px; padding: 8px 14px; font-size: 12px; }
+        }
+
+        @media (max-width: 480px) {
+            .title { font-size: clamp(26px, 10vw, 38px); }
+            .subtitle { font-size: 15px; }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="star-canvas"></canvas>
+
+    <!-- Sugerencia 1: BOTÓN DE MÚSICA -->
+    <button id="music-toggle" onclick="toggleMusic()" title="Música de fondo">
+        <span class="music-icon">🎵</span>
+        <span id="music-label">Activar Música</span>
+    </button>
+
+    <!-- Sugerencia 2: BOTÓN DE IDIOMA -->
+    <button id="lang-toggle" onclick="toggleLanguage()" title="Cambiar Idioma">
+        <span class="flag-icon" id="lang-flag">🇺🇸</span>
+        <span id="lang-label">EN</span>
+    </button>
+
+    <!-- SCENE 1: PAIN -->
+    <section class="scene" id="scene-1">
+        <img src="/stressed_owner_legacy.png" class="bg-img" alt="Stress">
+        <div class="overlay"></div>
+        <div class="content">
+            <h1 class="title">Conecta tu negocio <br> <span class="highlight">a la Inteligencia Artificial</span></h1>
+            <p class="subtitle">El caos de las hojas de cálculo y viejos sistemas... Son historia.</p>
+        </div>
+    </section>
+
+    <!-- SCENE 2: CUSTOM TAILOR -->
+    <section class="scene" id="scene-2">
+        <img src="/tailor_made_empire.png" class="bg-img" alt="Custom">
+        <div class="overlay"></div>
+        <div class="content">
+            <h1 class="title">Un Traje a <br> <span class="highlight">la Medida</span></h1>
+            <p class="subtitle">Los sistemas genéricos NO fueron pensados en tu negocio. Para crear un <b>Imperio</b>, desarrollamos tu <b>App o Sistema</b> con tu esencia.</p>
+        </div>
+    </section>
+
+    <!-- SCENE 3: OMNIPRESENCE (PODER) -->
+    <section class="scene" id="scene-power">
+        <img src="/business_fusion_omnipresence.png" class="bg-img" alt="Omnipresence">
+        <div class="overlay"></div>
+        <div class="content">
+            <h1 class="title">Tú y tu Negocio <br> <span class="highlight">Uno Mismo</span></h1>
+            <p class="subtitle">Creamos sistemas y apps<b> con IA</b>. Vende, supervisa, controla, crece a distancia.</p>
+        </div>
+    </section>
+
+    <!-- SCENE 4: UNIVERSAL REACH -->
+    <section class="scene" id="scene-3">
+        <img src="/universal_reach_branding.png" class="bg-img" alt="Global">
+        <div class="overlay"></div>
+        <div class="content">
+            <h1 class="title">Creamos soluciones para negocio<br> <span class="highlight">de cualquier tamaño</span></h1>
+            <p class="subtitle">Todo gran negocio comenzó con un buen sistema.</p>
+        </div>
+    </section>
+
+    <!-- SCENE 5: CREATIVITY -->
+    <section class="scene" id="scene-4">
+        <img src="/ai_creative_possibilities.png" class="bg-img" alt="Ideas">
+        <div class="overlay"></div>
+        <div class="content">
+            <h1 class="title">Tus ideas convertidas en APP <span class="highlight">No hay límites</span></h1>
+            <p class="subtitle">Un negocio más rápido, más eficiente, más organizado... <b>Un negocio inteligente.</b></p>
+        </div>
+    </section>
+
+    <!-- SCENE 6: BRANDING REVEAL + QR -->
+    <section class="scene" id="scene-5">
+        <div class="overlay" style="background:radial-gradient(circle, rgba(0,229,255,0.1), var(--bg));"></div>
+        <div class="content">
+            <img src="/logo-branding-v3.jpg" class="logo-branding" alt="Brain Branding">
+
+            <!-- Sugerencia 2: Layout con CTA + QR lado a lado -->
+            <div class="final-layout">
+                <div class="final-cta-col">
+                    <button class="cta-btn" onclick="contactWhatsApp('cta_btn')">Iniciar Mi Transformación</button>
+                </div>
+                <div class="qr-col">
+                    <div id="qr-code" onclick="contactWhatsApp('qr_code')"></div>
+                    <span class="qr-label">📱 Escanea o haz clic para contactarnos</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="progress-container" id="progress"></div>
+
+    <!-- Sugerencia 2: Elemento de Audio de Fallback -->
+    <audio id="fallback-audio" loop src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" style="display:none;"></audio>
+
+    <script>
+        // ── STAR ENGINE ──
+        const canvas = document.getElementById('star-canvas');
+        const ctx = canvas.getContext('2d');
+        let stars = [];
+        let pageIsVisible = true; // 🚀 Sugerencia 3: Control de Renderizador en Segundo Plano (Ahorro de Batería)
+
+        // 🚀 Sugerencia 2: Internacionalización Dinámica de Contenidos (Lightweight i18n Dictionary)
+        let currentLang = 'es';
+        const TRANSLATIONS = {
+            es: {
+                scene0Title: "Conecta tu negocio <br> <span class=\"highlight\">a la Inteligencia Artificial</span>",
+                scene0Sub: "El caos de las hojas de cálculo y viejos sistemas... Son historia.",
+                scene1Title: "Un Traje a <br> <span class=\"highlight\">la Medida</span>",
+                scene1Sub: "Los sistemas genéricos NO fueron pensados en tu negocio. Para crear un <b>Imperio</b>, desarrollamos tu <b>App o Sistema</b> con tu esencia.",
+                scene2Title: "Tú y tu Negocio <br> <span class=\"highlight\">Uno Mismo</span>",
+                scene2Sub: "Creamos sistemas y apps<b> con IA</b>. Vende, supervisa, controla, crece a distancia.",
+                scene3Title: "Creamos soluciones para negocio<br> <span class=\"highlight\">de cualquier tamaño</span>",
+                scene3Sub: "Todo gran negocio comenzó con un buen sistema.",
+                scene4Title: "Tus ideas convertidas en APP <span class=\"highlight\">No hay límites</span>",
+                scene4Sub: "Un negocio más rápido, más eficiente, más organizado... <b>Un negocio inteligente.</b>",
+                scene5Title: "Somos <span class=\"highlight\">Brain Branding</span>",
+                scene5Sub: "Desarrollo de Apps, Webs y Sistemas Inteligentes. <br> Empoderando marcas, reprogramando mentes.",
+                btnCta: "Iniciar Mi Transformación",
+                qrLabel: "📱 Escanea o haz clic para contactarnos"
+            },
+            en: {
+                scene0Title: "Connect your business <br> <span class=\"highlight\">to Artificial Intelligence</span>",
+                scene0Sub: "The chaos of spreadsheets and legacy systems... is now history.",
+                scene1Title: "A Tailor-Made <br> <span class=\"highlight\">Fit</span>",
+                scene1Sub: "Generic systems were NOT built for your business. To build an <b>Empire</b>, we develop your <b>App or System</b> with your unique essence.",
+                scene2Title: "You and your Business <br> <span class=\"highlight\">As One</span>",
+                scene2Sub: "We build systems and apps <b>powered by AI</b>. Sell, supervise, control, and grow from anywhere.",
+                scene3Title: "Building Technology <br> <span class=\"highlight\">Without Borders</span>",
+                scene3Sub: "We create robust solutions for businesses of any scale: the ultimate corporate tier.",
+                scene4Title: "Your ideas turned into APPs <span class=\"highlight\">Without Limits</span>",
+                scene4Sub: "A faster, more efficient, and highly organized business... <b>An intelligent enterprise.</b>",
+                scene5Title: "We are <span class=\"highlight\">Brain Branding</span>",
+                scene5Sub: "Smart Apps, Webs, and Intelligent Systems. <br> Empowering brands, reprogramming minds.",
+                btnCta: "Start My Transformation",
+                qrLabel: "📱 Scan or click to contact us"
+            }
+        };
+
+        function applyLanguage(lang) {
+            currentLang = lang;
+            document.getElementById('lang-label').textContent = lang === 'es' ? 'EN' : 'ES';
+            document.getElementById('lang-flag').textContent = lang === 'es' ? '🇺🇸' : '🇲🇽';
+            
+            const t = TRANSLATIONS[lang];
+            const contents = document.querySelectorAll('.scene .content');
+            if (contents.length >= 6) {
+                contents[0].querySelector('h1').innerHTML = t.scene0Title;
+                contents[0].querySelector('p').innerHTML = t.scene0Sub;
+                
+                contents[1].querySelector('h1').innerHTML = t.scene1Title;
+                contents[1].querySelector('p').innerHTML = t.scene1Sub;
+                
+                contents[2].querySelector('h1').innerHTML = t.scene2Title;
+                contents[2].querySelector('p').innerHTML = t.scene2Sub;
+                
+                contents[3].querySelector('h1').innerHTML = t.scene3Title;
+                contents[3].querySelector('p').innerHTML = t.scene3Sub;
+                
+                contents[4].querySelector('h1').innerHTML = t.scene4Title;
+                contents[4].querySelector('p').innerHTML = t.scene4Sub;
+                
+                const s5Title = contents[5].querySelector('h1');
+                const s5Sub = contents[5].querySelector('p');
+                if (s5Title) s5Title.innerHTML = t.scene5Title;
+                if (s5Sub) s5Sub.innerHTML = t.scene5Sub;
+                
+                document.querySelector('.cta-btn').textContent = t.btnCta;
+                document.querySelector('.qr-label').textContent = t.qrLabel;
+            }
+        }
+
+        function toggleLanguage() {
+            applyLanguage(currentLang === 'es' ? 'en' : 'es');
+        }
+
+        // 🚀 Sugerencia 3: Optimización del Garbage Collector (Paletas Estáticas Globales)
+        const gradients = [
+            'radial-gradient(circle at center, #1b0c2b 0%, #05020a 100%)', // Escena 0: Caos (Gris púrpura estresante)
+            'radial-gradient(circle at center, #05162e 0%, #010612 100%)', // Escena 1: Traje a la medida (Azul marino)
+            'radial-gradient(circle at center, #022338 0%, #000912 100%)', // Escena 2: Omnipresencia (Deep teal)
+            'radial-gradient(circle at center, #13032c 0%, #04000d 100%)', // Escena 3: Apps sin fronteras (Indigo espacial)
+            'radial-gradient(circle at center, #001d2c 0%, #00070c 100%)', // Escena 4: Todo es posible con IA (Futuristic cian)
+            'radial-gradient(circle at center, #230837 0%, #06010d 100%)'  // Escena 5: Brain Branding Reveal (Violeta imperial / Victoria)
+        ];
+
+        // 🚀 Sugerencia 1: Sincronización Cromática de Estrellas (Paleta Galáctica Estática)
+        const starRGBs = [
+            [240, 220, 255], // Escena 0: Caos (Gris púrpura tenue)
+            [180, 220, 255], // Escena 1: Traje a la medida (Azul pálido brillante)
+            [150, 255, 255], // Escena 2: Omnipresencia (Celeste brillante)
+            [200, 180, 255], // Escena 3: Apps sin fronteras (Violeta pálido)
+            [100, 255, 220], // Escena 4: Todo es posible con IA (Futuristic cian/neón)
+            [255, 220, 130]  // Escena 5: Brain Branding Reveal (Dorado / Oro brillante)
+        ];
+        let targetStarRGB = [...starRGBs[0]];
+        let currentStarRGB = [...starRGBs[0]];
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        class Star {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 1.8;
+                this.speed = Math.random() * 0.4 + 0.1;
+                this.opacity = Math.random();
+            }
+            draw() {
+                ctx.fillStyle = `rgba(${Math.round(currentStarRGB[0])}, ${Math.round(currentStarRGB[1])}, ${Math.round(currentStarRGB[2])}, ${this.opacity})`;
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+            }
+            update() {
+                this.y -= this.speed;
+                if (this.y < 0) { this.y = canvas.height; this.x = Math.random() * canvas.width; }
+            }
+        }
+
+        function initStars() {
+            const count = window.innerWidth < 768 ? 150 : 400; // 🚀 Sugerencia 3: Rendimiento optimizado en móvil
+            
+            // 🚀 Sugerencia 3: Optimización de Garbage Collection mediante Piscina de Estrellas (Star Pooling)
+            if (stars.length >= count) {
+                stars = stars.slice(0, count);
+                stars.forEach(s => {
+                    s.x = Math.random() * canvas.width;
+                    s.y = Math.random() * canvas.height;
+                });
+            } else {
+                stars.forEach(s => {
+                    s.x = Math.random() * canvas.width;
+                    s.y = Math.random() * canvas.height;
+                });
+                const diff = count - stars.length;
+                for (let i = 0; i < diff; i++) {
+                    stars.push(new Star());
+                }
+            }
+        }
+
+        function animateStars() {
+            if (!pageIsVisible) return; // 🚀 Sugerencia 3: Detener renderizado en segundo plano para ahorrar batería
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 🚀 Sugerencia 1: Transición Cromática Suave (Interpolación Lerp de color)
+            currentStarRGB[0] += (targetStarRGB[0] - currentStarRGB[0]) * 0.05;
+            currentStarRGB[1] += (targetStarRGB[1] - currentStarRGB[1]) * 0.05;
+            currentStarRGB[2] += (targetStarRGB[2] - currentStarRGB[2]) * 0.05;
+
+            stars.forEach(s => { s.update(); s.draw(); });
+            requestAnimationFrame(animateStars);
+        }
+
+        window.addEventListener('resize', () => { resize(); initStars(); });
+        resize(); initStars(); animateStars();
+
+        // ── Sugerencia 2: GENERAR QR CODE ──
+        new QRCode(document.getElementById('qr-code'), {
+            text: 'https://wa.me/527712339238?text=Hola,%20Brain%20Branding.%20Quiero%20empezar%20mi%20imperio%20digital.',
+            width: 160,
+            height: 160,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H
+        });
+
+        // ── Sugerencia 1: MOTOR DE MÚSICA AMBIENTAL DINÁMICA PROGRESIVA ──
+        let audioCtx = null;
+        let musicNodes = [];
+        let oscNodes = [];  // Osciladores principales
+        let gainNodes = []; // Ganancias de osciladores para mezclas individuales
+        let lfoNodes = [];  // LFOs de vibrato para modulación de datos
+        let bassOsc = null;  // Oscilador de bajo
+        let bassGainNode = null; // Ganancia de bajo
+        let musicPlaying = false;
+        let masterGain = null;
+
+        function createAmbientMusic() {
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                masterGain = audioCtx.createGain();
+                masterGain.gain.value = 0.45; // 🛡️ Sugerencia 3: Limitador de Volumen Saludable Máximo (Failsafe Gain)
+                masterGain.connect(audioCtx.destination);
+
+                // 🛡️ Sugerencia 3: Compresor Dinámico Analógico de Masterización (Pegamento de Mezcla)
+                const compressor = audioCtx.createDynamicsCompressor();
+                compressor.threshold.value = -24;
+                compressor.knee.value = 30;
+                compressor.ratio.value = 12;
+                compressor.attack.value = 0.003;
+                compressor.release.value = 0.25;
+                compressor.connect(masterGain);
+                musicNodes.push(compressor);
+
+                // 🛡️ Sugerencia 2: Filtro Limitador Ultrasónico (Lowpass a 15000Hz para evitar fatiga)
+                const ultrasonicFilter = audioCtx.createBiquadFilter();
+                ultrasonicFilter.type = 'lowpass';
+                ultrasonicFilter.frequency.value = 15000.0;
+                musicNodes.push(ultrasonicFilter);
+
+                // 🛡️ Sugerencia 2: Filtro de Muesca de Medios-Agudos (Notch a 3150Hz para evitar estridencia)
+                const notchFilter = audioCtx.createBiquadFilter();
+                notchFilter.type = 'notch';
+                notchFilter.frequency.value = 3150.0;
+                notchFilter.Q.value = 1.0;
+                
+                // Conectar cadena: ultrasonicFilter -> notchFilter -> compressor
+                ultrasonicFilter.connect(notchFilter);
+                notchFilter.connect(compressor);
+                musicNodes.push(notchFilter);
+
+                oscNodes = [];
+                gainNodes = [];
+                lfoNodes = [];
+
+                const notes = [130.81, 164.81, 196.00, 261.63, 329.63, 392.00, 523.25];
+                notes.forEach((freq, i) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = i % 2 === 0 ? 'sine' : 'triangle';
+                    osc.frequency.value = freq;
+                    
+                    // Ganancia inicial suave (se modula dinámicamente)
+                    gain.gain.value = 0.01;
+
+                    // Vibrato suave
+                    const lfo = audioCtx.createOscillator();
+                    const lfoGain = audioCtx.createGain();
+                    lfo.frequency.value = 0.2 + (i * 0.05);
+                    lfoGain.gain.value = 1.5;
+                    lfo.connect(lfoGain);
+                    lfoGain.connect(osc.frequency);
+                    lfo.start();
+
+                    osc.connect(gain);
+                    gain.connect(ultrasonicFilter);
+                    osc.start();
+                    
+                    musicNodes.push(osc, lfo);
+                    oscNodes.push(osc);
+                    gainNodes.push(gain);
+                    lfoNodes.push(lfo);
+                });
+
+                // Sub-bass suave
+                bassOsc = audioCtx.createOscillator();
+                bassGainNode = audioCtx.createGain();
+                bassOsc.type = 'sine';
+                bassOsc.frequency.value = 65.4;
+                bassGainNode.gain.value = 0.12;
+
+                // 🛡️ Sugerencia 2: Filtro de Paso Alto de Seguridad Auditiva (Infrasonic Highpass a 30Hz)
+                const highpass = audioCtx.createBiquadFilter();
+                highpass.type = 'highpass';
+                highpass.frequency.value = 30.0; // Elimina frecuencias infrasónicas nocivas para bocinas
+
+                bassOsc.connect(bassGainNode);
+                bassGainNode.connect(highpass);
+                highpass.connect(compressor);
+                bassOsc.start();
+                musicNodes.push(bassOsc, highpass);
+
+                // Forzar humor inicial según la escena activa
+                updateAudioMood(currentIdx);
+            } catch (err) {
+                console.warn("[Ambient Music] Web Audio bloqueado o no soportado, activando fallback MP3:", err);
+                playFallbackAudio();
+            }
+        }
+
+        // 🚀 Sugerencia 1: MOTOR DE HUMOR ACÚSTICO PROGRESIVO (Evolución Diapositiva por Diapositiva)
+        let moodTimeout = null; // 🚀 Sugerencia 3: Control Anti-Chasquidos (Debounce de Modulación)
+        function updateAudioMood(sceneIdx) {
+            if (!audioCtx || oscNodes.length < 7 || !musicPlaying) return;
+
+            clearTimeout(moodTimeout);
+            moodTimeout = setTimeout(() => {
+                const now = audioCtx.currentTime;
+                console.log(`[Audio Zenith] Modulando sonido para escena ${sceneIdx}`);
+
+                try {
+                    // Definir los perfiles musicales de las 6 escenas (0 a 5)
+                    switch (sceneIdx) {
+                    case 0:
+                        // 💀 ESCENA 0: Caos y Dolor (Hojas de cálculo, estrés)
+                        // Acorde: Do menor tenso, vibrato inestable y molesto, sin bajo profundo, agudos apagados.
+                        oscNodes[1].frequency.linearRampToValueAtTime(155.56, now + 1.5); // Eb3 (Menor)
+                        oscNodes[3].frequency.linearRampToValueAtTime(261.63, now + 1.5); // C4
+                        oscNodes[4].frequency.linearRampToValueAtTime(311.13, now + 1.5); // Eb4 (Menor)
+                        oscNodes[6].frequency.linearRampToValueAtTime(523.25, now + 1.5); // C5 (Silenciado)
+
+                        // Ganancias (Mapear volumen)
+                        gainNodes[0].gain.linearRampToValueAtTime(0.06, now + 1.5); // C3
+                        gainNodes[1].gain.linearRampToValueAtTime(0.05, now + 1.5); // Eb3
+                        gainNodes[2].gain.linearRampToValueAtTime(0.04, now + 1.5); // G3
+                        gainNodes[3].gain.linearRampToValueAtTime(0.03, now + 1.5); // C4
+                        gainNodes[4].gain.linearRampToValueAtTime(0.03, now + 1.5); // Eb4
+                        gainNodes[5].gain.linearRampToValueAtTime(0.02, now + 1.5); // G4
+                        gainNodes[6].gain.linearRampToValueAtTime(0.00, now + 1.5); // C5 (Mudo)
+
+                        // LFO (Vibrato rápido y tenso)
+                        lfoNodes.forEach((lfo, i) => lfo.frequency.linearRampToValueAtTime(0.8 + (i * 0.1), now + 1.5));
+                        
+                        // Bajo sutil
+                        bassGainNode.gain.linearRampToValueAtTime(0.04, now + 1.5);
+                        break;
+
+                    case 1:
+                        // 💎 ESCENA 1: Traje a la Medida (Nace la esperanza)
+                        // Acorde: Resolución a Do Mayor brillante y limpio, vibrato suave, bajo entra a nivel cálido.
+                        oscNodes[1].frequency.linearRampToValueAtTime(164.81, now + 1.5); // E3 (Mayor)
+                        oscNodes[3].frequency.linearRampToValueAtTime(261.63, now + 1.5); // C4
+                        oscNodes[4].frequency.linearRampToValueAtTime(329.63, now + 1.5); // E4 (Mayor)
+                        oscNodes[6].frequency.linearRampToValueAtTime(523.25, now + 1.5); // C5 (Silenciado)
+
+                        // Ganancias
+                        gainNodes[0].gain.linearRampToValueAtTime(0.06, now + 1.5);
+                        gainNodes[1].gain.linearRampToValueAtTime(0.05, now + 1.5);
+                        gainNodes[2].gain.linearRampToValueAtTime(0.05, now + 1.5);
+                        gainNodes[3].gain.linearRampToValueAtTime(0.04, now + 1.5);
+                        gainNodes[4].gain.linearRampToValueAtTime(0.03, now + 1.5);
+                        gainNodes[5].gain.linearRampToValueAtTime(0.02, now + 1.5);
+                        gainNodes[6].gain.linearRampToValueAtTime(0.00, now + 1.5); // C5 (Sigue mudo)
+
+                        // LFO (Vibrato calmado, celestial)
+                        lfoNodes.forEach((lfo, i) => lfo.frequency.linearRampToValueAtTime(0.15 + (i * 0.02), now + 1.5));
+                        
+                        // Bajo cálido
+                        bassGainNode.gain.linearRampToValueAtTime(0.08, now + 1.5);
+                        break;
+
+                    case 2:
+                        // 👑 ESCENA 2: Omnipresencia (Empoderamiento del negocio)
+                        // Acorde: Do Mayor con Séptima Mayor (Maj7) para una textura sofisticada de jazz y poder.
+                        oscNodes[1].frequency.linearRampToValueAtTime(164.81, now + 1.5); // E3
+                        oscNodes[3].frequency.linearRampToValueAtTime(246.94, now + 1.5); // B3 (Séptima Mayor)
+                        oscNodes[4].frequency.linearRampToValueAtTime(329.63, now + 1.5); // E4
+                        oscNodes[6].frequency.linearRampToValueAtTime(523.25, now + 1.5); // C5 (Entra a volumen bajo)
+
+                        // Ganancias (Revelamos la voz alta C5)
+                        gainNodes[0].gain.linearRampToValueAtTime(0.06, now + 1.5);
+                        gainNodes[1].gain.linearRampToValueAtTime(0.05, now + 1.5);
+                        gainNodes[2].gain.linearRampToValueAtTime(0.05, now + 1.5);
+                        gainNodes[3].gain.linearRampToValueAtTime(0.04, now + 1.5); // B3
+                        gainNodes[4].gain.linearRampToValueAtTime(0.04, now + 1.5);
+                        gainNodes[5].gain.linearRampToValueAtTime(0.03, now + 1.5);
+                        gainNodes[6].gain.linearRampToValueAtTime(0.015, now + 1.5); // C5 entra suave
+
+                        lfoNodes.forEach((lfo, i) => lfo.frequency.linearRampToValueAtTime(0.18 + (i * 0.03), now + 1.5));
+                        bassGainNode.gain.linearRampToValueAtTime(0.10, now + 1.5);
+                        break;
+
+                    case 3:
+                        // 🌎 ESCENA 3: Sin Fronteras (Expansión global)
+                        // Acorde: Maj7 expandido con notas de agudos más presentes para sensación de espacio infinito.
+                        oscNodes[1].frequency.linearRampToValueAtTime(164.81, now + 1.5); // E3
+                        oscNodes[3].frequency.linearRampToValueAtTime(246.94, now + 1.5); // B3
+                        oscNodes[4].frequency.linearRampToValueAtTime(329.63, now + 1.5); // E4
+                        oscNodes[6].frequency.linearRampToValueAtTime(523.25, now + 1.5); // C5 (Más volumen)
+
+                        // Ganancias (Aumentamos agudos y espaciado)
+                        gainNodes[0].gain.linearRampToValueAtTime(0.05, now + 1.5);
+                        gainNodes[1].gain.linearRampToValueAtTime(0.05, now + 1.5);
+                        gainNodes[2].gain.linearRampToValueAtTime(0.05, now + 1.5);
+                        gainNodes[3].gain.linearRampToValueAtTime(0.04, now + 1.5);
+                        gainNodes[4].gain.linearRampToValueAtTime(0.04, now + 1.5);
+                        gainNodes[5].gain.linearRampToValueAtTime(0.04, now + 1.5); // G4
+                        gainNodes[6].gain.linearRampToValueAtTime(0.03, now + 1.5); // C5 (Brillante)
+
+                        lfoNodes.forEach((lfo, i) => lfo.frequency.linearRampToValueAtTime(0.20 + (i * 0.03), now + 1.5));
+                        bassGainNode.gain.linearRampToValueAtTime(0.12, now + 1.5);
+                        break;
+
+                    case 4:
+                        // 🔮 ESCENA 4: Todo es Posible con IA (Futurismo y magia)
+                        // Acorde: Do Mayor 9na (Cadd9) con una nota futurista Re5 (D5 = 587.33Hz) y vibrato brillante ("shimmer").
+                        oscNodes[1].frequency.linearRampToValueAtTime(164.81, now + 1.5); // E3
+                        oscNodes[3].frequency.linearRampToValueAtTime(246.94, now + 1.5); // B3
+                        oscNodes[4].frequency.linearRampToValueAtTime(329.63, now + 1.5); // E4
+                        oscNodes[6].frequency.linearRampToValueAtTime(587.33, now + 1.5); // D5 (¡Nota futurista mágica!)
+
+                        // Ganancias
+                        gainNodes[0].gain.linearRampToValueAtTime(0.05, now + 1.5);
+                        gainNodes[1].gain.linearRampToValueAtTime(0.05, now + 1.5);
+                        gainNodes[2].gain.linearRampToValueAtTime(0.05, now + 1.5);
+                        gainNodes[3].gain.linearRampToValueAtTime(0.05, now + 1.5);
+                        gainNodes[4].gain.linearRampToValueAtTime(0.05, now + 1.5);
+                        gainNodes[5].gain.linearRampToValueAtTime(0.04, now + 1.5);
+                        gainNodes[6].gain.linearRampToValueAtTime(0.04, now + 1.5); // D5 brillante
+
+                        // LFO rápido y centelleante (simula procesamiento de datos de IA)
+                        lfoNodes.forEach((lfo, i) => lfo.frequency.linearRampToValueAtTime(0.55 + (i * 0.05), now + 1.5));
+                        
+                        // Bajo estelar
+                        bassGainNode.gain.linearRampToValueAtTime(0.14, now + 1.5);
+                        break;
+
+                    case 5:
+                        // 🧠 ESCENA 5: Revelación Brain Branding (El Imperio Digital completo)
+                        // Acorde: C Major total, épico, majestuoso, máximo cuerpo armónico, bajo profundo y agudo en resolución perfecta.
+                        oscNodes[1].frequency.linearRampToValueAtTime(164.81, now + 1.5); // E3
+                        oscNodes[3].frequency.linearRampToValueAtTime(261.63, now + 1.5); // C4
+                        oscNodes[4].frequency.linearRampToValueAtTime(329.63, now + 1.5); // E4
+                        oscNodes[6].frequency.linearRampToValueAtTime(523.25, now + 1.5); // C5 (Resolución a la octava superior)
+
+                        // Ganancias al máximo nivel armónico equilibrado
+                        gainNodes[0].gain.linearRampToValueAtTime(0.07, now + 1.5);
+                        gainNodes[1].gain.linearRampToValueAtTime(0.06, now + 1.5);
+                        gainNodes[2].gain.linearRampToValueAtTime(0.06, now + 1.5);
+                        gainNodes[3].gain.linearRampToValueAtTime(0.05, now + 1.5);
+                        gainNodes[4].gain.linearRampToValueAtTime(0.05, now + 1.5);
+                        gainNodes[5].gain.linearRampToValueAtTime(0.05, now + 1.5);
+                        gainNodes[6].gain.linearRampToValueAtTime(0.05, now + 1.5); // C5 majestuoso
+
+                        // LFO ancho y majestuoso
+                        lfoNodes.forEach((lfo, i) => lfo.frequency.linearRampToValueAtTime(0.25 + (i * 0.04), now + 1.5));
+                        
+                        // Bajo imperial profundo
+                        bassGainNode.gain.linearRampToValueAtTime(0.16, now + 1.5);
+                        break;
+                }
+            } catch (e) { console.warn("Fallo al modular audio progresivo:", e); }
+            }, 100);
+        }
+
+        // 🚀 Sugerencia 2: FALLBACK PARA MP3 (FAILSAFE)
+        function playFallbackAudio() {
+            const audio = document.getElementById('fallback-audio');
+            if (audio) {
+                audio.volume = 0.35;
+                audio.play().catch(e => console.warn("Reproducción fallback bloqueada:", e));
+            }
+        }
+
+        function stopFallbackAudio() {
+            const audio = document.getElementById('fallback-audio');
+            if (audio) { audio.pause(); }
+        }
+
+        function toggleMusic() {
+            const label = document.getElementById('music-label');
+            const icon = document.querySelector('.music-icon');
+
+            if (!musicPlaying) {
+                musicPlaying = true;
+                // Inicializar giroscopio al interactuar con el botón de música (gesto seguro de iOS)
+                initGiroscopio();
+
+                if (!audioCtx) {
+                    createAmbientMusic();
+                } else {
+                    masterGain.gain.value = 0.45; // 🛡️ Sugerencia 3: Limitador de Volumen Saludable Máximo (Failsafe Gain)
+                }
+                
+                // 🛡️ ZENITH AUDIO RESUME: Despertar SIEMPRE, ya sea recién creado o reanudado
+                if (audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume().then(() => {
+                        console.log("AudioContext despertado con éxito. Estado:", audioCtx.state);
+                        updateAudioMood(currentIdx);
+                    }).catch(e => console.warn("Error al despertar AudioContext:", e));
+                } else {
+                    console.log("AudioContext ya está activo. Estado:", audioCtx ? audioCtx.state : 'null');
+                    updateAudioMood(currentIdx);
+                }
+                
+                if (!audioCtx || audioCtx.state === 'closed') {
+                    playFallbackAudio();
+                }
+                
+                label.textContent = 'Silenciar';
+                icon.textContent = '🔊';
+            } else {
+                if (audioCtx) {
+                    masterGain.gain.value = 0; // Direct value assignment
+                }
+                stopFallbackAudio();
+                musicPlaying = false;
+                label.textContent = 'Activar Música';
+                icon.textContent = '🔇';
+            }
+        }
+
+        // ── SCENE ENGINE ──
+        const scenes = document.querySelectorAll('.scene');
+        const progress = document.getElementById('progress');
+        let currentIdx = 0;
+
+        scenes.forEach((_, i) => {
+            const dot = document.createElement('div');
+            dot.className = `dot ${i === 0 ? 'active' : ''}`;
+            progress.appendChild(dot);
+        });
+
+        const dots = document.querySelectorAll('.dot');
+
+        function showScene(idx) {
+            scenes.forEach(s => s.classList.remove('active'));
+            dots.forEach(d => d.className = `dot ${d === dots[idx] ? 'active' : ''}`);
+            scenes[idx].classList.add('active');
+            // 🚀 Sugerencia 1: Sincronización Cromática de Estrellas (Establecer objetivo de Interpolación)
+            if (starRGBs[idx]) {
+                targetStarRGB = starRGBs[idx];
+            }
+
+            // 🚀 Sugerencia 1: Sincronización Cromática-Afectiva del Fondo CSS
+            if (gradients[idx]) {
+                document.body.style.background = gradients[idx];
+            }
+            
+            // Modulación de audio en tiempo real al cambiar de slide
+            updateAudioMood(idx);
+        }
+
+        function nextScene() {
+            currentIdx = (currentIdx + 1) % scenes.length;
+            showScene(currentIdx);
+        }
+
+        setInterval(nextScene, 7000);
+        document.body.onclick = (e) => {
+            // Inicializar giroscopio al interactuar (gesto requerido por Safari/iOS)
+            initGiroscopio();
+
+            // Evitar que el clic en botones/QR avance la escena
+            if (!e.target.closest('.cta-btn') && !e.target.closest('#qr-code') && !e.target.closest('#music-toggle')) {
+                nextScene();
+            }
+        };
+        // 🚀 Sugerencia 2: Failsafe de Ciclo de Vida en iOS (Recuperar audio al enfocar)
+        document.addEventListener('visibilitychange', () => {
+            pageIsVisible = (document.visibilityState === 'visible'); // 🚀 Sugerencia 3: Pausar/Reanudar Renderizador
+            
+            if (pageIsVisible) {
+                requestAnimationFrame(animateStars); // Reanudar render de estrellas
+                
+                if (musicPlaying && audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume().then(() => {
+                        console.log("[Zenith iOS Failsafe] AudioContext reanudado al recuperar foco.");
+                    }).catch(e => console.warn("Fallo al reanudar por visibilidad:", e));
+                }
+            }
+        });
+
+        // 🚀 Sugerencia 2: Daemon de Monitoreo de Audio en Segundo Plano (Failsafe Periódico)
+        setInterval(() => {
+            if (musicPlaying && audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume().then(() => {
+                    console.log("[Zenith Failsafe Daemon] AudioContext reanudado automáticamente.");
+                }).catch(e => console.warn("Fallo en Daemon al reanudar context:", e));
+            }
+        }, 5000);
+
+        // 🚀 Sugerencia 1: Efecto de Paralaje 3D Sensorial (Desplazamiento inmersivo en PC)
+        let mouseX = 0, mouseY = 0;
+        document.addEventListener('mousemove', (e) => {
+            mouseX = (e.clientX / window.innerWidth) * 2 - 1; // Rango -1 a 1
+            mouseY = (e.clientY / window.innerHeight) * 2 - 1; // Rango -1 a 1
+            
+            const activeImg = document.querySelector('.scene.active .bg-img');
+            const activeContent = document.querySelector('.scene.active .content');
+            
+            if (activeImg) {
+                activeImg.style.transform = `scale(1.1) translate(${mouseX * 15}px, ${mouseY * 15}px)`;
+            }
+            if (activeContent) {
+                activeContent.style.transform = `translate(${mouseX * -20}px, ${mouseY * -20}px)`;
+            }
+        });
+
+        // 🚀 Sugerencia 1: Paralaje Giroscópico en Móviles (Detección de Movimiento Físico)
+        function handleOrientation(e) {
+            let tiltX = e.gamma || 0; // Rango -90 a 90 (inclinación lateral)
+            let tiltY = e.beta || 0;  // Rango -180 a 180 (inclinación frontal)
+            
+            // Normalizar a rango -1 a 1 (con límites seguros)
+            let normX = Math.max(-1, Math.min(1, tiltX / 30));
+            let normY = Math.max(-1, Math.min(1, (tiltY - 45) / 30)); // 45 grados es el ángulo cómodo de lectura móvil
+            
+            const activeImg = document.querySelector('.scene.active .bg-img');
+            const activeContent = document.querySelector('.scene.active .content');
+            
+            if (activeImg) {
+                activeImg.style.transform = `scale(1.1) translate(${normX * 15}px, ${normY * 15}px)`;
+            }
+            if (activeContent) {
+                activeContent.style.transform = `translate(${normX * -20}px, ${normY * -20}px)`;
+            }
+        }
+
+        let giroscopioIniciado = false;
+        function initGiroscopio() {
+            if (giroscopioIniciado) return;
+            giroscopioIniciado = true;
+            
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                // iOS 13+ requiere permiso explícito mediante un gesto del usuario
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                            console.log("[Zenith Giroscopio] Permiso concedido e iniciado.");
+                        }
+                    })
+                    .catch(e => console.warn("[Zenith Giroscopio] Error de permiso:", e));
+            } else {
+                // Android y navegadores estándar sin restricciones
+                window.addEventListener('deviceorientation', handleOrientation);
+                console.log("[Zenith Giroscopio] Inicializado de forma directa.");
+            }
+        }
+
+        // 🚀 Sugerencia 1: Sanitización y Encapsulado de la URL de WhatsApp
+        function contactWhatsApp(origin) {
+            const phone = '527712339238';
+            const text = 'Hola, Brain Branding. Quiero empezar mi imperio digital.';
+            const url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+            
+            // 🚀 Sugerencia 2: Métrica de Conversión Digital
+            console.log(`[Zenith Analytics] Conversión registrada desde el origen: ${origin}`);
+            
+            window.open(url, '_blank');
+        }
+
+        // 🚀 Sugerencia 3: Efecto de Atracción Magnética Premium en QR
+        const qrElement = document.getElementById('qr-code');
+        if (qrElement) {
+            qrElement.addEventListener('mousemove', (e) => {
+                const rect = qrElement.getBoundingClientRect();
+                // Calcular distancia del cursor al centro del QR
+                const x = e.clientX - rect.left - rect.width / 2;
+                const y = e.clientY - rect.top - rect.height / 2;
+                
+                // Atracción magnética sutil del 15% hacia las coordenadas del cursor
+                qrElement.style.transform = `scale(1.06) translate(${x * 0.15}px, ${y * 0.15}px)`;
+            });
+            
+            qrElement.addEventListener('mouseleave', () => {
+                // Retornar suavemente al estado de reposo original
+                qrElement.style.transform = 'scale(1) translate(0px, 0px)';
+            });
+        }
+
+        showScene(0);
+    </script>
+</body>
+</html>
