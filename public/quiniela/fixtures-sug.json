@@ -1,0 +1,20 @@
+{
+  "fixtures": [
+    { "id": "mx-1", "team_local": "América", "team_visita": "Chivas", "score_local": 2, "score_visita": 1, "status": "live", "priority": "high", "date": "Hoy, 20:00", "attraction_index": 95 },
+    { "id": "mx-2", "team_local": "Cruz Azul", "team_visita": "Pumas", "score_local": 0, "score_visita": 0, "status": "live", "priority": "high", "date": "Hoy, 18:30", "attraction_index": 90 },
+    { "id": "mx-3", "team_local": "Tigres", "team_visita": "Monterrey", "score_local": 3, "score_visita": 2, "status": "finished", "priority": "high", "date": "Ayer", "attraction_index": 92 },
+    { "id": "mx-4", "team_local": "Toluca", "team_visita": "Pachuca", "score_local": 0, "score_visita": 0, "status": "upcoming", "priority": "normal", "date": "Mañana, 12:00", "attraction_index": 78 },
+    { "id": "mx-5", "team_local": "León", "team_visita": "Santos", "score_local": 0, "score_visita": 0, "status": "upcoming", "priority": "normal", "date": "Mañana, 19:00", "attraction_index": 70 },
+    { "id": "mx-6", "team_local": "Tijuana", "team_visita": "Atlas", "score_local": 0, "score_visita": 0, "status": "upcoming", "priority": "normal", "date": "Mañana, 21:00", "attraction_index": 68 },
+    { "id": "mx-7", "team_local": "Necaxa", "team_visita": "Puebla", "score_local": 0, "score_visita": 0, "status": "upcoming", "priority": "normal", "date": "Lunes, 19:00", "attraction_index": 60 }
+  ],
+  "suggestions": [
+    { "id": "sug-1", "team_local": "América", "team_visita": "Monterrey", "date": "Próximo Sábado", "attraction_index": 96, "selected": true },
+    { "id": "sug-2", "team_local": "Chivas", "team_visita": "Cruz Azul", "date": "Próximo Domingo", "attraction_index": 94, "selected": true },
+    { "id": "sug-3", "team_local": "Pumas", "team_visita": "Tigres", "date": "Próximo Sábado", "attraction_index": 88, "selected": true },
+    { "id": "sug-4", "team_local": "Toluca", "team_visita": "Atlas", "date": "Próximo Viernes", "attraction_index": 76, "selected": true },
+    { "id": "sug-5", "team_local": "Pachuca", "team_visita": "León", "date": "Próximo Domingo", "attraction_index": 72, "selected": true },
+    { "id": "sug-6", "team_local": "Santos", "team_visita": "Tijuana", "date": "Próximo Lunes", "attraction_index": 66, "selected": true },
+    { "id": "sug-7", "team_local": "Querétaro", "team_visita": "Necaxa", "date": "Próximo Viernes", "attraction_index": 55, "selected": true }
+  ]
+}

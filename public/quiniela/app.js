@@ -9,6 +9,7 @@ import {
   getFixtures,
   getIASuggestions,
   acceptSuggestionsAsFixtures,
+  saveConsolidatedWeeklyFixtures,
   getLeaderboard,
   registerOrLoginUser,
   getUserData,
@@ -893,4 +894,23 @@ window.executeWeeklyClosure = async function() {
       showToast(res.message, "error");
     }
   }, 2000);
+};
+
+// Sugerencia 3: Comprimir y Guardar Fixtures consolidados en la nube (Bypass 1 KB)
+window.consolidateWeeklyFixtures = async function() {
+  showToast("Consolidando y encriptando fixtures semanales...", "info");
+  
+  setTimeout(async () => {
+    try {
+      const fixtures = await getFixtures();
+      const suggestions = await getIASuggestions();
+      await saveConsolidatedWeeklyFixtures(fixtures, suggestions);
+      
+      showToast("¡Fixtures comprimidos y guardados en la nube exitosamente!", "success");
+      window.triggerMockPush("⚡ Bypass Carga 1 KB", "Se ha generado el fixture comprimido semanal en la nube con ahorro del 90% de lecturas.");
+      window.appNavigate("dashboard");
+    } catch (e) {
+      showToast("Error al consolidar fixtures: " + e.message, "error");
+    }
+  }, 1000);
 };

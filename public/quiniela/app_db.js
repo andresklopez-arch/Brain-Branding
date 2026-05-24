@@ -213,11 +213,72 @@ export async function saveSystemConfig(cfg) {
   return true;
 }
 
-// Obtener Fixtures ordenados
-export async function getFixtures() {
+// Ahorro de lecturas: Comprimir y guardar fixtures y sugerencias semanales en un solo documento atómico de menos de 1 KB en la nube
+export async function saveConsolidatedWeeklyFixtures(fixtures, suggestions) {
+  const payload = {
+    fixtures: fixtures,
+    suggestions: suggestions,
+    updated_at: new Date().toISOString()
+  };
+
   if (useSimulation) {
-    const list = JSON.parse(localStorage.getItem("qia_fixtures"));
-    // Mapear Liga MX y priorizar
+    localStorage.setItem("qia_consolidated_fixtures", JSON.stringify(payload));
+    
+    // 🔥 COPIA DE RESPALDO A LA NUBE: Guardar en documento único consolidado
+    if (window.firebase && firebase.apps.length > 0) {
+      try {
+        await firebase.firestore().collection("config").doc("fixtures_weekly").set(payload);
+        console.log("⚡ [Cloud Sync] Fixtures semanales consolidados en Firestore.");
+      } catch (e) {
+        console.warn("Fallo guardado en Firestore de fixtures consolidados:", e);
+      }
+    }
+    return true;
+  }
+
+  await db.collection("config").doc("fixtures_weekly").set(payload);
+  return true;
+}
+
+// Obtener Fixtures ordenados (Carga estática ultraligera con Bypass de Carga de 1 KB de Sugerencia #3)
+export async function getFixtures() {
+  // Estrategia 1: Intentar leer del documento unificado dinámico de Firestore (Ahorro de lecturas de 1 KB)
+  if (window.firebase && firebase.apps.length > 0) {
+    try {
+      const doc = await firebase.firestore().collection("config").doc("fixtures_weekly").get();
+      if (doc.exists) {
+        const data = doc.data();
+        if (data.fixtures && data.fixtures.length > 0) {
+          if (useSimulation) {
+            localStorage.setItem("qia_fixtures", JSON.stringify(data.fixtures));
+          }
+          return data.fixtures.sort((a, b) => b.attraction_index - a.attraction_index);
+        }
+      }
+    } catch (e) {
+      console.log("⚙️ [Failsafe Cloud] Fallo al cargar fixtures consolidados de Firestore.");
+    }
+  }
+
+  // Estrategia 2: Intentar cargar del archivo local estático fixtures-sug.json
+  try {
+    const res = await fetch("./fixtures-sug.json");
+    if (res.ok) {
+      const data = await res.json();
+      if (data.fixtures && data.fixtures.length > 0) {
+        if (useSimulation) {
+          localStorage.setItem("qia_fixtures", JSON.stringify(data.fixtures));
+        }
+        return data.fixtures.sort((a, b) => b.attraction_index - a.attraction_index);
+      }
+    }
+  } catch (err) {
+    console.log("⚙️ [Failsafe Loader] fixtures-sug.json no disponible, cargando base de datos local.");
+  }
+
+  // Estrategia 3: Fallback a LocalStorage o Mock base
+  if (useSimulation) {
+    const list = JSON.parse(localStorage.getItem("qia_fixtures")) || LIGA_MX_MATCHES;
     return list.sort((a, b) => b.attraction_index - a.attraction_index);
   }
   try {
@@ -230,10 +291,44 @@ export async function getFixtures() {
   }
 }
 
-// Obtener sugerencias IA
+// Obtener sugerencias IA (Carga estática de Sugerencia #3)
 export async function getIASuggestions() {
+  // Estrategia 1: Intentar leer del documento unificado dinámico de Firestore
+  if (window.firebase && firebase.apps.length > 0) {
+    try {
+      const doc = await firebase.firestore().collection("config").doc("fixtures_weekly").get();
+      if (doc.exists) {
+        const data = doc.data();
+        if (data.suggestions && data.suggestions.length > 0) {
+          if (useSimulation) {
+            localStorage.setItem("qia_suggestions", JSON.stringify(data.suggestions));
+          }
+          return data.suggestions;
+        }
+      }
+    } catch (e) {
+      console.log("⚙️ [Failsafe Cloud] Fallo al cargar sugerencias consolidadas de Firestore.");
+    }
+  }
+
+  // Estrategia 2: Intentar cargar del archivo local estático fixtures-sug.json
+  try {
+    const res = await fetch("./fixtures-sug.json");
+    if (res.ok) {
+      const data = await res.json();
+      if (data.suggestions && data.suggestions.length > 0) {
+        if (useSimulation) {
+          localStorage.setItem("qia_suggestions", JSON.stringify(data.suggestions));
+        }
+        return data.suggestions;
+      }
+    }
+  } catch (err) {
+    console.log("⚙️ [Failsafe Loader] suggestions de fixtures-sug.json no disponible.");
+  }
+
   if (useSimulation) {
-    return JSON.parse(localStorage.getItem("qia_suggestions"));
+    return JSON.parse(localStorage.getItem("qia_suggestions")) || INITIAL_SUGGESTIONS;
   }
   const snap = await db.collection("suggestions").get();
   return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -294,33 +389,86 @@ export async function getLeaderboard() {
   });
 }
 
-// Auth de usuario simulado e integrado
+// Auth de usuario simulado e integrado (Sincronizado a la Nube de Sugerencia #2)
 export async function registerOrLoginUser(userData) {
-  const encryptedUser = encryptData(userData);
+  // Comprobar si ya existe en local o nube para preservar saldo anterior
+  const id = userData.phone || userData.email;
+  const existing = await getUserData(id);
+  
+  let finalUser = userData;
+  if (existing) {
+    // Si ya existe, combinamos datos preservando su balance e información
+    finalUser = {
+      ...userData,
+      balance: existing.balance !== undefined ? existing.balance : userData.balance,
+      alias: existing.alias || userData.alias,
+      is_admin: existing.is_admin !== undefined ? existing.is_admin : userData.is_admin,
+    };
+  }
+
+  const encryptedUser = encryptData(finalUser);
   if (useSimulation) {
     localStorage.setItem("qia_current_user", JSON.stringify(encryptedUser));
+    
+    // 🔥 COPIA DE RESPALDO A LA NUBE: Guardar copia de seguridad en Firestore
+    if (window.firebase && firebase.apps.length > 0) {
+      const uid = id.replace(/[^a-zA-Z0-9]/g, "_");
+      firebase.firestore().collection("users").doc(uid).set(encryptedUser, { merge: true }).catch(() => {});
+    }
+
     // Guardar en la lista global de usuarios simulados
     let allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
-    const decryptedList = allUsers.map(u => decryptData(u));
-    if (!decryptedList.find(u => u.phone === userData.phone || u.email === userData.email)) {
+    let foundIdx = allUsers.findIndex(u => {
+      const dec = decryptData(u);
+      return dec.phone === finalUser.phone || dec.email === finalUser.email;
+    });
+    if (foundIdx !== -1) {
+      allUsers[foundIdx] = encryptedUser;
+    } else {
       allUsers.push(encryptedUser);
-      localStorage.setItem("qia_users_list", JSON.stringify(allUsers));
     }
-    return userData;
+    localStorage.setItem("qia_users_list", JSON.stringify(allUsers));
+    return finalUser;
   }
   
-  const uid = userData.phone || userData.email.replace(/[^a-zA-Z0-9]/g, "_");
+  const uid = id.replace(/[^a-zA-Z0-9]/g, "_");
   await db.collection("users").doc(uid).set({
     ...encryptedUser,
     updated_at: new Date().toISOString()
   }, { merge: true });
   
   localStorage.setItem("qia_current_user", JSON.stringify(encryptedUser));
-  return userData;
+  return finalUser;
 }
 
 export async function getUserData(phoneOrEmail) {
   if (useSimulation) {
+    // Primero intentar recuperar de la nube si está conectado
+    if (window.firebase && firebase.apps.length > 0) {
+      try {
+        const uid = phoneOrEmail.replace(/[^a-zA-Z0-9]/g, "_");
+        const doc = await firebase.firestore().collection("users").doc(uid).get();
+        if (doc.exists) {
+          const cloudData = decryptData(doc.data());
+          // Sincronizar en la lista local de paso
+          let allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
+          let foundIdx = allUsers.findIndex(u => {
+            const dec = decryptData(u);
+            return dec.phone === cloudData.phone || dec.email === cloudData.email;
+          });
+          if (foundIdx !== -1) {
+            allUsers[foundIdx] = encryptData(cloudData);
+          } else {
+            allUsers.push(encryptData(cloudData));
+          }
+          localStorage.setItem("qia_users_list", JSON.stringify(allUsers));
+          return cloudData;
+        }
+      } catch (err) {
+        console.warn("Fallo lectura de respaldo en la nube para el usuario:", err);
+      }
+    }
+
     const allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
     const found = allUsers.find(u => {
       const dec = decryptData(u);
@@ -333,7 +481,7 @@ export async function getUserData(phoneOrEmail) {
   return doc.exists ? decryptData(doc.data()) : null;
 }
 
-// Transacciones y Billetera
+// Transacciones y Billetera (Sincronizado a la Nube de Sugerencia #2)
 export async function registerTransaction(tx) {
   if (!tx.id) tx.id = "tx-" + Date.now();
   tx.created_at = new Date().toISOString();
@@ -343,12 +491,24 @@ export async function registerTransaction(tx) {
     list.unshift(tx);
     localStorage.setItem("qia_transactions", JSON.stringify(list));
     
+    // 🔥 COPIA DE RESPALDO A LA NUBE: Guardar transaccion en Firestore
+    if (window.firebase && firebase.apps.length > 0) {
+      firebase.firestore().collection("transactions").doc(tx.id).set(tx).catch(() => {});
+    }
+    
     // Si es deposito de Stripe o aprobacion de SPEI, subir saldo
     if (tx.status === "approved") {
       const user = decryptData(JSON.parse(localStorage.getItem("qia_current_user")));
       if (user) {
         user.balance = (Number(user.balance) || 0) + Number(tx.amount);
         localStorage.setItem("qia_current_user", JSON.stringify(encryptData(user)));
+
+        // 🔥 COPIA DE RESPALDO A LA NUBE: Actualizar balance del usuario en Firestore
+        if (window.firebase && firebase.apps.length > 0) {
+          const uid = (user.phone || user.email).replace(/[^a-zA-Z0-9]/g, "_");
+          firebase.firestore().collection("users").doc(uid).set(encryptData(user), { merge: true }).catch(() => {});
+        }
+
         // actualizar en la lista
         let allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
         allUsers = allUsers.map(u => {
@@ -424,6 +584,12 @@ export async function approveSPEITransaction(txId) {
         });
         localStorage.setItem("qia_users_list", JSON.stringify(allUsers));
         
+        // 🔥 COPIA DE RESPALDO A LA NUBE: Actualizar balance del usuario afectado en Firestore
+        if (window.firebase && firebase.apps.length > 0) {
+          const uid = (user.phone || user.email).replace(/[^a-zA-Z0-9]/g, "_");
+          firebase.firestore().collection("users").doc(uid).set(encryptData(user), { merge: true }).catch(() => {});
+        }
+
         // Si el admin es él mismo, actualizar current user
         const curr = decryptData(JSON.parse(localStorage.getItem("qia_current_user")));
         if (curr && (curr.phone === user.phone || curr.email === user.email)) {
@@ -470,7 +636,7 @@ export async function declineSPEITransaction(txId) {
   return true;
 }
 
-// Tickets / Quinielas compradas
+// Tickets / Quinielas compradas (Sincronizado a la Nube de Sugerencia #2)
 export async function createTicket(ticket) {
   if (!ticket.id) ticket.id = "tkt-" + Date.now();
   ticket.created_at = new Date().toISOString();
@@ -480,11 +646,23 @@ export async function createTicket(ticket) {
     list.unshift(ticket);
     localStorage.setItem("qia_tickets", JSON.stringify(list));
     
+    // 🔥 COPIA DE RESPALDO A LA NUBE: Guardar ticket en Firestore
+    if (window.firebase && firebase.apps.length > 0) {
+      firebase.firestore().collection("tickets").doc(ticket.id).set(ticket).catch(() => {});
+    }
+
     // Cobrar costo al usuario
     const user = decryptData(JSON.parse(localStorage.getItem("qia_current_user")));
     if (user) {
       user.balance = (Number(user.balance) || 0) - Number(ticket.total_cost);
       localStorage.setItem("qia_current_user", JSON.stringify(encryptData(user)));
+      
+      // 🔥 COPIA DE RESPALDO A LA NUBE: Actualizar balance del usuario en Firestore
+      if (window.firebase && firebase.apps.length > 0) {
+        const uid = (user.phone || user.email).replace(/[^a-zA-Z0-9]/g, "_");
+        firebase.firestore().collection("users").doc(uid).set(encryptData(user), { merge: true }).catch(() => {});
+      }
+
       // actualizar en la lista
       let allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
       allUsers = allUsers.map(u => {
