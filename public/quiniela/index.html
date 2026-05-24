@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>QUINIELA MUNDIALISTA IA | Cyber Stadium</title>
+  <link rel="apple-touch-icon" href="logo-quiniela.png">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;900&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+
+  <!-- ☄️ SPLASH SCREEN -->
+  <div id="splash-screen" class="splash-screen">
+    <div class="stars-container" id="splash-stars"></div>
+    <div class="splash-content">
+      <div class="logo-glow-ring animate-spin-slow"></div>
+      <img src="logo-quiniela.png" class="splash-logo" alt="Quiniela Mundialista IA">
+      <h1 class="splash-title">QUINIELA <span class="text-accent">IA</span></h1>
+      <p class="splash-subtitle">CYBER STADIUM EDITION</p>
+      <div class="loader-crystal mt-20"></div>
+    </div>
+  </div>
+
+  <!-- 🛡️ LOGIN & REGISTER VIEW -->
+  <section id="login-view" class="login-view hidden">
+    <div class="stars-container" id="login-stars"></div>
+    <div class="login-card glass-morph animate-scale-in">
+      <img src="logo-quiniela.png" class="w-24 h-24 mx-auto mb-15 filter-neon" alt="Logo">
+      <h2 class="text-3xl font-black italic tracking-tighter text-white uppercase mb-5">INGRESAR AL <span class="text-accent">ESTADIO</span></h2>
+      <p class="text-xxs font-bold opacity-30 uppercase tracking-[4px] mb-30">Quiniela Mundialista Inteligente</p>
+      
+      <!-- Selector de Login -->
+      <div class="flex gap-4 mb-25 bg-white/5 p-2 rounded-full border border-white/5">
+        <button id="btn-login-google" class="btn-tab active flex-1" onclick="window.switchLoginTab('google')"><i class="ri-google-fill"></i> Google</button>
+        <button id="btn-login-phone" class="btn-tab flex-1" onclick="window.switchLoginTab('phone')"><i class="ri-phone-fill"></i> Teléfono</button>
+      </div>
+
+      <!-- Formulario de Google -->
+      <div id="form-google" class="auth-form space-y-16">
+        <button onclick="window.simulateGoogleAuth()" class="btn btn-primary w-full py-14 font-black uppercase text-xs tracking-widest"><i class="ri-google-fill mr-6"></i> Registrar con Google</button>
+      </div>
+
+      <!-- Formulario de Teléfono -->
+      <div id="form-phone" class="auth-form hidden space-y-16">
+        <div class="form-group">
+          <label class="form-label">Nombre Completo</label>
+          <input type="text" id="auth-name" class="form-input" placeholder="ej: Andrés López" spellcheck="false">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Alias Único (Apodo en Quiniela)</label>
+          <input type="text" id="auth-alias" class="form-input text-accent" placeholder="ej: reysmart_99" spellcheck="false" oninput="window.validateAliasAvailability(this.value)">
+          <div id="alias-feedback" class="text-[9px] font-black uppercase mt-4 hidden"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Teléfono Móvil (México)</label>
+          <input type="tel" id="auth-phone" class="form-input" placeholder="ej: 5512345678" maxlength="10">
+        </div>
+        <button onclick="window.simulatePhoneAuth()" id="btn-auth-phone-submit" class="btn btn-primary w-full py-14 font-black uppercase text-xs tracking-widest">Enviar Código SMS</button>
+      </div>
+      
+      <!-- Verificación SMS (Paso 2) -->
+      <div id="form-otp" class="auth-form hidden space-y-16">
+        <p class="text-xs opacity-50">Hemos enviado un código SMS de 6 dígitos a tu celular.</p>
+        <div class="form-group">
+          <label class="form-label">Código de Verificación</label>
+          <input type="number" id="auth-otp" class="form-input text-2xl tracking-[10px] text-center" placeholder="123456" max="999999">
+        </div>
+        <button onclick="window.simulateOtpVerify()" class="btn btn-accent w-full py-14 font-black text-xs tracking-widest">VERIFICAR E INGRESAR</button>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 🎛️ CORE APP CONTAINER -->
+  <div id="app-container" class="app-container hidden">
+    
+    <!-- HEADER SUPERIOR -->
+    <header class="app-header glass-morph">
+      <div class="flex items-center gap-12">
+        <img src="logo-quiniela.png" class="w-10 h-10 filter-neon animate-pulse-logo" alt="Logo">
+        <div>
+          <span class="text-xs opacity-40 font-black tracking-widest uppercase block mb-1">Mundialista</span>
+          <h1 class="text-md font-black italic tracking-tighter text-white leading-none">QUINIELA <span class="text-accent">IA</span></h1>
+        </div>
+      </div>
+      <div class="flex items-center gap-10">
+        <div class="wallet-badge" onclick="window.appNavigate('wallet')">
+          <span class="text-[8px] opacity-40 font-black uppercase">Saldo:</span>
+          <span class="text-xs font-black text-[#00ff88]" id="header-balance">$0.00</span>
+        </div>
+        <button onclick="window.handleLogout()" class="logout-btn" title="Cerrar Sesión">
+          <i class="ri-logout-box-r-line"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- PANELES DE CONTENIDO -->
+    <main class="app-main-content">
+      
+      <!-- PANEL 1: DASHBOARD (JUGADOR) -->
+      <section id="panel-dashboard" class="app-panel active animate-fade-in">
+        <!-- Bolsa Garantizada -->
+        <div class="gold-jackpot-card animate-float mb-24">
+          <div class="gold-stars"></div>
+          <div class="relative z-10">
+            <span class="text-xxxxs font-black tracking-[4px] opacity-50 uppercase block mb-6">Bolsa Garantizada Semanal</span>
+            <div class="text-4xl font-black italic tracking-tighter text-[#ffd700] text-glow mb-15" id="jackpot-amount">$5,000.00</div>
+            <div class="grid grid-cols-3 gap-8 border-t border-white/10 pt-12">
+              <div class="text-center"><span class="text-[7px] font-black opacity-30 uppercase block">1er Lugar</span><span class="text-[11px] font-black text-white" id="prize-1st">$2,500.00</span></div>
+              <div class="text-center"><span class="text-[7px] font-black opacity-30 uppercase block">2do Lugar</span><span class="text-[11px] font-black text-white" id="prize-2nd">$1,500.00</span></div>
+              <div class="text-center"><span class="text-[7px] font-black opacity-30 uppercase block">3er Lugar</span><span class="text-[11px] font-black text-white" id="prize-3rd">$1,000.00</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Estadísticas & Historial -->
+        <div class="grid grid-cols-2 gap-12 mb-24">
+          <div class="glass-card p-14 text-center">
+            <span class="text-xxxxs opacity-40 font-black uppercase tracking-wider block mb-4">Aciertos Promedio</span>
+            <div class="text-2xl font-black text-[#00e5ff]" id="stat-avg-hits">--</div>
+          </div>
+          <div class="glass-card p-14 text-center">
+            <span class="text-xxxxs opacity-40 font-black uppercase tracking-wider block mb-4">Jugadas Activas</span>
+            <div class="text-2xl font-black text-white" id="stat-active-tickets">0</div>
+          </div>
+        </div>
+
+        <!-- Marcadores en Vivo (Carrusel) -->
+        <div class="mb-24">
+          <div class="flex justify-between items-center mb-10">
+            <h2 class="text-xs font-black uppercase tracking-widest text-white"><i class="ri-pulse-line text-accent mr-4"></i> Marcadores en Vivo (Prioridad Liga MX)</h2>
+            <span class="pulsing-live text-[8px] bg-red-500/10 text-red-500 border border-red-500/20 px-6 py-2 rounded-full font-black uppercase tracking-wider"><span class="live-dot mr-4"></span>En Vivo</span>
+          </div>
+          <div class="scoreboards-carousel no-scrollbar" id="live-scores-container">
+            <!-- Dinámico -->
+          </div>
+        </div>
+
+        <!-- Tabla de Clasificación Semanal -->
+        <div class="glass-card p-20 mb-30">
+          <h2 class="text-xs font-black uppercase tracking-widest text-white mb-15"><i class="ri-trophy-fill text-yellow-500 mr-4"></i> Tabla de Posiciones Semanal</h2>
+          <div class="divide-y divide-white/5" id="leaderboard-container">
+            <!-- Dinámico -->
+          </div>
+        </div>
+      </section>
+
+      <!-- PANEL 2: JUGAR QUINIELA (CAPTURA) -->
+      <section id="panel-play" class="app-panel hidden animate-fade-in">
+        <div class="glass-card p-20 mb-20">
+          <h2 class="text-md font-black italic tracking-tighter text-white mb-4 uppercase">Quiniela de la Semana</h2>
+          <p class="text-xxs opacity-40 uppercase tracking-widest mb-15">Selecciona Local (L), Empate (E) o Visita (V)</p>
+          <div class="space-y-12" id="play-matches-container">
+            <!-- Dinámico -->
+          </div>
+        </div>
+
+        <!-- BÚSQUEDAS ADICIONALES (SIDE BETS) -->
+        <div class="glass-card p-20 mb-20" style="border-color: rgba(0, 242, 254, 0.2); background: rgba(0,242,254,0.01);">
+          <h3 class="text-xs font-black uppercase text-accent tracking-widest mb-12"><i class="ri-sparkling-fill mr-4"></i> Apuestas Adicionales Premium (Opcionales)</h3>
+          
+          <div class="space-y-12">
+            <div class="flex justify-between items-center p-12 bg-white/5 rounded-2xl border border-white/5">
+              <div class="flex flex-col">
+                <span class="text-xs font-black text-white uppercase">Goles Totales en la Quiniela</span>
+                <span class="text-[8px] opacity-40 uppercase font-black">Costo: +$10.00 / Premio: +$500.00 Bolsa</span>
+              </div>
+              <input type="checkbox" id="sidebet-goals" onchange="window.updatePoolCost()">
+            </div>
+            
+            <div class="flex justify-between items-center p-12 bg-white/5 rounded-2xl border border-white/5">
+              <div class="flex flex-col">
+                <span class="text-xs font-black text-white uppercase">Primer Anotador de la Semana</span>
+                <span class="text-[8px] opacity-40 uppercase font-black">Costo: +$15.00 / Premio: +$800.00 Bolsa</span>
+              </div>
+              <input type="checkbox" id="sidebet-striker" onchange="window.updatePoolCost()">
+            </div>
+          </div>
+        </div>
+
+        <!-- BOTÓN DE CONFIRMACIÓN -->
+        <div class="glass-card p-20 pb-80">
+          <div class="flex justify-between items-center mb-15">
+            <span class="text-xs font-black opacity-40 uppercase">Costo total de jugada:</span>
+            <span class="text-2xl font-black text-accent" id="pool-total-cost">$50.00</span>
+          </div>
+          <button onclick="window.purchaseTicket()" class="btn btn-primary w-full py-16 font-black uppercase rounded-2xl text-xs tracking-[4px] shadow-[0_0_40px_rgba(0,229,255,0.3)]">Confirmar y Emitir Ticket</button>
+        </div>
+      </section>
+
+      <!-- PANEL 3: BILLETERA (STRIPE + SPEI) -->
+      <section id="panel-wallet" class="app-panel hidden animate-fade-in">
+        <!-- Balance General -->
+        <div class="glass-card p-24 text-center mb-24 bg-gradient-to-br from-green-500/10 to-transparent border-green-500/20">
+          <i class="ri-wallet-3-fill text-[#00ff88] mb-12 block" style="font-size: clamp(32px, 8vw, 48px);"></i>
+          <span class="text-xxxxs font-black opacity-40 uppercase tracking-widest block mb-4">Saldo Disponible</span>
+          <div class="text-4xl font-black text-white italic tracking-tighter text-glow" id="wallet-balance">$0.00</div>
+        </div>
+
+        <!-- MÓDULO DE RECARGA STRIPE (TARJETA) -->
+        <div class="glass-card p-20 mb-20">
+          <h2 class="text-xs font-black uppercase tracking-widest text-white mb-15"><i class="ri-bank-card-fill text-accent mr-4"></i> Recarga Inmediata (Stripe)</h2>
+          <div class="form-group mb-12">
+            <label class="form-label">Monto a Recargar ($MXN)</label>
+            <input type="number" id="stripe-amount" class="form-input text-lg font-black text-accent" value="100" min="20">
+          </div>
+          <button onclick="window.simulateStripeDeposit()" class="btn btn-primary w-full py-14 font-black uppercase text-xs">PAGAR CON TARJETA</button>
+        </div>
+
+        <!-- MÓDULO DE RECARGA SPEI (TRANSFERENCIA) -->
+        <div class="glass-card p-20 mb-24">
+          <h2 class="text-xs font-black uppercase tracking-widest text-white mb-15"><i class="ri-exchange-dollar-fill text-yellow-500 mr-4"></i> Carga SPEI (Transferencia México)</h2>
+          <div class="p-12 bg-white/5 rounded-2xl border border-white/5 text-xxs uppercase tracking-wider space-y-6 mb-16">
+            <div>Banco: <span class="font-black text-white">STP (Sistema de Transferencias)</span></div>
+            <div>CLABE: <span class="font-black text-white text-accent tracking-widest">646180123456789012</span></div>
+            <div>Beneficiario: <span class="font-black text-white">Quiniela Mundialista IA</span></div>
+            <div style="color:var(--accent);">* Sube tu captura de pantalla y el saldo se validará.</div>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-8 mb-12">
+            <div class="form-group">
+              <label class="form-label">Monto Enviado ($)</label>
+              <input type="number" id="spei-amount" class="form-input" placeholder="ej: 150">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Folio/Referencia</label>
+              <input type="number" id="spei-ref" class="form-input" placeholder="ej: 987654">
+            </div>
+          </div>
+          
+          <button onclick="window.simulateSPEIDeposit()" class="btn w-full py-14 font-black uppercase text-xs" style="background:rgba(255,215,0,0.1); border:1px solid rgba(255,215,0,0.3); color:#ffd700;">ENVIAR COMPROBANTE SPEI</button>
+        </div>
+
+        <!-- HISTORIAL FINANCIERO -->
+        <div class="glass-card p-20 mb-80">
+          <h2 class="text-xs font-black uppercase tracking-widest text-white mb-15"><i class="ri-history-line mr-4"></i> Historial de Movimientos</h2>
+          <div class="divide-y divide-white/5" id="tx-history-container">
+            <!-- Dinámico -->
+          </div>
+        </div>
+      </section>
+
+      <!-- PANEL 4: ADMIN BOARD (CONFIG & CONTROLES) -->
+      <section id="panel-admin" class="app-panel hidden animate-fade-in">
+        <!-- Dashboard Admin -->
+        <div class="glass-card p-20 mb-20">
+          <h2 class="text-md font-black italic tracking-tighter text-white mb-12 uppercase"><i class="ri-command-fill text-accent mr-4"></i> Panel de Administración Central</h2>
+          <div class="grid grid-cols-2 gap-12">
+            <div class="bg-white/5 p-12 rounded-2xl border border-white/5">
+              <span class="text-xxxxs opacity-40 font-black uppercase block mb-4">Total Recaudado</span>
+              <div class="text-xl font-black text-white" id="adm-stat-sales">$0.00</div>
+            </div>
+            <div class="bg-white/5 p-12 rounded-2xl border border-white/5">
+              <span class="text-xxxxs opacity-40 font-black uppercase block mb-4">Participantes</span>
+              <div class="text-xl font-black text-white" id="adm-stat-users">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUGERENCIA IA DE PARTIDOS (PRÓXIMOS 21 DÍAS LIGA MX) -->
+        <div class="glass-card p-20 mb-20" style="border-color: rgba(168, 85, 247, 0.2); background: rgba(168,85,247,0.01);">
+          <div class="flex justify-between items-center mb-12">
+            <div>
+              <h3 class="text-xs font-black uppercase text-purple-400 tracking-widest"><i class="ri-robot-2-fill mr-4"></i> Quiniela Recomendada por IA (21 Días)</h3>
+              <p class="text-[8px] opacity-40 font-black uppercase mt-2">Sesgo prioritario: Liga MX</p>
+            </div>
+            <button onclick="window.acceptIASuggestion()" class="bg-purple-600 text-white font-black px-6 py-2 rounded-full text-[9px] uppercase tracking-wider">ACEPTAR TODA</button>
+          </div>
+          
+          <div class="space-y-8" id="admin-ia-matches-container">
+            <!-- Dinámico -->
+          </div>
+        </div>
+
+        <!-- CONFIGURACIÓN OPERATIVA DE COSTOS -->
+        <div class="glass-card p-20 mb-20">
+          <h3 class="text-xs font-black uppercase tracking-widest text-white mb-15"><i class="ri-settings-5-fill mr-4"></i> Costos & Gobernanza</h3>
+          
+          <div class="grid grid-cols-2 gap-12 mb-12">
+            <div class="form-group">
+              <label class="form-label">Costo Quiniela ($)</label>
+              <input type="number" id="cfg-pool-cost" class="form-input text-lg font-black text-accent" value="50">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Porcentaje App (%)</label>
+              <input type="number" id="cfg-pool-fee" class="form-input text-lg font-black text-accent" value="10">
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-12 mb-16">
+            <div class="form-group">
+              <label class="form-label">Bolsa Garantizada ($)</label>
+              <input type="number" id="cfg-pool-jackpot" class="form-input text-lg font-black text-accent" value="5000">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Costo Extra Goles ($)</label>
+              <input type="number" id="cfg-pool-extra-goals" class="form-input text-lg font-black text-accent" value="10">
+            </div>
+          </div>
+          
+          <button onclick="window.saveAdminConfig()" class="btn btn-primary w-full py-14 font-black uppercase text-xs">GUARDAR AJUSTES DE COSTO</button>
+        </div>
+
+        <!-- GOBERNANZA FINANCIERA (APROBACIÓN SPEI) -->
+        <div class="glass-card p-20 mb-20">
+          <h3 class="text-xs font-black uppercase tracking-widest text-white mb-15"><i class="ri-hand-coin-fill text-yellow-500 mr-4"></i> Autorizaciones SPEI Pendientes</h3>
+          <div class="space-y-12" id="admin-spei-container">
+            <!-- Dinámico -->
+          </div>
+        </div>
+
+        <!-- MÓDULO DE CIERRE SEMANAL (MARTES DE PAGOS) -->
+        <div class="glass-card p-20 mb-80" style="border-color: rgba(239, 68, 68, 0.2); background: rgba(239,68,68,0.01);">
+          <h3 class="text-xs font-black uppercase text-red-500 tracking-widest mb-12"><i class="ri-alert-fill mr-4"></i> Cierre Semanal & Reparto de Premios</h3>
+          <p class="text-xxs opacity-40 uppercase tracking-widest mb-15">Evalúa los aciertos finales y distribuye de forma atómica la bolsa entre los ganadores (Se ejecuta los martes).</p>
+          <button onclick="window.executeWeeklyClosure()" class="btn w-full py-16 font-black uppercase text-xs" style="background:#ef4444; color:#fff; border:none; box-shadow: 0 0 30px rgba(239,68,68,0.3);">⚙️ EJECUTAR CIERRE & EMITIR PAGOS</button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- DOCK DE NAVEGACIÓN ZENITH -->
+    <nav class="dock-zenith">
+      <button onclick="window.appNavigate('dashboard')" id="dock-dashboard" class="dock-item active">
+        <i class="ri-layout-grid-fill"></i><span class="dock-label">Estadio</span>
+      </button>
+      <button onclick="window.appNavigate('play')" id="dock-play" class="dock-item">
+        <i class="ri-ticket-2-fill"></i><span class="dock-label">Quiniela</span>
+      </button>
+      <button onclick="window.appNavigate('wallet')" id="dock-wallet" class="dock-item">
+        <i class="ri-wallet-3-fill"></i><span class="dock-label">Billetera</span>
+      </button>
+      <button onclick="window.appNavigate('admin')" id="dock-admin" class="dock-item hidden">
+        <i class="ri-shield-user-fill"></i><span class="dock-label">Admin</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- MODAL DE TICKETS (WHATSAPP SHARE / DETALLES) -->
+  <div id="ticket-modal" class="modal-overlay hidden">
+    <div class="modal-card glass-morph animate-scale-in">
+      <div class="flex justify-between items-center mb-15 border-b border-white/5 pb-10">
+        <h3 class="text-md font-black italic text-accent uppercase tracking-tighter">📋 Detalle de Ticket</h3>
+        <button onclick="window.closeTicketModal()" class="text-white hover:text-red-500 text-lg">✕</button>
+      </div>
+      <div id="ticket-modal-content" class="space-y-12 max-h-400 overflow-y-auto no-scrollbar">
+        <!-- Dinámico -->
+      </div>
+      <div class="flex gap-8 mt-20 pt-15 border-t border-white/5">
+        <button onclick="window.shareTicketOnWhatsApp()" class="flex-1 bg-green-500 text-black font-black py-12 rounded-2xl text-[10px] uppercase tracking-widest text-center flex items-center justify-center gap-4"><i class="ri-whatsapp-fill text-lg"></i> Compartir por WhatsApp</button>
+        <button onclick="window.closeTicketModal()" class="w-24 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase text-white">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Firebase dependencies -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+
+  <!-- Core Javascript Engines -->
+  <script type="module" src="app_db.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
