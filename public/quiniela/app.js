@@ -85,11 +85,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   // Checar si hay sesión guardada en localStorage (Descifrada)
   const savedUser = localStorage.getItem("qia_current_user");
   
-  // Simular carga de splash screen (1.5 segundos)
+  // Simular carga de splash screen (1.5 segundos con animación de zoom-in y fade-out premium)
   setTimeout(() => {
     const splash = document.getElementById("splash-screen");
     if (splash) {
       splash.style.opacity = "0";
+      splash.style.transform = "scale(1.08)"; // Zoom-in suave futurista
+      splash.style.transition = "opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1), transform 0.8s cubic-bezier(0.4, 0, 0.2, 1)";
       setTimeout(() => splash.remove(), 800);
     }
     
@@ -99,10 +101,19 @@ window.addEventListener("DOMContentLoaded", async () => {
       } catch (err) {
         currentUser = JSON.parse(savedUser);
       }
-      loadAppView();
     } else {
-      document.getElementById("login-view").classList.remove("hidden");
+      // Iniciar como Invitado Arena (Guest-First Flow)
+      currentUser = {
+        alias: "Invitado",
+        name: "Invitado Arena",
+        phone: "guest",
+        email: "guest@cyberstadium.mx",
+        balance: 0,
+        is_guest: true,
+        is_admin: false
+      };
     }
+    loadAppView();
   }, 1800);
 });
 
@@ -235,7 +246,16 @@ window.simulateGoogleAuth = async function() {
     showToast("¡Autenticación con Google exitosa!", "success");
     
     document.getElementById("login-view").classList.add("hidden");
-    loadAppView();
+    
+    // Si hay una acción de compra de quiniela en cola, reanudar de inmediato
+    if (pendingActionAfterLogin === "purchase_ticket") {
+      showToast("¡Sesión restaurada! Completando la compra de tu ticket en el Cyber Estadio...", "success");
+      pendingActionAfterLogin = null;
+      loadAppView();
+      window.purchaseTicket();
+    } else {
+      loadAppView();
+    }
   }, 1200);
 };
 
@@ -285,15 +305,67 @@ window.simulateOtpVerify = async function() {
   showToast("¡Teléfono verificado en la cadena de bloques!", "success");
   
   document.getElementById("login-view").classList.add("hidden");
-  loadAppView();
+  
+  // Si hay una acción de compra de quiniela en cola, reanudar de inmediato
+  if (pendingActionAfterLogin === "purchase_ticket") {
+    showToast("¡Sesión restaurada! Completando la compra de tu ticket en el Cyber Estadio...", "success");
+    pendingActionAfterLogin = null;
+    loadAppView();
+    window.purchaseTicket();
+  } else {
+    loadAppView();
+  }
 };
 
-// Cerrar sesión
+// Variable de control para reanudar apuestas tras registro rápido
+let pendingActionAfterLogin = null;
+
+// Abrir Login Modal emergente
+window.openLoginModal = function(pendingAction = null) {
+  pendingActionAfterLogin = pendingAction;
+  const loginView = document.getElementById("login-view");
+  if (loginView) {
+    loginView.classList.remove("hidden");
+    
+    // Inyectar botón de cierre ✕ si no existe
+    let closeBtn = document.getElementById("btn-close-login");
+    if (!closeBtn) {
+      closeBtn = document.createElement("button");
+      closeBtn.id = "btn-close-login";
+      closeBtn.className = "absolute top-20 right-20 text-white opacity-40 hover:opacity-100 text-lg font-black";
+      closeBtn.innerHTML = "✕";
+      closeBtn.setAttribute("onclick", "window.closeLoginModal()");
+      
+      const card = loginView.querySelector(".login-card");
+      if (card) {
+        card.style.position = "relative";
+        card.appendChild(closeBtn);
+      }
+    }
+    closeBtn.classList.remove("hidden");
+  }
+};
+
+window.closeLoginModal = function() {
+  const loginView = document.getElementById("login-view");
+  if (loginView) {
+    loginView.classList.add("hidden");
+  }
+  pendingActionAfterLogin = null;
+};
+
+// Cerrar sesión (Vuelve a modo Invitado sin bloquear la navegación)
 window.handleLogout = function() {
   localStorage.removeItem("qia_current_user");
-  currentUser = null;
-  document.getElementById("app-container").classList.add("hidden");
-  document.getElementById("login-view").classList.remove("hidden");
+  currentUser = {
+    alias: "Invitado",
+    name: "Invitado Arena",
+    phone: "guest",
+    email: "guest@cyberstadium.mx",
+    balance: 0,
+    is_guest: true,
+    is_admin: false
+  };
   
   // Limpiar inputs
   document.getElementById("auth-name").value = "";
@@ -301,13 +373,27 @@ window.handleLogout = function() {
   document.getElementById("auth-phone").value = "";
   document.getElementById("auth-otp").value = "";
   
-  showToast("Sesión cerrada. ¡Vuelve pronto al Cyber Stadium!", "info");
+  showToast("Sesión cerrada. ¡Vuelves como Invitado al Estadio!", "info");
+  loadAppView();
 };
 
 // ── NAVIGATION CONTROLLER ────────────────────────────────────────────────
 let currentPanel = "dashboard";
 
 window.appNavigate = function(panelName) {
+  // Bloquear pestañas si el usuario es Invitado
+  if (currentUser && currentUser.is_guest) {
+    if (panelName === "wallet") {
+      showToast("Para ingresar a tu Billetera Virtual y realizar recargas, por favor regístrate.", "info");
+      window.openLoginModal();
+      return;
+    }
+    if (panelName === "admin") {
+      showToast("Acceso denegado.", "error");
+      return;
+    }
+  }
+
   // Desactivar paneles
   const panels = ["dashboard", "play", "wallet", "admin"];
   panels.forEach(p => {
@@ -410,8 +496,22 @@ async function refreshPanelData(panel) {
 function loadAppView() {
   document.getElementById("app-container").classList.remove("hidden");
   
+  // Adaptar cabecera según el tipo de usuario (Invitado vs Registrado)
+  const logoutBtn = document.querySelector(".logout-btn");
+  if (logoutBtn) {
+    if (currentUser && currentUser.is_guest) {
+      logoutBtn.innerHTML = `<i class="ri-user-add-line" style="color: var(--accent); font-size: 16px;"></i>`;
+      logoutBtn.title = "Registrarse / Ingresar";
+      logoutBtn.setAttribute("onclick", "window.openLoginModal()");
+    } else {
+      logoutBtn.innerHTML = `<i class="ri-logout-box-r-line"></i>`;
+      logoutBtn.title = "Cerrar Sesión";
+      logoutBtn.setAttribute("onclick", "window.handleLogout()");
+    }
+  }
+
   // Mostrar dock de admin si es administrador
-  if (currentUser.is_admin) {
+  if (currentUser && currentUser.is_admin) {
     document.getElementById("dock-admin").classList.remove("hidden");
   } else {
     document.getElementById("dock-admin").classList.add("hidden");
@@ -554,6 +654,13 @@ window.purchaseTicket = async function() {
   
   if (missing.length > 0) {
     showToast(`Te falta predecir ${missing.length} partidos de la quiniela.`, "error");
+    return;
+  }
+  
+  // Interceptar si es Invitado (Guest-First Flow de conversión instantánea)
+  if (currentUser && currentUser.is_guest) {
+    showToast("¡Excelente quiniela! Para registrar tus predicciones en el Cyber Estadio y ganar la bolsa, por favor regístrate.", "info");
+    window.openLoginModal("purchase_ticket");
     return;
   }
   
