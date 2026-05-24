@@ -33,6 +33,23 @@
       fbq('track', 'PageView');
     </script>
     <!-- End Meta Pixel Code -->
+    <script>
+      // 🧹 Desregistrar de inmediato cualquier Service Worker de la raíz para restaurar la landing page
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for (let registration of registrations) {
+            if (registration.scope && !registration.scope.includes('/quiniela/')) {
+              registration.unregister().then(function(unregistered) {
+                if (unregistered) {
+                  console.log('🧹 [Service Worker] Desregistrado SW de raíz obsoleto.');
+                  window.location.reload(true); // Recarga forzada desde el servidor
+                }
+              });
+            }
+          }
+        });
+      }
+    </script>
     <!-- Open Graph / Meta Tags para Vista Previa en Redes Sociales (Facebook, WhatsApp, LinkedIn) -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="Tu negocio está a punto de entrar a la Inteligencia Artificial | Brain Branding">
