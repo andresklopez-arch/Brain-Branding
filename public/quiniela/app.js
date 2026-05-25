@@ -140,7 +140,22 @@ window.addEventListener("DOMContentLoaded", async () => {
       }
       loadAppView();
     } else {
-      document.getElementById("login-view").classList.remove("hidden");
+      // Auto-generación de usuario invitado instantánea (Direct Entry sin Fricción)
+      const guestId = Math.floor(Math.random() * 90000 + 10000);
+      const mockUser = {
+        phone: "invitado_" + guestId,
+        email: `invitado_${guestId}@cyberstadium.mx`,
+        name: "Invitado Arena",
+        alias: "invitado_" + guestId,
+        balance: 200, // saldo inicial
+        is_admin: true, // Habilitar admin para pruebas totales
+        created_at: new Date().toISOString()
+      };
+      
+      registerOrLoginUser(mockUser).then(registered => {
+        currentUser = registered;
+        loadAppView();
+      });
     }
 
     // Solicitar permisos de notificación móvil/PWA tras cargar splash
@@ -322,17 +337,10 @@ window.simulateOtpVerify = async function() {
 // Cerrar sesión
 window.handleLogout = function() {
   localStorage.removeItem("qia_current_user");
-  currentUser = null;
-  document.getElementById("app-container").classList.add("hidden");
-  document.getElementById("login-view").classList.remove("hidden");
-  
-  // Limpiar inputs
-  document.getElementById("auth-name").value = "";
-  document.getElementById("auth-alias").value = "";
-  document.getElementById("auth-phone").value = "";
-  document.getElementById("auth-otp").value = "";
-  
-  showToast("Sesión cerrada. ¡Vuelve pronto al Cyber Stadium!", "info");
+  showToast("Sesión cerrada. Reiniciando Estadio...", "info");
+  setTimeout(() => {
+    window.location.reload();
+  }, 1000);
 };
 
 // ── NAVIGATION CONTROLLER ────────────────────────────────────────────────
