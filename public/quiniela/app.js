@@ -153,6 +153,17 @@ window.addEventListener("DOMContentLoaded", async () => {
       setTimeout(() => splash.remove(), 800);
     }
     
+    // Cargar selecciones temporales si existen (Sugerencia de Resguardo de Quinielas)
+    const savedSelections = localStorage.getItem("qia_temp_selections");
+    if (savedSelections) {
+      try {
+        currentTicketSelections = JSON.parse(savedSelections);
+        console.log("💾 Selecciones temporales recuperadas:", currentTicketSelections);
+      } catch (e) {
+        console.warn("⚠️ Error al restaurar selecciones temporales:", e);
+      }
+    }
+
     if (savedUser) {
       try {
         currentUser = decryptData(JSON.parse(savedUser));
@@ -261,20 +272,29 @@ window.switchLoginTab = function(tab) {
 // Validación de Alias
 window.validateAliasAvailability = function(alias) {
   const feedback = document.getElementById("alias-feedback");
+  const previewContainer = document.getElementById("onboard-avatar-preview-container");
+  const previewImg = document.getElementById("onboard-avatar-preview");
+  
   if (!alias || alias.trim().length < 3) {
     feedback.classList.add("hidden");
+    if (previewContainer) previewContainer.classList.add("hidden");
     return;
   }
   feedback.classList.remove("hidden");
+  
+  // Mostrar previsualización del cyber-robot en tiempo real (Sugerencia 1)
+  if (previewContainer && previewImg) {
+    previewImg.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(alias)}`;
+    previewContainer.classList.remove("hidden");
+  }
+
   // Simple validación cosmética futurista
   if (alias.toLowerCase().includes("admin") || alias.toLowerCase().includes("antigravity")) {
     feedback.textContent = "Alias no disponible / Reservado";
     feedback.style.color = "var(--danger)";
-    document.getElementById("btn-auth-phone-submit").disabled = true;
   } else {
     feedback.textContent = "¡Alias disponible en la Quiniela Mundialista!";
     feedback.style.color = "var(--success)";
-    document.getElementById("btn-auth-phone-submit").disabled = false;
   }
 };
 
@@ -771,6 +791,9 @@ function renderPlayFixtures(fixtures) {
 window.selectBet = function(matchId, selection) {
   currentTicketSelections[matchId] = selection;
   
+  // Guardar selecciones temporales en localStorage (Sugerencia de Resguardo)
+  localStorage.setItem("qia_temp_selections", JSON.stringify(currentTicketSelections));
+  
   // Actualizar clases de botones
   ["L", "E", "V"].forEach(op => {
     const btn = document.getElementById(`btn-bet-${matchId}-${op}`);
@@ -864,8 +887,9 @@ window.purchaseTicket = async function() {
     // Enviar notificación local al celular
     window.sendLocalNotification("🎫 TICKET QUINIELA EMITIDO", `Tu ticket ${lastCreatedTicket.id} por $${cost.toFixed(2)} MXN ha sido guardado con éxito.`);
     
-    // Limpiar predicciones
+    // Limpiar predicciones y cesta temporal (Sugerencia de Resguardo)
     currentTicketSelections = {};
+    localStorage.removeItem("qia_temp_selections");
     document.getElementById("sidebet-goals").checked = false;
     document.getElementById("sidebet-striker").checked = false;
     
@@ -1655,6 +1679,11 @@ window.openAvatarCustomizer = function() {
   const modal = document.getElementById("avatar-modal");
   const container = document.getElementById("avatar-presets-grid");
   if (!modal || !container || !currentUser) return;
+  
+  if (currentUser.is_guest) {
+    showToast("⚠️ Define tu nombre y apodo participando en una quiniela para poder elegir tu robot personalizado.", "warning");
+    return;
+  }
   
   const presets = [
     { label: "Básico", suffix: "" },

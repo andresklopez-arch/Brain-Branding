@@ -32,16 +32,21 @@
     <div class="login-card glass-morph animate-scale-in">
       <img src="logo-quiniela.png" class="w-24 h-24 mx-auto mb-15 filter-neon" alt="Logo">
       <h2 class="text-3xl font-black italic tracking-tighter text-white uppercase mb-5">PREPARA TU <span class="text-accent">FICHA</span></h2>
-      <p class="text-xxs font-bold opacity-30 uppercase tracking-[4px] mb-30">Ingresa tu Nombre y Apodo</p>
+      <p class="text-xxs font-bold opacity-30 uppercase tracking-[4px] mb-20">Ingresa tu Nombre y Apodo</p>
       
+      <!-- Live Avatar Preview (Sugerencia 1) -->
+      <div id="onboard-avatar-preview-container" class="flex justify-center mb-20 hidden animate-scale-in">
+        <img id="onboard-avatar-preview" src="" class="w-16 h-16 rounded-full border-2 border-accent filter-neon" alt="Preview Avatar" style="width: 64px; height: 64px; border-radius: 50%;">
+      </div>
+
       <div class="form-group mb-16">
         <label class="form-label text-left block">Nombre Completo</label>
-        <input type="text" id="onboard-name" class="form-input text-white" placeholder="ej: Andrés López" spellcheck="false" style="text-align: left;">
+        <input type="text" id="onboard-name" class="form-input text-white" placeholder="ej: Andrés López" autocomplete="name" spellcheck="false" style="text-align: left;">
       </div>
       
       <div class="form-group mb-24">
         <label class="form-label text-left block">Apodo (Nombre en la Quiniela)</label>
-        <input type="text" id="onboard-alias" class="form-input text-accent font-black" placeholder="ej: rey_xalpa" spellcheck="false" oninput="window.validateAliasAvailability(this.value)" style="text-align: left;">
+        <input type="text" id="onboard-alias" class="form-input text-accent font-black" placeholder="ej: rey_xalpa" autocomplete="username" spellcheck="false" oninput="window.validateAliasAvailability(this.value)" style="text-align: left;">
         <div id="alias-feedback" class="text-[9px] font-black uppercase mt-4 hidden"></div>
       </div>
       
@@ -82,7 +87,7 @@
         <!-- Saludo Personalizado Superior -->
         <div class="flex justify-between items-center mb-16 animate-scale-in">
           <div class="flex items-center gap-10">
-            <img id="welcome-avatar" src="" class="w-12 h-12 rounded-full border-2 border-accent filter-neon hidden" alt="Avatar" style="width: 44px; height: 44px; border-radius: 50%;">
+            <img id="welcome-avatar" src="" class="w-12 h-12 rounded-full border-2 border-accent filter-neon hidden cursor-pointer" alt="Avatar" onclick="window.openAvatarCustomizer()" style="width: 44px; height: 44px; border-radius: 50%;">
             <div>
               <span class="text-xxxxs font-black tracking-[3px] opacity-40 uppercase block mb-4">Estadio Mundialista</span>
               <h2 class="text-xl font-black text-white uppercase italic tracking-tighter">Hola, <span class="text-accent" id="welcome-alias">@apodo</span> ⚡</h2>
@@ -451,6 +456,25 @@
       <div class="flex gap-8 mt-20 pt-15 border-t border-white/5">
         <button onclick="window.simulateOxxoPayment()" class="flex-1 bg-[#22c55e] text-black font-black py-12 rounded-2xl text-[9px] uppercase tracking-widest text-center flex items-center justify-center gap-4"><i class="ri-flashlight-fill"></i> SIMULAR PAGO EN CAJA</button>
         <button onclick="window.closeOxxoModal()" class="w-20 bg-white/5 border border-white/10 rounded-2xl text-[9px] font-black uppercase text-white">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE PERSONALIZACIÓN DE AVATAR (Sugerencia 1) -->
+  <div id="avatar-modal" class="modal-overlay hidden">
+    <div class="modal-card glass-morph animate-scale-in" style="max-width: 340px;">
+      <div class="flex justify-between items-center mb-15 border-b border-white/5 pb-10">
+        <h3 class="text-md font-black italic text-accent uppercase tracking-tighter"><i class="ri-robot-line mr-6"></i> Elige tu Cyber-Robot</h3>
+        <button onclick="window.closeAvatarCustomizer()" class="text-white hover:text-red-500 text-lg">✕</button>
+      </div>
+      <p class="text-xxxxs opacity-50 uppercase tracking-[2px] mb-15">Selecciona el preset de tu avatar para personalizar tu ficha en la quiniela</p>
+      
+      <div id="avatar-presets-grid" class="grid grid-cols-3 gap-10">
+        <!-- Dinámico -->
+      </div>
+      
+      <div class="flex gap-8 mt-20 pt-15 border-t border-white/5">
+        <button onclick="window.closeAvatarCustomizer()" class="w-full bg-white/5 border border-white/10 rounded-2xl py-12 text-[10px] font-black uppercase text-white hover:bg-white/10">Cerrar</button>
       </div>
     </div>
   </div>
