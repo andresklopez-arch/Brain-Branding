@@ -105,7 +105,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   initStarsBackground();
   
   // Sincronizar reloj antifraude en segundo plano
-  await syncServerTime();
+  syncServerTime();
   
   // Registrar Service Worker para soporte offline PWA
   if ('serviceWorker' in navigator) {
@@ -182,7 +182,7 @@ window.addEventListener("DOMContentLoaded", async () => {
 
 // Compresor y Caché WebP en cliente para logotipo
 function cacheLogoAsWebP() {
-  const cached = localStorage.getItem("logo_webp_cache");
+  const cached = localStorage.getItem("logo_webp_cache_v2");
   if (cached) {
     applyCachedLogo(cached);
     return;
@@ -199,7 +199,7 @@ function cacheLogoAsWebP() {
       const ctx = canvas.getContext("2d");
       ctx.drawImage(img, 0, 0);
       const webpUrl = canvas.toDataURL("image/webp", 0.85); // 85% calidad WebP
-      localStorage.setItem("logo_webp_cache", webpUrl);
+      localStorage.setItem("logo_webp_cache_v2", webpUrl);
       applyCachedLogo(webpUrl);
       console.log("⚡ [Performance] Logo comprimido a WebP y cacheado localmente.");
     } catch (e) {
