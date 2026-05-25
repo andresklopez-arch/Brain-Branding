@@ -819,29 +819,61 @@ export async function getGovernanceLogs() {
   }
 }
 
-// ── INDEXEDDB RESILIENT BACKUP ENGINE (Sugerencia 3) ───────────────────────
+// ── INDEXEDDB RESILIENT BACKUP ENGINE (Sugerencia 3 - Ultra Seguro) ─────────
 export function backupUserToIndexedDB(encryptedUser) {
   return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      console.warn("⚠️ [IndexedDB Backup] La escritura en IndexedDB excedió el tiempo límite.");
+      resolve(false);
+    }, 400);
+
     try {
+      if (!window.indexedDB) {
+        clearTimeout(timeout);
+        resolve(false);
+        return;
+      }
       const request = indexedDB.open("qia_stadium_backup_db", 1);
       request.onupgradeneeded = (e) => {
-        const dbInstance = e.target.result;
-        if (!dbInstance.objectStoreNames.contains("backup_store")) {
-          dbInstance.createObjectStore("backup_store", { keyPath: "id" });
+        try {
+          const dbInstance = e.target.result;
+          if (!dbInstance.objectStoreNames.contains("backup_store")) {
+            dbInstance.createObjectStore("backup_store", { keyPath: "id" });
+          }
+        } catch (err) {
+          console.warn("IndexedDB upgrade failed:", err);
         }
       };
       request.onsuccess = (e) => {
-        const dbInstance = e.target.result;
-        const tx = dbInstance.transaction("backup_store", "readwrite");
-        const store = tx.objectStore("backup_store");
-        store.put({ id: "current_user_session", data: encryptedUser });
-        tx.oncomplete = () => {
-          console.log("💾 [IndexedDB Backup] Sesión del usuario respaldada de forma resiliente.");
-          resolve(true);
-        };
+        try {
+          const dbInstance = e.target.result;
+          const tx = dbInstance.transaction("backup_store", "readwrite");
+          const store = tx.objectStore("backup_store");
+          store.put({ id: "current_user_session", data: encryptedUser });
+          tx.oncomplete = () => {
+            clearTimeout(timeout);
+            console.log("💾 [IndexedDB Backup] Sesión del usuario respaldada de forma resiliente.");
+            resolve(true);
+          };
+          tx.onerror = () => {
+            clearTimeout(timeout);
+            resolve(false);
+          };
+        } catch (err) {
+          clearTimeout(timeout);
+          resolve(false);
+        }
       };
-      request.onerror = () => resolve(false);
+      request.onerror = () => {
+        clearTimeout(timeout);
+        resolve(false);
+      };
+      request.onblocked = () => {
+        clearTimeout(timeout);
+        resolve(false);
+      };
     } catch (e) {
+      clearTimeout(timeout);
       resolve(false);
     }
   });
@@ -849,31 +881,67 @@ export function backupUserToIndexedDB(encryptedUser) {
 
 export function restoreUserFromIndexedDB() {
   return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      console.warn("⚠️ [IndexedDB Backup] La lectura de IndexedDB excedió el tiempo límite. Usando fallback.");
+      resolve(null);
+    }, 400);
+
     try {
+      if (!window.indexedDB) {
+        clearTimeout(timeout);
+        resolve(null);
+        return;
+      }
       const request = indexedDB.open("qia_stadium_backup_db", 1);
       request.onupgradeneeded = (e) => {
-        const dbInstance = e.target.result;
-        if (!dbInstance.objectStoreNames.contains("backup_store")) {
-          dbInstance.createObjectStore("backup_store", { keyPath: "id" });
+        try {
+          const dbInstance = e.target.result;
+          if (!dbInstance.objectStoreNames.contains("backup_store")) {
+            dbInstance.createObjectStore("backup_store", { keyPath: "id" });
+          }
+        } catch (err) {
+          console.warn("IndexedDB upgrade failed:", err);
         }
       };
       request.onsuccess = (e) => {
-        const dbInstance = e.target.result;
-        const tx = dbInstance.transaction("backup_store", "readonly");
-        const store = tx.objectStore("backup_store");
-        const getReq = store.get("current_user_session");
-        getReq.onsuccess = () => {
-          if (getReq.result) {
-            console.log("⚡ [IndexedDB Backup] Sesión restaurada desde IndexedDB.");
-            resolve(getReq.result.data);
-          } else {
+        try {
+          const dbInstance = e.target.result;
+          if (!dbInstance.objectStoreNames.contains("backup_store")) {
+            clearTimeout(timeout);
             resolve(null);
+            return;
           }
-        };
-        getReq.onerror = () => resolve(null);
+          const tx = dbInstance.transaction("backup_store", "readonly");
+          const store = tx.objectStore("backup_store");
+          const getReq = store.get("current_user_session");
+          getReq.onsuccess = () => {
+            clearTimeout(timeout);
+            if (getReq.result) {
+              console.log("⚡ [IndexedDB Backup] Sesión restaurada desde IndexedDB.");
+              resolve(getReq.result.data);
+            } else {
+              resolve(null);
+            }
+          };
+          getReq.onerror = () => {
+            clearTimeout(timeout);
+            resolve(null);
+          };
+        } catch (err) {
+          clearTimeout(timeout);
+          resolve(null);
+        }
       };
-      request.onerror = () => resolve(null);
+      request.onerror = () => {
+        clearTimeout(timeout);
+        resolve(null);
+      };
+      request.onblocked = () => {
+        clearTimeout(timeout);
+        resolve(null);
+      };
     } catch (e) {
+      clearTimeout(timeout);
       resolve(null);
     }
   });
