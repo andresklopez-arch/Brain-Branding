@@ -140,20 +140,22 @@ window.addEventListener("DOMContentLoaded", async () => {
       }
       loadAppView();
     } else {
-      // Auto-generación de usuario invitado instantánea (Direct Entry sin Fricción)
-      const guestId = Math.floor(Math.random() * 90000 + 10000);
+      // Auto-inicio directo (Jugador permanente local, sin registros de nungún tipo)
       const mockUser = {
-        phone: "invitado_" + guestId,
-        email: `invitado_${guestId}@cyberstadium.mx`,
-        name: "Invitado Arena",
-        alias: "invitado_" + guestId,
-        balance: 200, // saldo inicial
-        is_admin: true, // Habilitar admin para pruebas totales
+        phone: "jugador_arena",
+        email: "jugador@cyberstadium.mx",
+        name: "Jugador Arena",
+        alias: "Jugador",
+        balance: 200, // saldo inicial de cortesía
+        is_admin: true, // admin habilitado para pruebas de flujos
         created_at: new Date().toISOString()
       };
       
-      registerOrLoginUser(mockUser).then(registered => {
-        currentUser = registered;
+      // Importar encryptData dinámicamente si es necesario, pero como importamos todo de app_db,
+      // podemos usar localStorage directamente y guardar encryptData
+      import('./app_db.js').then(dbMod => {
+        localStorage.setItem("qia_current_user", JSON.stringify(dbMod.encryptData(mockUser)));
+        currentUser = mockUser;
         loadAppView();
       });
     }

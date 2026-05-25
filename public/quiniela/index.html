@@ -24,55 +24,7 @@
     </div>
   </div>
 
-  <!-- 🛡️ LOGIN & REGISTER VIEW -->
-  <section id="login-view" class="login-view hidden">
-    <div class="stars-container" id="login-stars"></div>
-    <div class="login-card glass-morph animate-scale-in">
-      <img src="logo-quiniela.png" class="w-24 h-24 mx-auto mb-15 filter-neon" alt="Logo">
-      <h2 class="text-3xl font-black italic tracking-tighter text-white uppercase mb-5">INGRESAR AL <span class="text-accent">ESTADIO</span></h2>
-      <p class="text-xxs font-bold opacity-30 uppercase tracking-[4px] mb-30">Quiniela Mundialista Inteligente</p>
-      
-      <!-- Selector de Login -->
-      <div class="flex gap-4 mb-25 bg-white/5 p-2 rounded-full border border-white/5">
-        <button id="btn-login-google" class="btn-tab active flex-1" onclick="window.switchLoginTab('google')"><i class="ri-google-fill"></i> Google</button>
-        <button id="btn-login-phone" class="btn-tab flex-1" onclick="window.switchLoginTab('phone')"><i class="ri-phone-fill"></i> Teléfono</button>
-      </div>
-
-      <!-- Formulario de Google -->
-      <div id="form-google" class="auth-form space-y-16">
-        <button onclick="window.simulateGoogleAuth()" class="btn btn-primary w-full py-14 font-black uppercase text-xs tracking-widest"><i class="ri-google-fill mr-6"></i> Registrar con Google</button>
-      </div>
-
-      <!-- Formulario de Teléfono -->
-      <div id="form-phone" class="auth-form hidden space-y-16">
-        <div class="form-group">
-          <label class="form-label">Nombre Completo</label>
-          <input type="text" id="auth-name" class="form-input" placeholder="ej: Andrés López" spellcheck="false">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Alias Único (Apodo en Quiniela)</label>
-          <input type="text" id="auth-alias" class="form-input text-accent" placeholder="ej: reysmart_99" spellcheck="false" oninput="window.validateAliasAvailability(this.value)">
-          <div id="alias-feedback" class="text-[9px] font-black uppercase mt-4 hidden"></div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Teléfono Móvil (México)</label>
-          <input type="tel" id="auth-phone" class="form-input" placeholder="ej: 5512345678" maxlength="10">
-        </div>
-        <button onclick="window.simulatePhoneAuth()" id="btn-auth-phone-submit" class="btn btn-primary w-full py-14 font-black uppercase text-xs tracking-widest">Enviar Código SMS</button>
-      </div>
-      
-      <!-- Verificación SMS (Paso 2) -->
-      <div id="form-otp" class="auth-form hidden space-y-16">
-        <p class="text-xs opacity-50">Hemos enviado un código SMS de 6 dígitos a tu celular.</p>
-        <div class="form-group">
-          <label class="form-label">Código de Verificación</label>
-          <input type="number" id="auth-otp" class="form-input text-2xl tracking-[10px] text-center" placeholder="123456" max="999999">
-        </div>
-        <button onclick="window.simulateOtpVerify()" class="btn btn-accent w-full py-14 font-black text-xs tracking-widest">VERIFICAR E INGRESAR</button>
-      </div>
-
-    </div>
-  </section>
+  </div>
 
   <!-- 🎛️ CORE APP CONTAINER -->
   <div id="app-container" class="app-container hidden">
@@ -91,9 +43,6 @@
           <span class="text-[8px] opacity-40 font-black uppercase">Saldo:</span>
           <span class="text-xs font-black text-[#00ff88]" id="header-balance">$0.00</span>
         </div>
-        <button onclick="window.handleLogout()" class="logout-btn" title="Cerrar Sesión">
-          <i class="ri-logout-box-r-line"></i>
-        </button>
       </div>
     </header>
 
