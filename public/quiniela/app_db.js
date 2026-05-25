@@ -141,13 +141,26 @@ async function checkSeeds() {
       ];
       localStorage.setItem("qia_leaderboard", JSON.stringify(defaultLeaderboard));
     }
+    if (!localStorage.getItem("qia_leaderboard_accumulated")) {
+      const defaultAcc = [
+        { rank: 1, alias: "rey_xalpa_master", name: "Andrés López", hits: 24 },
+        { rank: 2, alias: "futbol_cyber", name: "Carlos Slim", hits: 21 },
+        { rank: 3, alias: "stadium_queen", name: "Erika Wash", hits: 18 }
+      ];
+      localStorage.setItem("qia_leaderboard_accumulated", JSON.stringify(defaultAcc));
+    }
     if (!localStorage.getItem("qia_config")) {
       const defaultConfig = {
         pool_cost: 50,
         pool_fee: 10,
         pool_jackpot: 5000,
+        pool_places: 3,
         extra_goals_cost: 10,
-        extra_striker_cost: 15
+        extra_striker_cost: 15,
+        betting_deadline_day: 5,
+        betting_deadline_hour: 18,
+        bypass_deadline_testing: true,
+        manual_locked: false
       };
       localStorage.setItem("qia_config", JSON.stringify(defaultConfig));
     }
@@ -172,8 +185,13 @@ async function checkSeeds() {
           pool_cost: 50,
           pool_fee: 10,
           pool_jackpot: 5000,
+          pool_places: 3,
           extra_goals_cost: 10,
-          extra_striker_cost: 15
+          extra_striker_cost: 15,
+          betting_deadline_day: 5,
+          betting_deadline_hour: 18,
+          bypass_deadline_testing: true,
+          manual_locked: false
         };
         await db.collection("config").doc("governance").set(defaultConfig);
       }
@@ -187,21 +205,37 @@ async function checkSeeds() {
 
 // Configuración general de costos
 export async function getSystemConfig() {
+  let cfg;
   if (useSimulation) {
-    return JSON.parse(localStorage.getItem("qia_config"));
+    try {
+      cfg = JSON.parse(localStorage.getItem("qia_config"));
+    } catch (err) {
+      cfg = null;
+    }
+  } else {
+    try {
+      const doc = await db.collection("config").doc("governance").get();
+      cfg = doc.exists ? doc.data() : null;
+    } catch (e) {
+      cfg = null;
+    }
   }
-  try {
-    const doc = await db.collection("config").doc("governance").get();
-    return doc.exists ? doc.data() : {
-      pool_cost: 50,
-      pool_fee: 10,
-      pool_jackpot: 5000,
-      extra_goals_cost: 10,
-      extra_striker_cost: 15
-    };
-  } catch (e) {
-    return { pool_cost: 50, pool_fee: 10, pool_jackpot: 5000, extra_goals_cost: 10, extra_striker_cost: 15 };
-  }
+  
+  const defaults = {
+    pool_cost: 50,
+    pool_fee: 10,
+    pool_jackpot: 5000,
+    pool_places: 3,
+    extra_goals_cost: 10,
+    extra_striker_cost: 15,
+    betting_deadline_day: 5,
+    betting_deadline_hour: 18,
+    bypass_deadline_testing: true,
+    manual_locked: false
+  };
+  
+  if (!cfg) return defaults;
+  return { ...defaults, ...cfg };
 }
 
 export async function saveSystemConfig(cfg) {
@@ -213,72 +247,11 @@ export async function saveSystemConfig(cfg) {
   return true;
 }
 
-// Ahorro de lecturas: Comprimir y guardar fixtures y sugerencias semanales en un solo documento atómico de menos de 1 KB en la nube
-export async function saveConsolidatedWeeklyFixtures(fixtures, suggestions) {
-  const payload = {
-    fixtures: fixtures,
-    suggestions: suggestions,
-    updated_at: new Date().toISOString()
-  };
-
-  if (useSimulation) {
-    localStorage.setItem("qia_consolidated_fixtures", JSON.stringify(payload));
-    
-    // 🔥 COPIA DE RESPALDO A LA NUBE: Guardar en documento único consolidado
-    if (window.firebase && firebase.apps.length > 0) {
-      try {
-        await firebase.firestore().collection("config").doc("fixtures_weekly").set(payload);
-        console.log("⚡ [Cloud Sync] Fixtures semanales consolidados en Firestore.");
-      } catch (e) {
-        console.warn("Fallo guardado en Firestore de fixtures consolidados:", e);
-      }
-    }
-    return true;
-  }
-
-  await db.collection("config").doc("fixtures_weekly").set(payload);
-  return true;
-}
-
-// Obtener Fixtures ordenados (Carga estática ultraligera con Bypass de Carga de 1 KB de Sugerencia #3)
+// Obtener Fixtures ordenados
 export async function getFixtures() {
-  // Estrategia 1: Intentar leer del documento unificado dinámico de Firestore (Ahorro de lecturas de 1 KB)
-  if (window.firebase && firebase.apps.length > 0) {
-    try {
-      const doc = await firebase.firestore().collection("config").doc("fixtures_weekly").get();
-      if (doc.exists) {
-        const data = doc.data();
-        if (data.fixtures && data.fixtures.length > 0) {
-          if (useSimulation) {
-            localStorage.setItem("qia_fixtures", JSON.stringify(data.fixtures));
-          }
-          return data.fixtures.sort((a, b) => b.attraction_index - a.attraction_index);
-        }
-      }
-    } catch (e) {
-      console.log("⚙️ [Failsafe Cloud] Fallo al cargar fixtures consolidados de Firestore.");
-    }
-  }
-
-  // Estrategia 2: Intentar cargar del archivo local estático fixtures-sug.json
-  try {
-    const res = await fetch("./fixtures-sug.json");
-    if (res.ok) {
-      const data = await res.json();
-      if (data.fixtures && data.fixtures.length > 0) {
-        if (useSimulation) {
-          localStorage.setItem("qia_fixtures", JSON.stringify(data.fixtures));
-        }
-        return data.fixtures.sort((a, b) => b.attraction_index - a.attraction_index);
-      }
-    }
-  } catch (err) {
-    console.log("⚙️ [Failsafe Loader] fixtures-sug.json no disponible, cargando base de datos local.");
-  }
-
-  // Estrategia 3: Fallback a LocalStorage o Mock base
   if (useSimulation) {
-    const list = JSON.parse(localStorage.getItem("qia_fixtures")) || LIGA_MX_MATCHES;
+    const list = JSON.parse(localStorage.getItem("qia_fixtures"));
+    // Mapear Liga MX y priorizar
     return list.sort((a, b) => b.attraction_index - a.attraction_index);
   }
   try {
@@ -291,44 +264,10 @@ export async function getFixtures() {
   }
 }
 
-// Obtener sugerencias IA (Carga estática de Sugerencia #3)
+// Obtener sugerencias IA
 export async function getIASuggestions() {
-  // Estrategia 1: Intentar leer del documento unificado dinámico de Firestore
-  if (window.firebase && firebase.apps.length > 0) {
-    try {
-      const doc = await firebase.firestore().collection("config").doc("fixtures_weekly").get();
-      if (doc.exists) {
-        const data = doc.data();
-        if (data.suggestions && data.suggestions.length > 0) {
-          if (useSimulation) {
-            localStorage.setItem("qia_suggestions", JSON.stringify(data.suggestions));
-          }
-          return data.suggestions;
-        }
-      }
-    } catch (e) {
-      console.log("⚙️ [Failsafe Cloud] Fallo al cargar sugerencias consolidadas de Firestore.");
-    }
-  }
-
-  // Estrategia 2: Intentar cargar del archivo local estático fixtures-sug.json
-  try {
-    const res = await fetch("./fixtures-sug.json");
-    if (res.ok) {
-      const data = await res.json();
-      if (data.suggestions && data.suggestions.length > 0) {
-        if (useSimulation) {
-          localStorage.setItem("qia_suggestions", JSON.stringify(data.suggestions));
-        }
-        return data.suggestions;
-      }
-    }
-  } catch (err) {
-    console.log("⚙️ [Failsafe Loader] suggestions de fixtures-sug.json no disponible.");
-  }
-
   if (useSimulation) {
-    return JSON.parse(localStorage.getItem("qia_suggestions")) || INITIAL_SUGGESTIONS;
+    return JSON.parse(localStorage.getItem("qia_suggestions"));
   }
   const snap = await db.collection("suggestions").get();
   return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -368,13 +307,19 @@ export async function acceptSuggestionsAsFixtures(suggestions) {
   return true;
 }
 
-// Clasificación / Leaderboard
-export async function getLeaderboard() {
+// Clasificación / Leaderboard (Semanal y Acumulada)
+export async function getLeaderboard(type = 'weekly') {
   if (useSimulation) {
-    return JSON.parse(localStorage.getItem("qia_leaderboard"));
+    if (type === 'accumulated') {
+      return JSON.parse(localStorage.getItem("qia_leaderboard_accumulated") || "[]");
+    }
+    return JSON.parse(localStorage.getItem("qia_leaderboard") || "[]");
   }
-  const snap = await db.collection("users")
-    .orderBy("avg_hits", "desc")
+  const collectionName = type === 'accumulated' ? "users" : "users"; // Ajustar después para estructura completa
+  const orderField = type === 'accumulated' ? "total_hits" : "avg_hits";
+  
+  const snap = await db.collection(collectionName)
+    .orderBy(orderField, "desc")
     .limit(10)
     .get();
   let rank = 1;
@@ -384,91 +329,46 @@ export async function getLeaderboard() {
       rank: rank++,
       alias: u.alias || "user_ia",
       name: u.name || "Usuario",
-      hits: u.avg_hits || 0
+      hits: type === 'accumulated' ? (u.total_hits || 0) : (u.avg_hits || 0)
     };
   });
 }
 
-// Auth de usuario simulado e integrado (Sincronizado a la Nube de Sugerencia #2)
+// Auth de usuario simulado e integrado con Roles
 export async function registerOrLoginUser(userData) {
-  // Comprobar si ya existe en local o nube para preservar saldo anterior
-  const id = userData.phone || userData.email;
-  const existing = await getUserData(id);
-  
-  let finalUser = userData;
-  if (existing) {
-    // Si ya existe, combinamos datos preservando su balance e información
-    finalUser = {
-      ...userData,
-      balance: existing.balance !== undefined ? existing.balance : userData.balance,
-      alias: existing.alias || userData.alias,
-      is_admin: existing.is_admin !== undefined ? existing.is_admin : userData.is_admin,
-    };
+  if (!userData.role) {
+    // Si el alias es Master Admin, darle rol especial (mock)
+    if (userData.alias && userData.alias.toLowerCase().includes('master')) {
+      userData.role = 'master';
+    } else {
+      userData.role = 'user';
+    }
   }
-
-  const encryptedUser = encryptData(finalUser);
+  const encryptedUser = encryptData(userData);
   if (useSimulation) {
     localStorage.setItem("qia_current_user", JSON.stringify(encryptedUser));
-    
-    // 🔥 COPIA DE RESPALDO A LA NUBE: Guardar copia de seguridad en Firestore
-    if (window.firebase && firebase.apps.length > 0) {
-      const uid = id.replace(/[^a-zA-Z0-9]/g, "_");
-      firebase.firestore().collection("users").doc(uid).set(encryptedUser, { merge: true }).catch(() => {});
-    }
-
     // Guardar en la lista global de usuarios simulados
     let allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
-    let foundIdx = allUsers.findIndex(u => {
-      const dec = decryptData(u);
-      return dec.phone === finalUser.phone || dec.email === finalUser.email;
-    });
-    if (foundIdx !== -1) {
-      allUsers[foundIdx] = encryptedUser;
-    } else {
+    const decryptedList = allUsers.map(u => decryptData(u));
+    if (!decryptedList.find(u => u.phone === userData.phone || u.email === userData.email)) {
       allUsers.push(encryptedUser);
+      localStorage.setItem("qia_users_list", JSON.stringify(allUsers));
     }
-    localStorage.setItem("qia_users_list", JSON.stringify(allUsers));
-    return finalUser;
+    return userData;
   }
   
-  const uid = id.replace(/[^a-zA-Z0-9]/g, "_");
+  const uid = userData.phone || userData.email.replace(/[^a-zA-Z0-9]/g, "_");
   await db.collection("users").doc(uid).set({
     ...encryptedUser,
     updated_at: new Date().toISOString()
   }, { merge: true });
   
   localStorage.setItem("qia_current_user", JSON.stringify(encryptedUser));
-  return finalUser;
+  return userData;
 }
 
 export async function getUserData(phoneOrEmail) {
   if (useSimulation) {
-    // Primero intentar recuperar de la nube si está conectado
-    if (window.firebase && firebase.apps.length > 0) {
-      try {
-        const uid = phoneOrEmail.replace(/[^a-zA-Z0-9]/g, "_");
-        const doc = await firebase.firestore().collection("users").doc(uid).get();
-        if (doc.exists) {
-          const cloudData = decryptData(doc.data());
-          // Sincronizar en la lista local de paso
-          let allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
-          let foundIdx = allUsers.findIndex(u => {
-            const dec = decryptData(u);
-            return dec.phone === cloudData.phone || dec.email === cloudData.email;
-          });
-          if (foundIdx !== -1) {
-            allUsers[foundIdx] = encryptData(cloudData);
-          } else {
-            allUsers.push(encryptData(cloudData));
-          }
-          localStorage.setItem("qia_users_list", JSON.stringify(allUsers));
-          return cloudData;
-        }
-      } catch (err) {
-        console.warn("Fallo lectura de respaldo en la nube para el usuario:", err);
-      }
-    }
-
     const allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
     const found = allUsers.find(u => {
       const dec = decryptData(u);
@@ -481,7 +381,7 @@ export async function getUserData(phoneOrEmail) {
   return doc.exists ? decryptData(doc.data()) : null;
 }
 
-// Transacciones y Billetera (Sincronizado a la Nube de Sugerencia #2)
+// Transacciones y Billetera
 export async function registerTransaction(tx) {
   if (!tx.id) tx.id = "tx-" + Date.now();
   tx.created_at = new Date().toISOString();
@@ -491,24 +391,12 @@ export async function registerTransaction(tx) {
     list.unshift(tx);
     localStorage.setItem("qia_transactions", JSON.stringify(list));
     
-    // 🔥 COPIA DE RESPALDO A LA NUBE: Guardar transaccion en Firestore
-    if (window.firebase && firebase.apps.length > 0) {
-      firebase.firestore().collection("transactions").doc(tx.id).set(tx).catch(() => {});
-    }
-    
     // Si es deposito de Stripe o aprobacion de SPEI, subir saldo
     if (tx.status === "approved") {
       const user = decryptData(JSON.parse(localStorage.getItem("qia_current_user")));
       if (user) {
         user.balance = (Number(user.balance) || 0) + Number(tx.amount);
         localStorage.setItem("qia_current_user", JSON.stringify(encryptData(user)));
-
-        // 🔥 COPIA DE RESPALDO A LA NUBE: Actualizar balance del usuario en Firestore
-        if (window.firebase && firebase.apps.length > 0) {
-          const uid = (user.phone || user.email).replace(/[^a-zA-Z0-9]/g, "_");
-          firebase.firestore().collection("users").doc(uid).set(encryptData(user), { merge: true }).catch(() => {});
-        }
-
         // actualizar en la lista
         let allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
         allUsers = allUsers.map(u => {
@@ -584,12 +472,6 @@ export async function approveSPEITransaction(txId) {
         });
         localStorage.setItem("qia_users_list", JSON.stringify(allUsers));
         
-        // 🔥 COPIA DE RESPALDO A LA NUBE: Actualizar balance del usuario afectado en Firestore
-        if (window.firebase && firebase.apps.length > 0) {
-          const uid = (user.phone || user.email).replace(/[^a-zA-Z0-9]/g, "_");
-          firebase.firestore().collection("users").doc(uid).set(encryptData(user), { merge: true }).catch(() => {});
-        }
-
         // Si el admin es él mismo, actualizar current user
         const curr = decryptData(JSON.parse(localStorage.getItem("qia_current_user")));
         if (curr && (curr.phone === user.phone || curr.email === user.email)) {
@@ -636,7 +518,7 @@ export async function declineSPEITransaction(txId) {
   return true;
 }
 
-// Tickets / Quinielas compradas (Sincronizado a la Nube de Sugerencia #2)
+// Tickets / Quinielas compradas
 export async function createTicket(ticket) {
   if (!ticket.id) ticket.id = "tkt-" + Date.now();
   ticket.created_at = new Date().toISOString();
@@ -646,23 +528,11 @@ export async function createTicket(ticket) {
     list.unshift(ticket);
     localStorage.setItem("qia_tickets", JSON.stringify(list));
     
-    // 🔥 COPIA DE RESPALDO A LA NUBE: Guardar ticket en Firestore
-    if (window.firebase && firebase.apps.length > 0) {
-      firebase.firestore().collection("tickets").doc(ticket.id).set(ticket).catch(() => {});
-    }
-
     // Cobrar costo al usuario
     const user = decryptData(JSON.parse(localStorage.getItem("qia_current_user")));
     if (user) {
       user.balance = (Number(user.balance) || 0) - Number(ticket.total_cost);
       localStorage.setItem("qia_current_user", JSON.stringify(encryptData(user)));
-      
-      // 🔥 COPIA DE RESPALDO A LA NUBE: Actualizar balance del usuario en Firestore
-      if (window.firebase && firebase.apps.length > 0) {
-        const uid = (user.phone || user.email).replace(/[^a-zA-Z0-9]/g, "_");
-        firebase.firestore().collection("users").doc(uid).set(encryptData(user), { merge: true }).catch(() => {});
-      }
-
       // actualizar en la lista
       let allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
       allUsers = allUsers.map(u => {
@@ -712,156 +582,101 @@ export async function getAdminStats() {
 
 // Cierre semanal (Martes de pagos)
 export async function executeWeeklyClosure(config) {
-  // Simular la asignación de aciertos aleatorios a los tickets y repartición de bolsa
   if (useSimulation) {
-    const tickets = JSON.parse(localStorage.getItem("qia_tickets"));
-    const leaderboard = JSON.parse(localStorage.getItem("qia_leaderboard"));
-    
+    const tickets = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
     if (tickets.length === 0) return { success: false, message: "No hay tickets activos para cerrar esta semana." };
 
-    // Evaluar aciertos (en simulación, evaluamos aciertos aleatorios de 4 a 7 para cada ticket)
+    // 1. Agrupar por usuario y tomar la mejor quiniela
+    const userBest = {};
     tickets.forEach(t => {
       t.status = "checked";
-      t.hits = Math.floor(Math.random() * 4) + 4; // de 4 a 7 aciertos de 7 posibles
+      t.hits = Math.floor(Math.random() * 4) + 4; // de 4 a 7 aciertos simulados
+      if (!userBest[t.user_id] || t.hits > userBest[t.user_id].hits) {
+        userBest[t.user_id] = t;
+      }
     });
+
+    const bestTickets = Object.values(userBest).sort((a, b) => b.hits - a.hits);
     
-    // Ordenar tickets por aciertos
-    const sorted = [...tickets].sort((a, b) => b.hits - a.hits);
-    
-    // La bolsa se divide: 1er lugar (50%), 2do lugar (30%), 3er lugar (20%)
+    // 2. Determinar bolsas por lugar
+    const places = Number(config.pool_places) || 3;
     const jackpot = Number(config.pool_jackpot) || 5000;
-    const p1 = jackpot * 0.5;
-    const p2 = jackpot * 0.3;
-    const p3 = jackpot * 0.2;
+    const percentages = [];
+    let remaining = 100;
+    for(let i=0; i<places; i++){
+      let p = (i === places - 1) ? remaining : Math.round(remaining * 0.5);
+      percentages.push(p);
+      remaining -= p;
+    }
+    const prizePools = percentages.map(p => (p/100) * jackpot);
 
+    // 3. Asignar premios manejando empates
+    let currentSlot = 0;
+    let i = 0;
     const winners = [];
-    if (sorted[0]) {
-      sorted[0].prize = p1;
-      winners.push({ alias: sorted[0].user_alias, prize: p1, rank: 1, hits: sorted[0].hits });
-      
-      // Pagar premio en balance simulado
-      let allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
-      const winnerUser = allUsers.find(u => u.phone === sorted[0].user_id || u.email === sorted[0].user_id);
-      if (winnerUser) {
-        winnerUser.balance = (Number(winnerUser.balance) || 0) + p1;
-        localStorage.setItem("qia_users_list", JSON.stringify(allUsers));
+    while (i < bestTickets.length && currentSlot < places) {
+      let currentHits = bestTickets[i].hits;
+      let tiedUsers = [];
+      while (i < bestTickets.length && bestTickets[i].hits === currentHits) {
+        tiedUsers.push(bestTickets[i]);
+        i++;
       }
-    }
-    if (sorted[1]) {
-      sorted[1].prize = p2;
-      winners.push({ alias: sorted[1].user_alias, prize: p2, rank: 2, hits: sorted[1].hits });
       
-      let allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
-      const winnerUser = allUsers.find(u => u.phone === sorted[1].user_id || u.email === sorted[1].user_id);
-      if (winnerUser) {
-        winnerUser.balance = (Number(winnerUser.balance) || 0) + p2;
-        localStorage.setItem("qia_users_list", JSON.stringify(allUsers));
+      let slotsConsumed = Math.min(tiedUsers.length, places - currentSlot);
+      let totalTiedPrize = 0;
+      for(let s = 0; s < slotsConsumed; s++) {
+        totalTiedPrize += prizePools[currentSlot + s] || 0;
       }
-    }
-    if (sorted[2]) {
-      sorted[2].prize = p3;
-      winners.push({ alias: sorted[2].user_alias, prize: p3, rank: 3, hits: sorted[2].hits });
-      
-      let allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
-      const winnerUser = allUsers.find(u => u.phone === sorted[2].user_id || u.email === sorted[2].user_id);
-      if (winnerUser) {
-        winnerUser.balance = (Number(winnerUser.balance) || 0) + p3;
-        localStorage.setItem("qia_users_list", JSON.stringify(allUsers));
-      }
-    }
+      let prizePerUser = totalTiedPrize / tiedUsers.length;
 
-    // Actualizar Leaderboard semanal con los ganadores reales
-    const newLeaderboard = winners.map(w => ({
-      rank: w.rank,
-      alias: w.alias,
-      name: w.alias === "Admin" ? "Administrador" : w.alias,
-      hits: w.hits
-    }));
-    
-    // Rellenar leaderboard con otros seeds para que no quede vacía
-    while (newLeaderboard.length < 4) {
-      newLeaderboard.push({ rank: newLeaderboard.length + 1, alias: "stadium_pro_" + newLeaderboard.length, name: "Jugador IA", hits: 3 });
-    }
-    
-    localStorage.setItem("qia_leaderboard", JSON.stringify(newLeaderboard));
-    localStorage.setItem("qia_tickets", JSON.stringify(tickets)); // guardar con status checked
-    
-    // Si el usuario actual ganó, recargar balance en vista
-    const curr = decryptData(JSON.parse(localStorage.getItem("qia_current_user")));
-    if (curr) {
-      const allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
-      const updatedCurr = allUsers.find(u => {
-        const dec = decryptData(u);
-        return dec.phone === curr.phone || dec.email === curr.email;
+      tiedUsers.forEach(tu => {
+        if (prizePerUser > 0) {
+          tu.prize = prizePerUser;
+          winners.push({ alias: tu.user_alias, user_id: tu.user_id, prize: prizePerUser, rank: currentSlot + 1, hits: tu.hits });
+        }
       });
-      if (updatedCurr) {
-        localStorage.setItem("qia_current_user", JSON.stringify(updatedCurr));
+      currentSlot += tiedUsers.length;
+    }
+
+    // Actualizar saldos simulados
+    let allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
+    winners.forEach(w => {
+      const uIndex = allUsers.findIndex(au => {
+        const dec = decryptData(au);
+        return dec.phone === w.user_id || dec.email === w.user_id;
+      });
+      if (uIndex !== -1) {
+        const decU = decryptData(allUsers[uIndex]);
+        decU.balance = (Number(decU.balance) || 0) + w.prize;
+        allUsers[uIndex] = encryptData(decU);
       }
-    }
-
-    return {
-      success: true,
-      message: "Cierre completado. La bolsa de $" + jackpot + " MXN ha sido distribuida entre los 3 primeros lugares.",
-      winners: winners
-    };
-  }
-
-  // Cloud Firestore Cierre semanal
-  try {
-    const tSnap = await db.collection("tickets").where("status", "==", "active").get();
-    if (tSnap.empty) return { success: false, message: "No hay tickets activos para cerrar esta semana en Firestore." };
-
-    const jackpot = Number(config.pool_jackpot) || 5000;
-    const p1 = jackpot * 0.5;
-    const p2 = jackpot * 0.3;
-    const p3 = jackpot * 0.2;
-
-    const tickets = tSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    tickets.forEach(t => {
-      t.status = "checked";
-      t.hits = Math.floor(Math.random() * 4) + 4; // simulación de aciertos
     });
-
-    const sorted = [...tickets].sort((a, b) => b.hits - a.hits);
-    const winners = [];
-
-    // Repartir en lote Firestore
-    const batch = db.batch();
+    localStorage.setItem("qia_users_list", JSON.stringify(allUsers));
     
-    if (sorted[0]) {
-      const ref = db.collection("tickets").doc(sorted[0].id);
-      batch.update(ref, { status: "checked", hits: sorted[0].hits, prize: p1 });
-      const uRef = db.collection("users").doc(sorted[0].user_id.replace(/[^a-zA-Z0-9]/g, "_"));
-      batch.update(uRef, { balance: firebase.firestore.FieldValue.increment(p1) });
-      winners.push({ alias: sorted[0].user_alias, prize: p1, rank: 1, hits: sorted[0].hits });
-    }
-    if (sorted[1]) {
-      const ref = db.collection("tickets").doc(sorted[1].id);
-      batch.update(ref, { status: "checked", hits: sorted[1].hits, prize: p2 });
-      const uRef = db.collection("users").doc(sorted[1].user_id.replace(/[^a-zA-Z0-9]/g, "_"));
-      batch.update(uRef, { balance: firebase.firestore.FieldValue.increment(p2) });
-      winners.push({ alias: sorted[1].user_alias, prize: p2, rank: 2, hits: sorted[1].hits });
-    }
-    if (sorted[2]) {
-      const ref = db.collection("tickets").doc(sorted[2].id);
-      batch.update(ref, { status: "checked", hits: sorted[2].hits, prize: p3 });
-      const uRef = db.collection("users").doc(sorted[2].user_id.replace(/[^a-zA-Z0-9]/g, "_"));
-      batch.update(uRef, { balance: firebase.firestore.FieldValue.increment(p3) });
-      winners.push({ alias: sorted[2].user_alias, prize: p3, rank: 3, hits: sorted[2].hits });
-    }
+    // Actualizar Leaderboards
+    const newWeeklyLeaderboard = bestTickets.map((t, idx) => ({
+      rank: idx + 1, alias: t.user_alias, name: t.user_alias, hits: t.hits
+    })).slice(0, 10);
+    localStorage.setItem("qia_leaderboard", JSON.stringify(newWeeklyLeaderboard));
 
-    // Actualizar los demás a checked
-    for (let i = 3; i < sorted.length; i++) {
-      const ref = db.collection("tickets").doc(sorted[i].id);
-      batch.update(ref, { status: "checked", hits: sorted[i].hits, prize: 0 });
-    }
+    let accBoard = JSON.parse(localStorage.getItem("qia_leaderboard_accumulated") || "[]");
+    bestTickets.forEach(t => {
+      let entry = accBoard.find(a => a.alias === t.user_alias);
+      if (entry) {
+        entry.hits += t.hits;
+      } else {
+        accBoard.push({ rank: 0, alias: t.user_alias, name: t.user_alias, hits: t.hits });
+      }
+    });
+    accBoard.sort((a, b) => b.hits - a.hits);
+    accBoard.forEach((item, idx) => item.rank = idx + 1);
+    localStorage.setItem("qia_leaderboard_accumulated", JSON.stringify(accBoard));
+    localStorage.setItem("qia_tickets", JSON.stringify(tickets));
 
-    await batch.commit();
-
-    // Actualizar current user local si coincide con ganadores
+    // Refrescar current_user
     const curr = decryptData(JSON.parse(localStorage.getItem("qia_current_user")));
     if (curr) {
-      const winnerMatch = winners.find(w => w.alias === curr.alias);
+      const winnerMatch = winners.find(w => w.user_id === curr.phone || w.user_id === curr.email);
       if (winnerMatch) {
         curr.balance = (Number(curr.balance) || 0) + winnerMatch.prize;
         localStorage.setItem("qia_current_user", JSON.stringify(encryptData(curr)));
@@ -870,10 +685,132 @@ export async function executeWeeklyClosure(config) {
 
     return {
       success: true,
-      message: "Cierre de Firestore completado con éxito.",
+      message: "Cierre completado. La bolsa de $" + jackpot + " MXN ha sido distribuida.",
       winners: winners
     };
+  }
+
+  // Lógica de Cloud Firestore
+  try {
+    const tSnap = await db.collection("tickets").where("status", "==", "active").get();
+    if (tSnap.empty) return { success: false, message: "No hay tickets activos en Firestore." };
+
+    const jackpot = Number(config.pool_jackpot) || 5000;
+    const places = Number(config.pool_places) || 3;
+    const percentages = [];
+    let remaining = 100;
+    for(let i=0; i<places; i++){
+      let p = (i === places - 1) ? remaining : Math.round(remaining * 0.5);
+      percentages.push(p);
+      remaining -= p;
+    }
+    const prizePools = percentages.map(p => (p/100) * jackpot);
+
+    const tickets = tSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const userBest = {};
+    tickets.forEach(t => {
+      t.status = "checked";
+      t.hits = Math.floor(Math.random() * 4) + 4;
+      if (!userBest[t.user_id] || t.hits > userBest[t.user_id].hits) {
+        userBest[t.user_id] = t;
+      }
+    });
+
+    const bestTickets = Object.values(userBest).sort((a, b) => b.hits - a.hits);
+    let currentSlot = 0;
+    let i = 0;
+    const winners = [];
+    
+    while (i < bestTickets.length && currentSlot < places) {
+      let currentHits = bestTickets[i].hits;
+      let tiedUsers = [];
+      while (i < bestTickets.length && bestTickets[i].hits === currentHits) {
+        tiedUsers.push(bestTickets[i]);
+        i++;
+      }
+      
+      let slotsConsumed = Math.min(tiedUsers.length, places - currentSlot);
+      let totalTiedPrize = 0;
+      for(let s = 0; s < slotsConsumed; s++) {
+        totalTiedPrize += prizePools[currentSlot + s] || 0;
+      }
+      let prizePerUser = totalTiedPrize / tiedUsers.length;
+
+      tiedUsers.forEach(tu => {
+        if (prizePerUser > 0) {
+          tu.prize = prizePerUser;
+          winners.push({ alias: tu.user_alias, user_id: tu.user_id, prize: prizePerUser, rank: currentSlot + 1, hits: tu.hits, id: tu.id });
+        }
+      });
+      currentSlot += tiedUsers.length;
+    }
+
+    const batch = db.batch();
+    winners.forEach(w => {
+      const ref = db.collection("tickets").doc(w.id);
+      batch.update(ref, { status: "checked", hits: w.hits, prize: w.prize });
+      const uid = w.user_id.replace(/[^a-zA-Z0-9]/g, "_");
+      batch.update(db.collection("users").doc(uid), { 
+        balance: firebase.firestore.FieldValue.increment(w.prize),
+        total_hits: firebase.firestore.FieldValue.increment(w.hits) // Acumulado
+      });
+    });
+
+    await batch.commit();
+
+    const curr = decryptData(JSON.parse(localStorage.getItem("qia_current_user")));
+    if (curr) {
+      const winnerMatch = winners.find(w => w.user_id === curr.phone || w.user_id === curr.email);
+      if (winnerMatch) {
+        curr.balance = (Number(curr.balance) || 0) + winnerMatch.prize;
+        localStorage.setItem("qia_current_user", JSON.stringify(encryptData(curr)));
+      }
+    }
+
+    return { success: true, message: "Cierre de Firestore completado con éxito.", winners };
   } catch (e) {
     return { success: false, message: "Error en cierre Firestore: " + e.message };
+  }
+}
+
+// ── AUDITORÍA DE GOBERNANZA (BITÁCORA INALTERABLE) ───────────────────────
+export async function createGovernanceLog(action, details, user) {
+  const log = {
+    id: "log-" + Date.now(),
+    action: action,
+    details: details,
+    user_alias: user ? user.alias : "sistema",
+    user_id: user ? (user.phone || user.email) : "system",
+    created_at: new Date().toISOString()
+  };
+  
+  if (useSimulation) {
+    const logs = JSON.parse(localStorage.getItem("qia_governance_logs") || "[]");
+    logs.unshift(log);
+    localStorage.setItem("qia_governance_logs", JSON.stringify(logs));
+    return log;
+  }
+  
+  try {
+    await db.collection("governance_logs").doc(log.id).set(log);
+  } catch (e) {
+    console.warn("Error guardando bitácora en la nube:", e);
+  }
+  return log;
+}
+
+export async function getGovernanceLogs() {
+  if (useSimulation) {
+    return JSON.parse(localStorage.getItem("qia_governance_logs") || "[]");
+  }
+  try {
+    const snap = await db.collection("governance_logs")
+      .orderBy("created_at", "desc")
+      .limit(20)
+      .get();
+    return snap.docs.map(doc => doc.data());
+  } catch (e) {
+    console.warn("Error leyendo bitácora de la nube:", e);
+    return [];
   }
 }

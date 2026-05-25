@@ -3,20 +3,20 @@
    ============================================================ */
 
 :root {
-  --bg-color: #05070a;
-  --panel-bg: #0b0f19;
-  --accent: #00f2fe;      /* Cian Eléctrico */
-  --success: #00ff88;     /* Verde Césped Neón */
-  --gold: #fbbf24;        /* Dorado Corona */
+  --bg-color: #0d0a06;
+  --panel-bg: #1a140d;
+  --accent: #cd7f32;      /* Bronce Principal */
+  --success: #22c55e;     /* Verde Césped */
+  --gold: #e3a869;        /* Bronce Claro */
   --pink: #f472b6;
   --danger: #ef4444;
   --text-primary: #ffffff;
   --text-secondary: rgba(255, 255, 255, 0.7);
   --text-muted: rgba(255, 255, 255, 0.35);
   
-  --glow-accent: rgba(0, 242, 254, 0.35);
-  --glow-success: rgba(0, 255, 136, 0.35);
-  --glow-gold: rgba(251, 191, 36, 0.35);
+  --glow-accent: rgba(205, 127, 50, 0.35);
+  --glow-success: rgba(34, 197, 94, 0.35);
+  --glow-gold: rgba(227, 168, 105, 0.35);
   
   --border-glass: rgba(255, 255, 255, 0.06);
   --bg-glass: rgba(255, 255, 255, 0.02);
