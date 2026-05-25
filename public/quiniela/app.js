@@ -22,7 +22,9 @@ import {
   executeWeeklyClosure as executeDBClose,
   decryptData,
   createGovernanceLog,
-  getGovernanceLogs
+  getGovernanceLogs,
+  backupUserToIndexedDB,
+  restoreUserFromIndexedDB
 } from './app_db.js';
 
 // ── VARIABLES DE CONTROL GLOBAL ──────────────────────────────────────────
@@ -122,7 +124,16 @@ window.addEventListener("DOMContentLoaded", async () => {
   systemConfig = await getSystemConfig();
   
   // Checar si hay sesión guardada en localStorage (Descifrada)
-  const savedUser = localStorage.getItem("qia_current_user");
+  let savedUser = localStorage.getItem("qia_current_user");
+  
+  // Si no está en LocalStorage, intentar restaurar de IndexedDB (Sugerencia 3)
+  if (!savedUser) {
+    const restored = await restoreUserFromIndexedDB();
+    if (restored) {
+      localStorage.setItem("qia_current_user", JSON.stringify(restored));
+      savedUser = JSON.stringify(restored);
+    }
+  }
   
   // Simular carga de splash screen (1.5 segundos)
   setTimeout(() => {
@@ -324,6 +335,21 @@ window.simulateOtpVerify = async function() {
 // Cerrar sesión
 window.handleLogout = function() {
   localStorage.removeItem("qia_current_user");
+  
+  // Limpiar respaldo IndexedDB de forma segura (Sugerencia 3)
+  try {
+    const request = indexedDB.open("qia_stadium_backup_db", 1);
+    request.onsuccess = (e) => {
+      const dbInstance = e.target.result;
+      if (dbInstance.objectStoreNames.contains("backup_store")) {
+        const tx = dbInstance.transaction("backup_store", "readwrite");
+        tx.objectStore("backup_store").delete("current_user_session");
+      }
+    };
+  } catch (e) {
+    console.warn("IndexedDB logout clear failed:", e);
+  }
+  
   showToast("Sesión cerrada. Reiniciando Estadio...", "info");
   setTimeout(() => {
     window.location.reload();
@@ -381,6 +407,9 @@ async function refreshPanelData(panel) {
   if (welcomeAlias && currentUser && currentUser.alias) {
     welcomeAlias.textContent = "@" + currentUser.alias;
   }
+  
+  // Cargar avatar y tier visual de forma dinámica (Sugerencia 1 y 2)
+  loadUserAvatarAndTier();
   
   if (panel === "dashboard") {
     // 1. Bolsa y Premios (Dinámico)
@@ -548,6 +577,9 @@ function loadAppView() {
   if (welcomeAlias && currentUser && currentUser.alias) {
     welcomeAlias.textContent = "@" + currentUser.alias;
   }
+  
+  // Cargar avatar y tier visual de forma dinámica (Sugerencia 1 y 2)
+  loadUserAvatarAndTier();
   
   // Mostrar dock de admin si es administrador
   if (currentUser.is_admin) {
@@ -1501,3 +1533,67 @@ window.completeOnboarding = async function() {
     loadAppView();
   });
 };
+
+// ── PERSONALIZACIÓN Y TEMA VISUAL (Sugerencias 1 y 2) ────────────────────
+function loadUserAvatarAndTier() {
+  if (!currentUser || !currentUser.alias) return;
+
+  const avatarUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(currentUser.alias)}`;
+  
+  // 1. Mostrar Avatares Generativos DiceBear
+  const headerAvatar = document.getElementById("header-avatar");
+  if (headerAvatar) {
+    headerAvatar.src = avatarUrl;
+    headerAvatar.classList.remove("hidden");
+  }
+  
+  const welcomeAvatar = document.getElementById("welcome-avatar");
+  if (welcomeAvatar) {
+    welcomeAvatar.src = avatarUrl;
+    welcomeAvatar.classList.remove("hidden");
+  }
+
+  // 2. Personalización del Tema Visual por Nivel de Aciertos (Visual Tiering)
+  const tickets = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
+  const userTickets = tickets.filter(t => t.user_id === currentUser.phone || t.user_id === currentUser.email);
+  const checked = userTickets.filter(t => t.status === "checked");
+  
+  let avgHits = 0;
+  if (checked.length > 0) {
+    avgHits = checked.reduce((sum, t) => sum + t.hits, 0) / checked.length;
+  } else {
+    // Si es nuevo, intentar buscar en el seed del leaderboard por defecto
+    const defaultWeekly = JSON.parse(localStorage.getItem("qia_leaderboard") || "[]");
+    const found = defaultWeekly.find(r => r.alias === currentUser.alias);
+    if (found) avgHits = found.hits;
+  }
+
+  const tierBadge = document.getElementById("user-tier-badge");
+  if (tierBadge) {
+    if (avgHits >= 6) {
+      // ORO
+      tierBadge.innerHTML = `<i class="ri-vip-crown-fill mr-4" style="color:#ffd700;"></i> RANGO ORO`;
+      tierBadge.style.color = "#ffd700";
+      tierBadge.style.background = "rgba(255, 215, 0, 0.15)";
+      tierBadge.style.borderColor = "rgba(255, 215, 0, 0.35)";
+      tierBadge.style.boxShadow = "0 0 15px rgba(255, 215, 0, 0.25)";
+      if (welcomeAvatar) welcomeAvatar.style.borderColor = "#ffd700";
+    } else if (avgHits >= 4) {
+      // PLATA
+      tierBadge.innerHTML = `<i class="ri-medal-fill mr-4" style="color:#e2e8f0;"></i> RANGO PLATA`;
+      tierBadge.style.color = "#e2e8f0";
+      tierBadge.style.background = "rgba(226, 232, 240, 0.15)";
+      tierBadge.style.borderColor = "rgba(226, 232, 240, 0.35)";
+      tierBadge.style.boxShadow = "0 0 15px rgba(226, 232, 240, 0.25)";
+      if (welcomeAvatar) welcomeAvatar.style.borderColor = "#e2e8f0";
+    } else {
+      // BRONCE
+      tierBadge.innerHTML = `<i class="ri-award-fill mr-4" style="color:#cd7f32;"></i> RANGO BRONCE`;
+      tierBadge.style.color = "#cd7f32";
+      tierBadge.style.background = "rgba(205, 127, 50, 0.15)";
+      tierBadge.style.borderColor = "rgba(205, 127, 50, 0.35)";
+      tierBadge.style.boxShadow = "0 0 15px rgba(205, 127, 50, 0.25)";
+      if (welcomeAvatar) welcomeAvatar.style.borderColor = "#cd7f32";
+    }
+  }
+}

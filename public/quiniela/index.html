@@ -64,7 +64,7 @@
       <div class="flex items-center gap-10">
         <!-- Badge Personalizado con el Apodo -->
         <div class="user-badge flex items-center gap-6 bg-white/5 border border-white/10 px-10 py-6 rounded-full">
-          <i class="ri-user-3-fill text-accent text-xs"></i>
+          <img id="header-avatar" src="" class="w-6 h-6 rounded-full border border-accent/30 hidden" alt="Avatar" style="width: 20px; height: 20px; border-radius: 50%;">
           <span class="text-xxs font-black text-white" id="header-username">@usuario</span>
         </div>
         <div class="wallet-badge" onclick="window.appNavigate('wallet')">
@@ -81,11 +81,14 @@
       <section id="panel-dashboard" class="app-panel active animate-fade-in">
         <!-- Saludo Personalizado Superior -->
         <div class="flex justify-between items-center mb-16 animate-scale-in">
-          <div>
-            <span class="text-xxxxs font-black tracking-[3px] opacity-40 uppercase block mb-4">Cyber Estadio</span>
-            <h2 class="text-xl font-black text-white uppercase italic tracking-tighter">Hola, <span class="text-accent" id="welcome-alias">@apodo</span> ⚡</h2>
+          <div class="flex items-center gap-10">
+            <img id="welcome-avatar" src="" class="w-12 h-12 rounded-full border-2 border-accent filter-neon hidden" alt="Avatar" style="width: 44px; height: 44px; border-radius: 50%;">
+            <div>
+              <span class="text-xxxxs font-black tracking-[3px] opacity-40 uppercase block mb-4">Cyber Estadio</span>
+              <h2 class="text-xl font-black text-white uppercase italic tracking-tighter">Hola, <span class="text-accent" id="welcome-alias">@apodo</span> ⚡</h2>
+            </div>
           </div>
-          <span class="text-xxxxs font-black text-[#cd7f32] bg-[#cd7f32]/10 border border-[#cd7f32]/20 px-10 py-6 rounded-full uppercase tracking-widest"><i class="ri-vip-crown-fill mr-4"></i>Jugador Premium</span>
+          <span id="user-tier-badge" class="text-xxxxs font-black text-[#cd7f32] bg-[#cd7f32]/10 border border-[#cd7f32]/20 px-10 py-6 rounded-full uppercase tracking-widest"><i class="ri-vip-crown-fill mr-4"></i>Jugador Premium</span>
         </div>
 
         <!-- Bolsa Garantizada -->

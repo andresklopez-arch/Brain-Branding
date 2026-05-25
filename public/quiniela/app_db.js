@@ -345,6 +345,10 @@ export async function registerOrLoginUser(userData) {
     }
   }
   const encryptedUser = encryptData(userData);
+  
+  // Realizar respaldo resiliente en IndexedDB (Sugerencia 3)
+  backupUserToIndexedDB(encryptedUser);
+
   if (useSimulation) {
     localStorage.setItem("qia_current_user", JSON.stringify(encryptedUser));
     // Guardar en la lista global de usuarios simulados
@@ -814,3 +818,64 @@ export async function getGovernanceLogs() {
     return [];
   }
 }
+
+// ── INDEXEDDB RESILIENT BACKUP ENGINE (Sugerencia 3) ───────────────────────
+export function backupUserToIndexedDB(encryptedUser) {
+  return new Promise((resolve) => {
+    try {
+      const request = indexedDB.open("qia_stadium_backup_db", 1);
+      request.onupgradeneeded = (e) => {
+        const dbInstance = e.target.result;
+        if (!dbInstance.objectStoreNames.contains("backup_store")) {
+          dbInstance.createObjectStore("backup_store", { keyPath: "id" });
+        }
+      };
+      request.onsuccess = (e) => {
+        const dbInstance = e.target.result;
+        const tx = dbInstance.transaction("backup_store", "readwrite");
+        const store = tx.objectStore("backup_store");
+        store.put({ id: "current_user_session", data: encryptedUser });
+        tx.oncomplete = () => {
+          console.log("💾 [IndexedDB Backup] Sesión del usuario respaldada de forma resiliente.");
+          resolve(true);
+        };
+      };
+      request.onerror = () => resolve(false);
+    } catch (e) {
+      resolve(false);
+    }
+  });
+}
+
+export function restoreUserFromIndexedDB() {
+  return new Promise((resolve) => {
+    try {
+      const request = indexedDB.open("qia_stadium_backup_db", 1);
+      request.onupgradeneeded = (e) => {
+        const dbInstance = e.target.result;
+        if (!dbInstance.objectStoreNames.contains("backup_store")) {
+          dbInstance.createObjectStore("backup_store", { keyPath: "id" });
+        }
+      };
+      request.onsuccess = (e) => {
+        const dbInstance = e.target.result;
+        const tx = dbInstance.transaction("backup_store", "readonly");
+        const store = tx.objectStore("backup_store");
+        const getReq = store.get("current_user_session");
+        getReq.onsuccess = () => {
+          if (getReq.result) {
+            console.log("⚡ [IndexedDB Backup] Sesión restaurada desde IndexedDB.");
+            resolve(getReq.result.data);
+          } else {
+            resolve(null);
+          }
+        };
+        getReq.onerror = () => resolve(null);
+      };
+      request.onerror = () => resolve(null);
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
