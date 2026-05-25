@@ -161,9 +161,18 @@ window.addEventListener("DOMContentLoaded", async () => {
       }
       loadAppView();
     } else {
-      // Mostrar Onboarding en primer ingreso para definir Nombre y Apodo
-      const onboard = document.getElementById("onboarding-view");
-      if (onboard) onboard.classList.remove("hidden");
+      // Crear perfil de invitado silencioso y fluido (Bypass de Registro)
+      currentUser = {
+        phone: "invitado_" + Date.now(),
+        email: "invitado@quinielamundialista.mx",
+        name: "Invitado",
+        alias: "invitado",
+        balance: 200, // saldo de cortesía
+        is_guest: true, // bandera de invitado
+        is_admin: false,
+        created_at: new Date().toISOString()
+      };
+      loadAppView();
     }
 
     // Solicitar permisos de notificación móvil/PWA tras cargar splash
@@ -788,6 +797,17 @@ window.updatePoolCost = function() {
 
 // Confirmar y comprar ticket
 window.purchaseTicket = async function() {
+  // Si es un usuario invitado, exigir Onboarding antes de emitir el ticket (Fluidez)
+  if (currentUser && currentUser.is_guest) {
+    showToast("Por favor define tu nombre y apodo para registrar tu ticket.", "info");
+    window.pendingTicketPurchase = true;
+    
+    // Mostrar el onboarding view
+    const onboard = document.getElementById("onboarding-view");
+    if (onboard) onboard.classList.remove("hidden");
+    return;
+  }
+
   // 1. Validar límite de apuestas (Sugerencia 3)
   const isLocked = window.checkBettingDeadlineStatus();
   if (isLocked) {
@@ -1523,11 +1543,12 @@ window.completeOnboarding = async function() {
   showToast("Preparando tu estadio personalizado...", "info");
   
   const mockUser = {
-    phone: "jugador_" + Date.now(),
+    phone: currentUser.phone && !currentUser.phone.startsWith("invitado_") ? currentUser.phone : "jugador_" + Date.now(),
     email: alias + "@quinielamundialista.mx",
     name: name,
     alias: alias,
-    balance: 200, // Saldo inicial
+    balance: currentUser.balance || 200, // Conservar el saldo actual
+    is_guest: false,
     is_admin: true, // Habilitar admin para pruebas rápidas
     created_at: new Date().toISOString()
   };
@@ -1538,9 +1559,19 @@ window.completeOnboarding = async function() {
     
     showToast(`🏟️ ¡Bienvenido al Estadio Mundialista, @${alias}!`, "success");
     
-    // Ocultar onboarding e iniciar
+    // Ocultar onboarding
     document.getElementById("onboarding-view").classList.add("hidden");
+    
+    // Recargar vista y avatares
     loadAppView();
+
+    // Si había una compra de ticket pendiente, reintentar comprar de inmediato
+    if (window.pendingTicketPurchase) {
+      window.pendingTicketPurchase = false;
+      setTimeout(() => {
+        window.purchaseTicket();
+      }, 500);
+    }
   });
 };
 
@@ -1565,22 +1596,32 @@ function loadUserAvatarAndTier() {
   }
 
   // 2. Personalización del Tema Visual por Aciertos en base a Estrellas (Sugerencia 2 - Ajustado)
-  const tickets = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
-  const userTickets = tickets.filter(t => t.user_id === currentUser.phone || t.user_id === currentUser.email);
-  const checked = userTickets.filter(t => t.status === "checked");
-  
-  let avgHits = 0;
-  if (checked.length > 0) {
-    avgHits = checked.reduce((sum, t) => sum + t.hits, 0) / checked.length;
-  } else {
-    // Si es nuevo, intentar buscar en el seed del leaderboard por defecto
-    const defaultWeekly = JSON.parse(localStorage.getItem("qia_leaderboard") || "[]");
-    const found = defaultWeekly.find(r => r.alias === currentUser.alias);
-    if (found) avgHits = found.hits;
-  }
-
   const tierBadge = document.getElementById("user-tier-badge");
-  if (tierBadge) {
+  if (tierBadge && currentUser.is_guest) {
+    tierBadge.innerHTML = `<i class="ri-user-heart-fill mr-4" style="color:var(--accent);"></i> Espectador`;
+    tierBadge.style.color = "var(--accent)";
+    tierBadge.style.background = "rgba(205, 127, 50, 0.05)";
+    tierBadge.style.borderColor = "rgba(205, 127, 50, 0.15)";
+    tierBadge.style.boxShadow = "none";
+    if (welcomeAvatar) {
+      welcomeAvatar.style.borderColor = "var(--border-glass)";
+      welcomeAvatar.style.boxShadow = "none";
+    }
+  } else if (tierBadge) {
+    const tickets = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
+    const userTickets = tickets.filter(t => t.user_id === currentUser.phone || t.user_id === currentUser.email);
+    const checked = userTickets.filter(t => t.status === "checked");
+    
+    let avgHits = 0;
+    if (checked.length > 0) {
+      avgHits = checked.reduce((sum, t) => sum + t.hits, 0) / checked.length;
+    } else {
+      // Si es nuevo, intentar buscar en el seed del leaderboard por defecto
+      const defaultWeekly = JSON.parse(localStorage.getItem("qia_leaderboard") || "[]");
+      const found = defaultWeekly.find(r => r.alias === currentUser.alias);
+      if (found) avgHits = found.hits;
+    }
+
     let numStars = 1;
     if (avgHits >= 6.5) numStars = 5;
     else if (avgHits >= 5.5) numStars = 4;
