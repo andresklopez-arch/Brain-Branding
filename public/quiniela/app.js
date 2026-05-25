@@ -359,12 +359,28 @@ async function refreshPanelData(panel) {
   if (!currentUser) return;
   
   // Cargar saldo de cabecera siempre
-  const refreshedUser = localStorage.getItem("qia_current_user") 
-    ? JSON.parse(localStorage.getItem("qia_current_user")) 
-    : currentUser;
+  let refreshedUser = currentUser;
+  const savedUser = localStorage.getItem("qia_current_user");
+  if (savedUser) {
+    try {
+      refreshedUser = decryptData(JSON.parse(savedUser));
+    } catch (err) {
+      refreshedUser = JSON.parse(savedUser);
+    }
+  }
   currentUser = refreshedUser;
   
   document.getElementById("header-balance").textContent = `$${Number(currentUser.balance).toFixed(2)}`;
+  
+  const headerUser = document.getElementById("header-username");
+  if (headerUser && currentUser && currentUser.alias) {
+    headerUser.textContent = "@" + currentUser.alias;
+  }
+  
+  const welcomeAlias = document.getElementById("welcome-alias");
+  if (welcomeAlias && currentUser && currentUser.alias) {
+    welcomeAlias.textContent = "@" + currentUser.alias;
+  }
   
   if (panel === "dashboard") {
     // 1. Bolsa y Premios (Dinámico)
@@ -527,6 +543,12 @@ function loadAppView() {
     headerUser.textContent = "@" + currentUser.alias;
   }
   
+  // Mostrar apodo en bienvenida del dashboard
+  const welcomeAlias = document.getElementById("welcome-alias");
+  if (welcomeAlias && currentUser && currentUser.alias) {
+    welcomeAlias.textContent = "@" + currentUser.alias;
+  }
+  
   // Mostrar dock de admin si es administrador
   if (currentUser.is_admin) {
     document.getElementById("dock-admin").classList.remove("hidden");
@@ -639,7 +661,14 @@ function renderLeaderboard(leaderboard, containerId = "leaderboard-container") {
   
   leaderboard.forEach(row => {
     const div = document.createElement("div");
-    div.className = "board-row flex justify-between items-center py-10";
+    const isMe = currentUser && row.alias === currentUser.alias;
+    
+    // Si soy yo, aplicar borde y fondo bronce de Cyber Stadium para resaltar
+    div.className = `board-row flex justify-between items-center py-10 px-8 rounded-xl border transition-all ${
+      isMe 
+        ? 'border-accent/40 bg-accent/10 shadow-[0_0_15px_rgba(205,127,50,0.15)]' 
+        : 'border-transparent'
+    }`;
     
     let medalClass = "bg-white/5 text-white";
     if (row.rank === 1) medalClass = "rank-1";
@@ -650,7 +679,7 @@ function renderLeaderboard(leaderboard, containerId = "leaderboard-container") {
       <div class="flex items-center gap-10">
         <span class="rank-badge ${medalClass}">${row.rank}</span>
         <div class="flex flex-col">
-          <span class="text-xs font-black text-white">@${row.alias}</span>
+          <span class="text-xs font-black text-white">${isMe ? '✨ Tú (@' + row.alias + ')' : '@' + row.alias}</span>
           <span class="text-[8px] opacity-30 uppercase font-black">${row.name}</span>
         </div>
       </div>
