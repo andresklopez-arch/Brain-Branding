@@ -132,6 +132,16 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (restored) {
       localStorage.setItem("qia_current_user", JSON.stringify(restored));
       savedUser = JSON.stringify(restored);
+      
+      // Registrar log de telemetría de resiliencia (Sugerencia 3 - Auditoría)
+      import('./app_db.js').then(async dbMod => {
+        const decrypted = dbMod.decryptData(restored);
+        await dbMod.createGovernanceLog(
+          "Rescate de Sesión",
+          `El motor IndexedDB recuperó con éxito la sesión local del usuario: @${decrypted.alias}`,
+          decrypted
+        );
+      });
     }
   }
   
@@ -1538,9 +1548,10 @@ window.completeOnboarding = async function() {
 function loadUserAvatarAndTier() {
   if (!currentUser || !currentUser.alias) return;
 
-  const avatarUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(currentUser.alias)}`;
+  const seed = currentUser.avatar_seed || currentUser.alias;
+  const avatarUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(seed)}`;
   
-  // 1. Mostrar Avatares Generativos DiceBear
+  // 1. Mostrar Avatares Generativos DiceBear (Sugerencia 1)
   const headerAvatar = document.getElementById("header-avatar");
   if (headerAvatar) {
     headerAvatar.src = avatarUrl;
@@ -1553,7 +1564,7 @@ function loadUserAvatarAndTier() {
     welcomeAvatar.classList.remove("hidden");
   }
 
-  // 2. Personalización del Tema Visual por Nivel de Aciertos (Visual Tiering)
+  // 2. Personalización del Tema Visual por Aciertos en base a Estrellas (Sugerencia 2 - Ajustado)
   const tickets = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
   const userTickets = tickets.filter(t => t.user_id === currentUser.phone || t.user_id === currentUser.email);
   const checked = userTickets.filter(t => t.status === "checked");
@@ -1570,30 +1581,92 @@ function loadUserAvatarAndTier() {
 
   const tierBadge = document.getElementById("user-tier-badge");
   if (tierBadge) {
-    if (avgHits >= 6) {
-      // ORO
-      tierBadge.innerHTML = `<i class="ri-vip-crown-fill mr-4" style="color:#ffd700;"></i> RANGO ORO`;
-      tierBadge.style.color = "#ffd700";
-      tierBadge.style.background = "rgba(255, 215, 0, 0.15)";
-      tierBadge.style.borderColor = "rgba(255, 215, 0, 0.35)";
-      tierBadge.style.boxShadow = "0 0 15px rgba(255, 215, 0, 0.25)";
-      if (welcomeAvatar) welcomeAvatar.style.borderColor = "#ffd700";
-    } else if (avgHits >= 4) {
-      // PLATA
-      tierBadge.innerHTML = `<i class="ri-medal-fill mr-4" style="color:#e2e8f0;"></i> RANGO PLATA`;
-      tierBadge.style.color = "#e2e8f0";
-      tierBadge.style.background = "rgba(226, 232, 240, 0.15)";
-      tierBadge.style.borderColor = "rgba(226, 232, 240, 0.35)";
-      tierBadge.style.boxShadow = "0 0 15px rgba(226, 232, 240, 0.25)";
-      if (welcomeAvatar) welcomeAvatar.style.borderColor = "#e2e8f0";
-    } else {
-      // BRONCE
-      tierBadge.innerHTML = `<i class="ri-award-fill mr-4" style="color:#cd7f32;"></i> RANGO BRONCE`;
-      tierBadge.style.color = "#cd7f32";
-      tierBadge.style.background = "rgba(205, 127, 50, 0.15)";
-      tierBadge.style.borderColor = "rgba(205, 127, 50, 0.35)";
-      tierBadge.style.boxShadow = "0 0 15px rgba(205, 127, 50, 0.25)";
-      if (welcomeAvatar) welcomeAvatar.style.borderColor = "#cd7f32";
+    let numStars = 1;
+    if (avgHits >= 6.5) numStars = 5;
+    else if (avgHits >= 5.5) numStars = 4;
+    else if (avgHits >= 4.5) numStars = 3;
+    else if (avgHits >= 3.0) numStars = 2;
+    else numStars = 1;
+
+    let starString = "";
+    for (let s = 0; s < numStars; s++) {
+      starString += `<i class="ri-star-fill" style="color:#ffd700; text-shadow: 0 0 8px rgba(255,215,0,0.6);"></i>`;
+    }
+
+    tierBadge.innerHTML = `${starString} <span style="margin-left: 4px;">${numStars} ${numStars === 1 ? 'ESTRELLA' : 'ESTRELLAS'}</span>`;
+    
+    // El brillo y color aumentan dinámicamente con las estrellas
+    const opacityFactor = 0.05 + (numStars * 0.04); // de 0.09 a 0.25
+    tierBadge.style.color = "#ffd700";
+    tierBadge.style.background = `rgba(255, 215, 0, ${opacityFactor})`;
+    tierBadge.style.borderColor = `rgba(255, 215, 0, ${opacityFactor + 0.15})`;
+    tierBadge.style.boxShadow = `0 0 ${8 + (numStars * 4)}px rgba(255, 215, 0, ${opacityFactor + 0.1})`;
+    
+    if (welcomeAvatar) {
+      welcomeAvatar.style.borderColor = "#ffd700";
+      welcomeAvatar.style.boxShadow = `0 0 ${6 + (numStars * 3)}px rgba(255, 215, 0, ${opacityFactor + 0.15})`;
     }
   }
 }
+
+// ── CONTROLADOR DE MODAL DEL PERSONALIZADOR DE AVATAR (Sugerencia 1) ───────────
+window.openAvatarCustomizer = function() {
+  const modal = document.getElementById("avatar-modal");
+  const container = document.getElementById("avatar-presets-grid");
+  if (!modal || !container || !currentUser) return;
+  
+  const presets = [
+    { label: "Básico", suffix: "" },
+    { label: "Guerrero", suffix: "_warrior" },
+    { label: "Titán", suffix: "_titan" },
+    { label: "Gladiador", suffix: "_gladiator" },
+    { label: "Campeón", suffix: "_champion" },
+    { label: "Centinela", suffix: "_sentinel" }
+  ];
+  
+  container.innerHTML = "";
+  const currentSeed = currentUser.avatar_seed || currentUser.alias;
+  
+  presets.forEach(p => {
+    const seed = currentUser.alias + p.suffix;
+    const isSelected = currentSeed === seed;
+    const url = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(seed)}`;
+    
+    container.innerHTML += `
+      <div class="preset-card glass-card p-10 text-center cursor-pointer flex flex-col items-center gap-6" 
+           onclick="window.selectAvatarPreset('${seed}')" 
+           style="border: 1px solid ${isSelected ? 'var(--accent)' : 'rgba(255,255,255,0.06)'}; 
+                  border-radius:12px; 
+                  padding: 10px;
+                  background:${isSelected ? 'rgba(205,127,50,0.1)' : 'transparent'};">
+        <img src="${url}" class="w-12 h-12 rounded-full border border-white/10" style="width: 48px; height: 48px; border-radius: 50%;">
+        <span class="text-[8px] font-black text-white uppercase" style="margin-top: 6px; display: block;">${p.label}</span>
+      </div>
+    `;
+  });
+  
+  modal.classList.remove("hidden");
+};
+
+window.closeAvatarCustomizer = function() {
+  document.getElementById("avatar-modal").classList.add("hidden");
+};
+
+window.selectAvatarPreset = async function(seed) {
+  if (!currentUser) return;
+  
+  showToast("Actualizando tu cyber-robot...", "success");
+  
+  currentUser.avatar_seed = seed;
+  
+  // Guardar en LocalStorage y IndexedDB
+  import('./app_db.js').then(async dbMod => {
+    const encrypted = dbMod.encryptData(currentUser);
+    localStorage.setItem("qia_current_user", JSON.stringify(encrypted));
+    await dbMod.backupUserToIndexedDB(encrypted);
+    
+    // Actualizar UI
+    loadUserAvatarAndTier();
+    window.closeAvatarCustomizer();
+  });
+};
