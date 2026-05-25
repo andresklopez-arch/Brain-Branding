@@ -26,6 +26,29 @@
 
   </div>
 
+  <!-- 🛡️ ONBOARDING VIEW -->
+  <section id="onboarding-view" class="login-view hidden">
+    <div class="stars-container" id="login-stars"></div>
+    <div class="login-card glass-morph animate-scale-in">
+      <img src="logo-quiniela.png" class="w-24 h-24 mx-auto mb-15 filter-neon" alt="Logo">
+      <h2 class="text-3xl font-black italic tracking-tighter text-white uppercase mb-5">PREPARA TU <span class="text-accent">FICHA</span></h2>
+      <p class="text-xxs font-bold opacity-30 uppercase tracking-[4px] mb-30">Ingresa tu Nombre y Apodo</p>
+      
+      <div class="form-group mb-16">
+        <label class="form-label text-left block">Nombre Completo</label>
+        <input type="text" id="onboard-name" class="form-input text-white" placeholder="ej: Andrés López" spellcheck="false" style="text-align: left;">
+      </div>
+      
+      <div class="form-group mb-24">
+        <label class="form-label text-left block">Apodo (Nombre en la Quiniela)</label>
+        <input type="text" id="onboard-alias" class="form-input text-accent font-black" placeholder="ej: rey_xalpa" spellcheck="false" oninput="window.validateAliasAvailability(this.value)" style="text-align: left;">
+        <div id="alias-feedback" class="text-[9px] font-black uppercase mt-4 hidden"></div>
+      </div>
+      
+      <button onclick="window.completeOnboarding()" class="btn btn-primary w-full py-14 font-black uppercase text-xs tracking-widest shadow-[0_0_20px_rgba(205,127,50,0.3)]">INGRESAR AL ESTADIO</button>
+    </div>
+  </section>
+
   <!-- 🎛️ CORE APP CONTAINER -->
   <div id="app-container" class="app-container hidden">
     
@@ -181,11 +204,18 @@
         </div>
 
         <!-- HISTORIAL FINANCIERO -->
-        <div class="glass-card p-20 mb-80">
+        <div class="glass-card p-20 mb-20">
           <h2 class="text-xs font-black uppercase tracking-widest text-white mb-15"><i class="ri-history-line mr-4"></i> Historial de Movimientos</h2>
           <div class="divide-y divide-white/5" id="tx-history-container">
             <!-- Dinámico -->
           </div>
+        </div>
+
+        <!-- ABANDONAR ESTADIO -->
+        <div class="glass-card p-20 mb-80" style="border-color: rgba(239, 68, 68, 0.2);">
+          <h2 class="text-xs font-black uppercase tracking-widest text-red-500 mb-15"><i class="ri-shut-down-line mr-4"></i> Salida del Estadio</h2>
+          <p class="text-xxs opacity-40 uppercase tracking-widest mb-15">Borra tu perfil local de este dispositivo y restablece el saldo.</p>
+          <button onclick="window.handleLogout()" class="btn w-full py-12 font-black uppercase text-[10px]" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#ef4444;">🚪 ABANDONAR ESTADIO / BORRAR PERFIL</button>
         </div>
       </section>
 

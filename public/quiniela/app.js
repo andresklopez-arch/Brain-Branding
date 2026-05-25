@@ -140,24 +140,9 @@ window.addEventListener("DOMContentLoaded", async () => {
       }
       loadAppView();
     } else {
-      // Auto-inicio directo (Jugador permanente local, sin registros de nungún tipo)
-      const mockUser = {
-        phone: "jugador_arena",
-        email: "jugador@cyberstadium.mx",
-        name: "Jugador Arena",
-        alias: "Jugador",
-        balance: 200, // saldo inicial de cortesía
-        is_admin: true, // admin habilitado para pruebas de flujos
-        created_at: new Date().toISOString()
-      };
-      
-      // Importar encryptData dinámicamente si es necesario, pero como importamos todo de app_db,
-      // podemos usar localStorage directamente y guardar encryptData
-      import('./app_db.js').then(dbMod => {
-        localStorage.setItem("qia_current_user", JSON.stringify(dbMod.encryptData(mockUser)));
-        currentUser = mockUser;
-        loadAppView();
-      });
+      // Mostrar Onboarding en primer ingreso para definir Nombre y Apodo
+      const onboard = document.getElementById("onboarding-view");
+      if (onboard) onboard.classList.remove("hidden");
     }
 
     // Solicitar permisos de notificación móvil/PWA tras cargar splash
@@ -535,6 +520,12 @@ async function refreshPanelData(panel) {
 // Cargar vista inicial tras login
 function loadAppView() {
   document.getElementById("app-container").classList.remove("hidden");
+  
+  // Mostrar apodo en la cabecera para personalización de marca
+  const headerUser = document.getElementById("header-username");
+  if (headerUser && currentUser && currentUser.alias) {
+    headerUser.textContent = "@" + currentUser.alias;
+  }
   
   // Mostrar dock de admin si es administrador
   if (currentUser.is_admin) {
@@ -1447,3 +1438,37 @@ function drawAdminAnalyticsChart() {
     }
   });
 }
+
+// ── COMPLETAR ONBOARDING MINIMALISTA (Sugerencia) ────────────────────────
+window.completeOnboarding = async function() {
+  const name = document.getElementById("onboard-name").value;
+  const alias = document.getElementById("onboard-alias").value;
+  
+  if (!name || !alias || alias.trim().length < 3) {
+    showToast("Por favor ingresa tu nombre y un apodo de al menos 3 caracteres.", "error");
+    return;
+  }
+  
+  showToast("Preparando tu estadio personalizado...", "info");
+  
+  const mockUser = {
+    phone: "jugador_" + Date.now(),
+    email: alias + "@cyberstadium.mx",
+    name: name,
+    alias: alias,
+    balance: 200, // Saldo inicial
+    is_admin: true, // Habilitar admin para pruebas rápidas
+    created_at: new Date().toISOString()
+  };
+  
+  import('./app_db.js').then(async dbMod => {
+    // Registrar/Login local e inyectar
+    currentUser = await dbMod.registerOrLoginUser(mockUser);
+    
+    showToast(`🏟️ ¡Bienvenido al Estadio, @${alias}!`, "success");
+    
+    // Ocultar onboarding e iniciar
+    document.getElementById("onboarding-view").classList.add("hidden");
+    loadAppView();
+  });
+};
