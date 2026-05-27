@@ -636,7 +636,7 @@ function renderLiveScores(fixtures) {
     
     card.innerHTML = `
       <div class="flex justify-between items-center">
-        <span class="text-[8px] bg-white/5 border border-black/5 px-6 py-2 rounded-full font-black uppercase text-accent">LIGA MX</span>
+        <span class="text-[8px] bg-white/5 border border-black/5 px-6 py-2 rounded-full font-black uppercase text-accent">${f.group || "LIGA MX"}</span>
         ${statusBadge}
       </div>
       <div class="flex items-center justify-between mt-4">
@@ -1219,15 +1219,15 @@ async function renderGovernanceLogs() {
 
 // Actualizar cartelera desde Google / API-Football (Simulado)
 window.fetchMatchesAPI = async function() {
-  showToast("Conectando con la API de Google / API-Football...", "info");
+  showToast("Conectando con ESPN API...", "info");
   
   setTimeout(async () => {
-    // Aquí se llamaría a la API real (e.g. fetch('https://v3.football.api-sports.io/...'))
-    // y se formatearían los datos. Por ahora, usamos el mock de IA (Liga MX top partidos)
     const suggestions = await getIASuggestions();
     await acceptSuggestionsAsFixtures(suggestions);
-    showToast("¡Partidos más atractivos de la semana sincronizados exitosamente!", "success");
-    window.appNavigate("dashboard");
+    showToast("¡Partidos sincronizados exitosamente!", "success");
+    loadAdminPanel();
+    window.refreshPanelData('dashboard');
+    window.refreshPanelData('play');
   }, 2000);
 };
 
