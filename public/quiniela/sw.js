@@ -73,7 +73,7 @@ self.addEventListener("fetch", (e) => {
         return networkResponse;
       }).catch(() => {
         // Retornar fallback básico si no hay red
-        return new Response("Offline Mode Activo en el Cyber Stadium");
+        return new Response("Offline Mode Activo en el Quiniela Mundialista");
       });
     })
   );

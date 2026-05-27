@@ -103,7 +103,7 @@ export async function initDatabase() {
   await checkSeeds();
 }
 
-// ── SEMILLAS Y MOCK DATA DE CYBER STADIUM (LIGA MX) ───────────────────
+// ── SEMILLAS Y MOCK DATA DE Quiniela Mundialista (LIGA MX) ───────────────────
 const LIGA_MX_MATCHES = [
   { id: "mx-1", team_local: "América", team_visita: "Chivas", score_local: 2, score_visita: 1, status: "live", priority: "high", date: "Hoy, 20:00", attraction_index: 95 },
   { id: "mx-2", team_local: "Cruz Azul", team_visita: "Pumas", score_local: 0, score_visita: 0, status: "live", priority: "high", date: "Hoy, 18:30", attraction_index: 90 },

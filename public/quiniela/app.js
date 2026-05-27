@@ -158,8 +158,8 @@ window.addEventListener("DOMContentLoaded", async () => {
       if ("Notification" in window && Notification.permission === "default") {
         Notification.requestPermission().then(permission => {
           if (permission === "granted") {
-            showToast("¡Notificaciones del Cyber Stadium activadas!", "success");
-            window.sendLocalNotification("🏟️ ¡BIENVENIDO AL CYBER STADIUM!", "Recibirás alertas en tu celular sobre partidos, saldos y cierres de quinielas.");
+            showToast("¡Notificaciones del Quiniela Mundialista activadas!", "success");
+            window.sendLocalNotification("🏟️ ¡BIENVENIDO AL Quiniela Mundialista!", "Recibirás alertas en tu celular sobre partidos, saldos y cierres de quinielas.");
           }
         });
       }
@@ -250,7 +250,7 @@ window.validateAliasAvailability = function(alias) {
     feedback.style.color = "var(--danger)";
     document.getElementById("btn-auth-phone-submit").disabled = true;
   } else {
-    feedback.textContent = "¡Alias disponible en el Cyber Stadium!";
+    feedback.textContent = "¡Alias disponible en el Quiniela Mundialista!";
     feedback.style.color = "var(--success)";
     document.getElementById("btn-auth-phone-submit").disabled = false;
   }
@@ -314,7 +314,7 @@ window.simulateOtpVerify = async function() {
   
   const mockUser = {
     phone: phone,
-    email: alias + "@cyberstadium.mx",
+    email: alias + "@quinielamundialista.mx",
     name: name,
     alias: alias,
     balance: 200, // saldo de cortesía
@@ -849,7 +849,7 @@ window.closeTicketModal = function() {
 window.shareTicketOnWhatsApp = function() {
   if (!lastCreatedTicket) return;
   
-  let msg = `*🎫 QUINIELA MUNDIALISTA IA — CYBER STADIUM *\n`;
+  let msg = `*🎫 QUINIELA MUNDIALISTA IA — Quiniela Mundialista *\n`;
   msg += `*Ticket ID:* ${lastCreatedTicket.id}\n`;
   msg += `*Usuario:* @${lastCreatedTicket.user_alias}\n`;
   msg += `*Costo:* $${lastCreatedTicket.total_cost.toFixed(2)} MXN\n\n`;
@@ -1204,7 +1204,7 @@ window.fetchMatchesAPI = async function() {
 // Enviar comprobante por WhatsApp (Wallet)
 window.sendVoucherWhatsApp = function() {
   if (!currentUser) return;
-  let msg = `*🎫 QUINIELA CYBER STADIUM - SOLICITUD DE RECARGA *\n`;
+  let msg = `*🎫 QUINIELA Quiniela Mundialista - SOLICITUD DE RECARGA *\n`;
   msg += `*Usuario:* @${currentUser.alias}\n`;
   msg += `*Tel/Correo:* ${currentUser.phone || currentUser.email}\n`;
   msg += `\nHe subido un comprobante de transferencia SPEI en la aplicación. Por favor, aprueba la recarga de mi saldo.\n`;
@@ -1462,7 +1462,7 @@ window.completeOnboarding = async function() {
   
   const mockUser = {
     phone: "jugador_" + Date.now(),
-    email: alias + "@cyberstadium.mx",
+    email: alias + "@quinielamundialista.mx",
     name: name,
     alias: alias,
     balance: 200, // Saldo inicial

@@ -1,7 +1,7 @@
 {
   "name": "Quiniela Mundialista IA",
   "short_name": "Quiniela IA",
-  "description": "Quiniela Deportiva con Inteligencia Artificial - Cyber Stadium",
+  "description": "Quiniela Deportiva con Inteligencia Artificial - Quiniela Mundialista",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#05070a",
