@@ -892,8 +892,10 @@ export async function getGovernanceLogs() {
 
 export async function fetchAllUsers() {
   if (useSimulation) {
-    const local = JSON.parse(localStorage.getItem("qia_users_mock") || "[]");
-    return local;
+    const local = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
+    return local.map(u => {
+      try { return decryptData(u); } catch(e) { return u; }
+    });
   }
   try {
     const snap = await db.collection("users").get();

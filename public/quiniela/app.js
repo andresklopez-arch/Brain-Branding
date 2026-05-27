@@ -1552,18 +1552,39 @@ async function loadAdminPanel() {
   fixtures.forEach(f => {
     const tr = document.createElement("tr");
     tr.className = "border-b border-black border-opacity-10";
+    
+    const local = f.team_home || f.team_local || "TBA";
+    const visita = f.team_away || f.team_visita || "TBA";
+    
+    let dateStr = f.date;
+    let timeStr = "";
+    if (f.date && f.date.includes("T")) {
+      try {
+        const d = new Date(f.date);
+        if (!isNaN(d.getTime())) {
+          dateStr = d.toLocaleDateString();
+          timeStr = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+      } catch(e) {}
+    } else if (f.date && f.date.includes(",")) {
+      // Split "Mañana, 20:00"
+      const parts = f.date.split(",");
+      dateStr = parts[0].trim();
+      timeStr = parts[1] ? parts[1].trim() : "";
+    }
+
     tr.innerHTML = `
       <td class="py-10 text-xs">
-        <div>${new Date(f.date).toLocaleDateString()}</div>
-        <div class="opacity-50">${new Date(f.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+        <div>${dateStr}</div>
+        <div class="opacity-50">${timeStr}</div>
       </td>
       <td class="py-10">
-        <div class="font-bold ">${f.team_home} vs ${f.team_away}</div>
+        <div class="font-bold ">${local} vs ${visita}</div>
         <div class="text-xs opacity-50">${f.group || "Fase de Grupos"}</div>
-        ${f.status === 'finished' ? `<div class="text-xs text-success font-black mt-2">MARCADOR: ${f.result_home} - ${f.result_away}</div>` : ''}
+        ${f.status === 'finished' ? `<div class="text-xs text-success font-black mt-2">MARCADOR: ${f.score_local || f.result_home || 0} - ${f.score_visita || f.result_away || 0}</div>` : ''}
       </td>
       <td class="py-10 text-center flex gap-5 justify-center">
-        <button onclick="window.adminSetScore('${f.id}', '${f.team_home}', '${f.team_away}')" class="btn text-xs px-10 py-5" style="background: rgba(34,197,94,0.2); border: 1px solid #22c55e; color: #22c55e;">🏆</button>
+        <button onclick="window.adminSetScore('${f.id}', '${local}', '${visita}')" class="btn text-xs px-10 py-5" style="background: rgba(34,197,94,0.2); border: 1px solid #22c55e; color: #22c55e;">🏆</button>
         <button onclick="window.adminCancelFixture('${f.id}')" class="btn text-xs px-10 py-5" style="background: rgba(227,168,105,0.2); border: 1px solid #e3a869; color: #e3a869;">⛔</button>
         <button onclick="window.adminDeleteFixture('${f.id}')" class="btn text-xs px-10 py-5" style="background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #ef4444;">🗑</button>
       </td>
