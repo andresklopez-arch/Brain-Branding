@@ -1,26 +1,17 @@
 <!DOCTYPE html>
 <html lang="es">
+<!DOCTYPE html>
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>QUINIELA MUNDIALISTA IA | Quiniela Mundialista</title>
-  <link rel="apple-touch-icon" href="/quiniela/logo-quiniela.png">
+  <link rel="apple-touch-icon" href="logo-quiniela.png">
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;900&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
-  <link rel="stylesheet" href="/quiniela/index.css?v=12">
-  <link rel="manifest" href="/quiniela/manifest.json">
+  <link rel="stylesheet" href="index.css?v=15">
+  <link rel="manifest" href="manifest.json">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script>
-    window.onerror = function(msg, url, lineNo, columnNo, error) {
-      console.error("Global Error Capturado:", msg, "Línea:", lineNo);
-      localStorage.setItem("qia_crash_log", new Date().toISOString() + " - " + msg + " (Línea " + lineNo + ")");
-      return false;
-    };
-    window.onunhandledrejection = function(event) {
-      console.error("Promesa Rechazada:", event.reason);
-      localStorage.setItem("qia_promise_log", new Date().toISOString() + " - " + event.reason);
-    };
-  </script>
 </head>
 <body>
 
@@ -29,7 +20,7 @@
     <div class="stars-container" id="splash-stars"></div>
     <div class="splash-content">
       <div class="logo-glow-ring animate-spin-slow"></div>
-      <img src="/quiniela/logo-quiniela.png" class="splash-logo" alt="Quiniela Mundialista IA">
+      <img src="logo-quiniela.png" class="splash-logo" alt="Quiniela Mundialista IA">
       <h1 class="splash-title">QUINIELA <span class="text-accent">IA</span></h1>
       <p class="splash-subtitle">Quiniela Mundialista EDITION</p>
       <div class="loader-crystal mt-20"></div>
@@ -41,32 +32,23 @@
   <!-- 🛡️ ONBOARDING VIEW -->
   <section id="onboarding-view" class="login-view hidden">
     <div class="stars-container" id="login-stars"></div>
-    <div class="login-card dark-glass animate-scale-in" style="max-width: 800px; width: 90vw;">
-      <img src="/quiniela/logo-quiniela.png" style="width: 120px; height: 120px; object-fit: contain;" class="mx-auto mb-15 filter-neon" alt="Logo">
+    <div class="login-card glass-morph animate-scale-in">
+      <img src="logo-quiniela.png" class="w-24 h-24 mx-auto mb-15 filter-neon" alt="Logo">
       <h2 class="text-3xl font-black italic tracking-tighter  uppercase mb-5">PREPARA TU <span class="text-accent">FICHA</span></h2>
       <p class="text-xxs font-bold opacity-30 uppercase tracking-[4px] mb-30">Ingresa tu Nombre y Apodo</p>
       
-      <div id="login-form-container">
-        <div class="form-group mb-16">
-          <label class="form-label text-left block text-lg mb-3">Nombre Completo</label>
-          <input type="text" id="onboard-name" class="form-input text-lg py-12" placeholder="ej: Andrés López" spellcheck="false" style="text-align: left;">
-        </div>
-        
-        <div class="form-group mb-24">
-          <label class="form-label text-left block text-lg mb-3">Apodo (Nombre en la Quiniela)</label>
-          <input type="text" id="onboard-alias" class="form-input text-accent font-black text-xl py-12" placeholder="ej: rey_xalpa" spellcheck="false" oninput="window.validateAliasAvailability(this.value)" style="text-align: left;">
-          <div id="alias-feedback" class="text-[11px] font-black uppercase mt-4 hidden"></div>
-        </div>
-        
-        <button onclick="window.completeOnboarding()" class="btn btn-primary w-full py-18 font-black uppercase text-sm tracking-widest shadow-[0_0_20px_rgba(205,127,50,0.3)]">INGRESAR AL ESTADIO</button>
+      <div class="form-group mb-16">
+        <label class="form-label text-left block">Nombre Completo</label>
+        <input type="text" id="onboard-name" class="form-input " placeholder="ej: Andrés López" spellcheck="false" style="text-align: left;">
       </div>
-
-      <div id="login-loading-container" class="hidden flex flex-col items-center justify-center py-20 relative">
-        <div class="logo-glow-ring animate-spin-slow" style="width: 140px; height: 140px; margin: 0 auto; position: absolute; left: 50%; transform: translateX(-50%); z-index: 1;"></div>
-        <img src="/quiniela/logo-quiniela.png" style="width: 100px; height: 100px; object-fit: contain; position: relative; z-index: 2; margin-top: 20px;" class="mx-auto filter-neon" alt="Logo">
-        <h3 class="text-2xl font-black italic tracking-tighter text-accent uppercase mt-12 animate-pulse" style="position: relative; z-index: 2;">PREPARANDO ESTADIO...</h3>
-        <p class="text-xs font-bold opacity-50 uppercase tracking-widest mt-3" style="position: relative; z-index: 2;">Estableciendo conexión segura</p>
+      
+      <div class="form-group mb-24">
+        <label class="form-label text-left block">Apodo (Nombre en la Quiniela)</label>
+        <input type="text" id="onboard-alias" class="form-input text-accent font-black" placeholder="ej: rey_xalpa" spellcheck="false" oninput="window.validateAliasAvailability(this.value)" style="text-align: left;">
+        <div id="alias-feedback" class="text-[9px] font-black uppercase mt-4 hidden"></div>
       </div>
+      
+      <button onclick="window.completeOnboarding()" class="btn btn-primary w-full py-14 font-black uppercase text-xs tracking-widest shadow-[0_0_20px_rgba(205,127,50,0.3)]">INGRESAR AL ESTADIO</button>
     </div>
   </section>
 
@@ -76,7 +58,7 @@
     <!-- HEADER SUPERIOR -->
     <header class="app-header glass-morph">
       <div class="flex items-center gap-12">
-        <img src="/quiniela/logo-quiniela.png" class="w-10 h-10 filter-neon animate-pulse-logo" alt="Logo" ondblclick="window.promptAdminAccess()" style="cursor: pointer;">
+        <img src="logo-quiniela.png" class="w-10 h-10 filter-neon animate-pulse-logo" alt="Logo" ondblclick="window.promptAdminAccess()" style="cursor: pointer;">
         <div>
           <span class="text-xs opacity-40 font-black tracking-widest uppercase block mb-1">Mundialista</span>
           <h1 class="text-md font-black italic tracking-tighter  leading-none">QUINIELA <span class="text-accent">IA</span></h1>
@@ -244,10 +226,17 @@
         </div>
 
         <!-- ABANDONAR ESTADIO -->
-        <div class="glass-card p-20 mb-80" style="border-color: rgba(239, 68, 68, 0.2);">
+        <div class="glass-card p-20 mb-20" style="border-color: rgba(239, 68, 68, 0.2);">
           <h2 class="text-xs font-black uppercase tracking-widest text-red-500 mb-15"><i class="ri-shut-down-line mr-4"></i> Salida del Estadio</h2>
           <p class="text-xxs opacity-40 uppercase tracking-widest mb-15">Borra tu perfil local de este dispositivo y restablece el saldo.</p>
           <button onclick="window.handleLogout()" class="btn w-full py-12 font-black uppercase text-[10px]" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#ef4444;">🚪 ABANDONAR ESTADIO / BORRAR PERFIL</button>
+        </div>
+
+        <!-- CACHÉ Y MANTENIMIENTO -->
+        <div class="glass-card p-20 mb-80" style="border-color: rgba(66, 133, 244, 0.25);">
+          <h2 class="text-xs font-black uppercase tracking-widest text-[#4285F4] mb-15"><i class="ri-refresh-line mr-4"></i> Mantenimiento de Caché</h2>
+          <p class="text-xxs opacity-40 uppercase tracking-widest mb-15">Si experimentas problemas visuales o deseas forzar la descarga de la última versión.</p>
+          <button onclick="window.forceClearAppCache()" class="btn w-full py-12 font-black uppercase text-[10px]" style="background:rgba(66,133,244,0.1); border:1px solid rgba(66,133,244,0.3); color:#4285F4;"><i class="ri-delete-bin-3-line mr-4"></i> LIMPIAR CACHÉ Y FORZAR RECARGA</button>
         </div>
       </section>
 
@@ -308,17 +297,51 @@
             </div>
           </div>
 
-          <div class="glass-card p-20 mb-20" style="border-color: rgba(139, 92, 246, 0.2);">
-            <div class="flex justify-between items-center mb-12">
+          <!-- 🧭 BUSCADOR DE PARTIDOS IA (GOOGLE SEARCH AI MODE) -->
+          <div class="glass-card p-20 mb-20" style="border-color: rgba(66, 133, 244, 0.25); background: linear-gradient(180deg, rgba(66,133,244,0.02) 0%, transparent 100%);">
+            <div class="flex justify-between items-center mb-15">
               <div>
-                <h3 class="text-xs font-black uppercase text-purple-400 tracking-widest"><i class="ri-radar-fill mr-4"></i> Explorador API ESPN</h3>
-                <p class="text-[8px] opacity-40 font-black uppercase mt-2">Busca partidos globales y agrégalos a tu Quiniela activa.</p>
+                <h3 class="text-xs font-black uppercase text-[#4285F4] tracking-widest flex items-center gap-6">
+                  <i class="ri-google-fill"></i> Buscador Google <span class="bg-[#4285F4]/10 text-[#4285F4] border border-[#4285F4]/20 px-8 py-2 rounded-full font-black text-[7px] tracking-wider uppercase animate-pulse" style="font-size: 7px; padding: 2px 8px; border-radius: 9999px;">Modo IA</span>
+                </h3>
+                <p class="text-[8px] opacity-40 font-black uppercase mt-2">Encuentra los partidos más atractivos de los siguientes 21 días con Inteligencia Artificial.</p>
               </div>
-              <button onclick="window.adminSearchAPI()" class="bg-purple-500 text-black font-black px-6 py-2 rounded-full text-[9px] uppercase tracking-wider hover:opacity-90">Buscar Partidos</button>
             </div>
             
+            <!-- Barra de búsqueda interactiva de Google AI -->
+            <div class="form-group mb-15">
+              <div class="relative flex items-center" style="position: relative; width: 100%;">
+                <i class="ri-search-line absolute left-14 text-sm opacity-40" style="position: absolute; left: 14px; z-index: 10;"></i>
+                <input type="text" id="google-ai-search-input" class="form-input" style="padding-left: 40px; padding-right: 48px; border-radius: 50px; font-weight: 600;" value="¿cuáles son los partidos más atractivos de futbol soccer de los próximos 21 días?" spellcheck="false">
+                <button onclick="window.adminSearchGoogleAI()" class="absolute right-6 bg-[#4285F4] text-white w-32 h-32 rounded-full flex items-center justify-center hover:opacity-90 transition-all" style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: none; cursor: pointer; height: 32px; width: 32px;">
+                  <i class="ri-magic-line text-sm" style="color: #ffffff;"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Chips de Filtro Rápido (Sugerencia 2) -->
+            <div class="flex gap-6 mb-15 overflow-x-auto no-scrollbar" style="gap: 6px; overflow-x: auto; display: flex; margin-bottom: 15px;">
+              <button onclick="window.adminSelectAISearchChip('¿cuáles son los partidos más atractivos de futbol soccer de los próximos 21 días?', 'todos')" class="btn-tab active" id="chip-ai-todos" style="font-size: 8px; padding: 6px 10px; white-space: nowrap; border-radius: 20px;">📅 Todos</button>
+              <button onclick="window.adminSelectAISearchChip('¿cuáles son los partidos más atractivos de la Eurocopa 2026 de los próximos 21 días?', 'euro')" class="btn-tab" id="chip-ai-euro" style="font-size: 8px; padding: 6px 10px; white-space: nowrap; border-radius: 20px;">🇪🇺 Eurocopa 2026</button>
+              <button onclick="window.adminSelectAISearchChip('¿cuáles son los partidos más atractivos de la Copa América 2026 de los próximos 21 días?', 'copa')" class="btn-tab" id="chip-ai-copa" style="font-size: 8px; padding: 6px 10px; white-space: nowrap; border-radius: 20px;">🌎 Copa América</button>
+              <button onclick="window.adminSelectAISearchChip('¿cuáles son los partidos más atractivos de la Liga MX y MLS de los próximos 21 días?', 'local')" class="btn-tab" id="chip-ai-local" style="font-size: 8px; padding: 6px 10px; white-space: nowrap; border-radius: 20px;">🇲🇽 Liga MX / MLS</button>
+            </div>
+            
+            <!-- Contenedor del Resumen de la IA (Google Search AI Overview) -->
+            <div id="google-ai-overview-container" class="hidden mb-15 animate-scale-in">
+              <div class="p-16 rounded-2xl border" style="background: rgba(66, 133, 244, 0.05); border-color: rgba(66, 133, 244, 0.2); text-align: left; padding: 16px; border-radius: var(--radius-md);">
+                <div class="flex items-center gap-6 mb-10 text-[#4285F4] font-black text-[9px] uppercase tracking-widest" style="font-size: 9px; font-weight: 900; letter-spacing: 2px; margin-bottom: 10px;">
+                  <i class="ri-sparkling-fill animate-pulse" style="color: #4285F4;"></i> Resumen de IA de Google
+                </div>
+                <div class="text-[11px] text-primary font-medium leading-relaxed" id="google-ai-overview-text" style="color: var(--text-primary); font-size: 11px; line-height: 1.6;">
+                  <!-- Dinámico -->
+                </div>
+              </div>
+            </div>
+            
+            <!-- Contenedor de Resultados para Agregar -->
             <div class="space-y-8 max-h-[300px] overflow-y-auto no-scrollbar" id="admin-api-matches-container">
-              <div class="text-center text-xs opacity-40 py-20 uppercase tracking-widest">Haz clic en Buscar Partidos para cargar la cartelera global</div>
+              <div class="text-center text-xs opacity-40 py-20 uppercase tracking-widest">Escribe tu consulta y haz clic en la varita de IA para buscar</div>
             </div>
           </div>
         </div>
@@ -532,15 +555,39 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
 
+
   <!-- Core Javascript Engines -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-  <script type="module" src="app_db.js?v=12"></script>
-  <script type="module" src="app.js?v=12"></script>
+  <script type="module" src="app_db.js?v=15"></script>
+  <script type="module" src="app.js?v=15"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=12').then(registration => {
-          console.log('SW registered');
+        navigator.serviceWorker.register('sw.js?v=15').then(registration => {
+          console.log('⚙️ [PWA] Service Worker registrado con éxito:', registration.scope);
+          
+          // Detectar e instalar actualizaciones automáticamente al instante
+          registration.onupdatefound = () => {
+            const installingWorker = registration.installing;
+            if (installingWorker == null) return;
+            installingWorker.onstatechange = () => {
+              if (installingWorker.state === 'installed') {
+                if (navigator.serviceWorker.controller) {
+                  console.log('⚙️ [PWA] Nueva versión disponible en la nube. Recargando de inmediato...');
+                  if (typeof showToast === 'function') {
+                    showToast("🏟️ Nueva actualización del Estadio instalada. Recargando...", "success");
+                  }
+                  setTimeout(() => {
+                    window.location.reload();
+                  }, 2000);
+                } else {
+                  console.log('⚙️ [PWA] Contenido cacheado localmente para uso offline.');
+                }
+              }
+            };
+          };
+        }).catch(err => {
+          console.warn('⚠️ [PWA] Registro fallido de Service Worker:', err);
         });
       });
     }

@@ -8,6 +8,9 @@ import {
   saveSystemConfig,
   getFixtures,
   getIASuggestions,
+  getGoogleAISearchResults,
+  encryptAISearchData,
+  decryptAISearchData,
   acceptSuggestionsAsFixtures,
   getLeaderboard,
   registerOrLoginUser,
@@ -495,6 +498,60 @@ async function refreshPanelData(panel) {
     
     // Llenar listas heredadas de god-mode
     loadAdminPanel();
+    
+    // Cargar caché encriptada del Buscador Google AI si existe
+    const cachedAISearch = localStorage.getItem("qia_last_ai_search");
+    if (cachedAISearch) {
+      try {
+        const results = decryptAISearchData(cachedAISearch);
+        if (results) {
+          // Sincronizar el chip activo guardado en la caché
+          const categories = ["todos", "euro", "copa", "local"];
+          categories.forEach(cat => {
+            const el = document.getElementById(`chip-ai-${cat}`);
+            if (el) el.classList.toggle("active", cat === (results.category || 'todos'));
+          });
+
+          const overviewContainer = document.getElementById("google-ai-overview-container");
+          const overviewText = document.getElementById("google-ai-overview-text");
+          if (overviewContainer && overviewText && results.overview) {
+            overviewText.innerHTML = results.overview;
+            overviewContainer.classList.remove("hidden");
+          }
+          
+          const container = document.getElementById("admin-api-matches-container");
+          if (container && results.matches && results.matches.length > 0) {
+            container.innerHTML = "";
+            results.matches.forEach(s => {
+              const div = document.createElement("div");
+              div.className = "flex justify-between items-center p-12 bg-white/5 rounded-xl border border-black/5 text-xxs font-bold uppercase tracking-wider hover:bg-white/10 transition-all";
+              div.style.marginBottom = "8px";
+              
+              let dateStr = "TBA";
+              try {
+                const d = new Date(s.date);
+                dateStr = d.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+              } catch(e) {}
+
+              div.innerHTML = `
+                <div class="flex flex-col" style="max-width: 70%; text-align: left;">
+                  <span class="text-xs font-black text-primary" style="font-size: 11px; font-weight: 900;">${s.team_local} vs ${s.team_visita}</span>
+                  <span class="text-xxxxs opacity-35 mt-2 flex items-center gap-4" style="margin-top: 4px; font-size: 8px;"><i class="ri-calendar-line"></i> ${dateStr}</span>
+                  <span class="text-[8px] opacity-45 lowercase italic mt-4" style="text-transform: none; line-height: 1.2; margin-top: 4px; display: block; font-size: 8px;">${s.reason || ''}</span>
+                </div>
+                <div class="flex flex-col items-end gap-6" style="gap: 6px;">
+                  <span class="text-[8px] bg-purple-500/10 text-purple-600 px-6 py-2 rounded-full border border-purple-500/20 font-black" style="font-size: 8px; font-weight: 900;">${s.group}</span>
+                  <button onclick="window.adminAddFromAPI('${s.id}', '${s.team_local}', '${s.team_visita}', '${s.date}', '${s.group}', ${s.attraction_index})" class="bg-[#4285F4] text-white px-10 py-5 rounded-xl text-[9px] uppercase font-black hover:opacity-90 transition-all shadow-[0_0_10px_rgba(66,133,244,0.15)]" style="border: none; cursor: pointer; border-radius: 12px; font-size: 9px; font-weight: 900; padding: 5px 10px;">Agregar</button>
+                </div>
+              `;
+              container.appendChild(div);
+            });
+          }
+        }
+      } catch(e) {
+        console.error("Error cargando caché de búsqueda IA:", e);
+      }
+    }
     
     // 2. Sugerencias IA
     const suggestions = await getIASuggestions();
@@ -1259,6 +1316,152 @@ window.adminSearchAPI = async function() {
     showToast(`Se encontraron ${suggestions.length} partidos.`, "success");
   } catch (err) {
     container.innerHTML = "<div class='text-center text-red-500 py-20 uppercase tracking-widest'>Error de conexión con la API.</div>";
+  }
+};
+
+// Buscar partidos más atractivos mediante el Buscador Google con Modo IA
+window.adminSearchGoogleAI = async function(category = 'todos') {
+  const queryInput = document.getElementById("google-ai-search-input");
+  const query = queryInput ? queryInput.value.trim() : "";
+  
+  showToast("Preguntando al buscador de Google con Modo IA...", "info");
+  
+  const container = document.getElementById("admin-api-matches-container");
+  if (!container) return;
+  
+  // Ocultar el overview actual de inmediato
+  const overviewContainer = document.getElementById("google-ai-overview-container");
+  const overviewText = document.getElementById("google-ai-overview-text");
+  if (overviewContainer) overviewContainer.classList.add("hidden");
+
+  // Mostrar el ESQUELETO DE CARGA (Skeleton Loading UI)
+  container.innerHTML = `
+    <!-- Google AI Overview Skeleton -->
+    <div class="p-16 rounded-2xl border mb-15 skeleton-card" style="background: rgba(66, 133, 244, 0.03); border-color: rgba(66, 133, 244, 0.1); padding: 16px; border-radius: var(--radius-md);">
+      <div class="flex items-center gap-6 mb-10 text-[#4285F4] font-black text-[9px] uppercase tracking-widest animate-pulse" style="font-weight:900; font-size:9px; letter-spacing:2px; display:flex; align-items:center; gap:6px; margin-bottom:10px;">
+        <i class="ri-sparkling-fill animate-spin-slow"></i> Analizando cartelera con Google AI...
+      </div>
+      <div class="space-y-8" style="display:flex; flex-direction:column; gap:8px;">
+        <div class="skeleton-line skeleton-pulse" style="height: 10px; width: 95%;"></div>
+        <div class="skeleton-line skeleton-pulse" style="height: 10px; width: 85%;"></div>
+        <div class="skeleton-line skeleton-pulse" style="height: 10px; width: 90%;"></div>
+      </div>
+    </div>
+
+    <!-- Match Cards Skeletons -->
+    <div class="space-y-8" style="display:flex; flex-direction:column; gap:8px;">
+      ${[1, 2, 3].map(() => `
+        <div class="flex justify-between items-center p-12 bg-white/5 rounded-xl border border-black/5 skeleton-card" style="margin-bottom: 8px; display:flex; justify-content:space-between; align-items:center; padding:12px; border-radius:12px;">
+          <div class="flex flex-col" style="width: 60%; display:flex; flex-direction:column; gap:6px;">
+            <div class="skeleton-line skeleton-pulse" style="height: 12px; width: 80%;"></div>
+            <div class="skeleton-line skeleton-pulse" style="height: 8px; width: 45%; margin-top:4px;"></div>
+            <div class="skeleton-line skeleton-pulse" style="height: 6px; width: 95%; margin-top:4px;"></div>
+          </div>
+          <div class="flex flex-col items-end gap-6" style="width: 25%; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+            <div class="skeleton-line skeleton-pulse" style="height: 14px; width: 55px; border-radius:8px;"></div>
+            <div class="skeleton-line skeleton-pulse" style="height: 20px; width: 65px; border-radius:12px; margin-top:6px;"></div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  
+  setTimeout(async () => {
+    try {
+      const results = await getGoogleAISearchResults(query, category);
+      container.innerHTML = "";
+      
+      // Mostrar Overview con fade-in suave
+      if (overviewContainer && overviewText) {
+        overviewText.innerHTML = results.overview;
+        overviewContainer.classList.remove("hidden");
+      }
+      
+      if (!results.matches || results.matches.length === 0) {
+        container.innerHTML = "<div class='text-center text-xs opacity-40 py-20 uppercase tracking-widest'>No se encontraron partidos en los próximos 21 días.</div>";
+        return;
+      }
+
+      results.matches.forEach(s => {
+        const div = document.createElement("div");
+        div.className = "flex justify-between items-center p-12 bg-white/5 rounded-xl border border-black/5 text-xxs font-bold uppercase tracking-wider hover:bg-white/10 transition-all";
+        div.style.marginBottom = "8px";
+        
+        let dateStr = "TBA";
+        try {
+          const d = new Date(s.date);
+          dateStr = d.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        } catch(e) {}
+
+        div.innerHTML = `
+          <div class="flex flex-col" style="max-width: 70%; text-align: left;">
+            <span class="text-xs font-black text-primary" style="font-size: 11px; font-weight: 900;">${s.team_local} vs ${s.team_visita}</span>
+            <span class="text-xxxxs opacity-35 mt-2 flex items-center gap-4" style="margin-top: 4px; font-size: 8px;"><i class="ri-calendar-line"></i> ${dateStr}</span>
+            <span class="text-[8px] opacity-45 lowercase italic mt-4" style="text-transform: none; line-height: 1.2; margin-top: 4px; display: block; font-size: 8px;">${s.reason || ''}</span>
+          </div>
+          <div class="flex flex-col items-end gap-6" style="gap: 6px;">
+            <span class="text-[8px] bg-purple-500/10 text-purple-600 px-6 py-2 rounded-full border border-purple-500/20 font-black" style="font-size: 8px; font-weight: 900;">${s.group}</span>
+            <button onclick="window.adminAddFromAPI('${s.id}', '${s.team_local}', '${s.team_visita}', '${s.date}', '${s.group}', ${s.attraction_index})" class="bg-[#4285F4] text-white px-10 py-5 rounded-xl text-[9px] uppercase font-black hover:opacity-90 transition-all shadow-[0_0_10px_rgba(66,133,244,0.15)]" style="border: none; cursor: pointer; border-radius: 12px; font-size: 9px; font-weight: 900; padding: 5px 10px;">Agregar</button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+      
+      // Guardar en caché local encriptada de forma ultra-segura
+      localStorage.setItem("qia_last_ai_search", encryptAISearchData(results));
+      showToast(`¡Búsqueda con Google AI completada! Se encontraron ${results.matches.length} partidos.`, "success");
+    } catch (err) {
+      console.error(err);
+      container.innerHTML = "<div class='text-center text-red-500 py-20 uppercase tracking-widest'>Error al consultar Google AI.</div>";
+    }
+  }, 2200); // Un pequeño retraso para darle realismo a la "búsqueda con IA"
+};
+
+// Controlador de clics en los chips de filtros rápidos de Google AI
+window.adminSelectAISearchChip = function(queryText, category) {
+  const queryInput = document.getElementById("google-ai-search-input");
+  if (queryInput) {
+    queryInput.value = queryText;
+  }
+  
+  // Actualizar clases activas en los chips
+  const categories = ["todos", "euro", "copa", "local"];
+  categories.forEach(cat => {
+    const el = document.getElementById(`chip-ai-${cat}`);
+    if (el) el.classList.toggle("active", cat === category);
+  });
+  
+  // Lanzar la búsqueda de inmediato
+  window.adminSearchGoogleAI(category);
+};
+
+// Limpiar de forma manual y absoluta la caché del navegador/Service Worker
+window.forceClearAppCache = async function() {
+  showToast("Limpiando caché del Service Worker...", "info");
+  if ('serviceWorker' in navigator) {
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (let registration of registrations) {
+        await registration.unregister();
+      }
+      
+      const cacheNames = await caches.keys();
+      for (let cacheName of cacheNames) {
+        await caches.delete(cacheName);
+      }
+      
+      localStorage.removeItem("logo_webp_cache");
+      localStorage.removeItem("qia_last_ai_search");
+      
+      showToast("Caché eliminada con éxito. Reiniciando aplicación...", "success");
+      setTimeout(() => {
+        window.location.reload(true);
+      }, 1500);
+    } catch (err) {
+      showToast("Error al limpiar caché: " + err.message, "error");
+    }
+  } else {
+    showToast("Caché no soportada en este navegador.", "info");
   }
 };
 

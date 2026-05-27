@@ -722,3 +722,20 @@ input[type="checkbox"]:checked::after {
     border-right: 1.5px solid var(--border-glass);
   }
 }
+
+/* ── SKELETON LOADER ANIMATIONS ──────────────────────────── */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.35; background: rgba(0, 0, 0, 0.05); }
+  50% { opacity: 0.75; background: rgba(0, 0, 0, 0.12); }
+}
+.skeleton-pulse {
+  animation: skeleton-pulse 1.4s infinite ease-in-out;
+}
+.skeleton-card {
+  animation: skeleton-pulse 1.4s infinite ease-in-out;
+  border-color: rgba(0, 0, 0, 0.04) !important;
+}
+.skeleton-line {
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+}
