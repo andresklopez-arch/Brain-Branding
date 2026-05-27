@@ -269,7 +269,35 @@ export async function getFixtures() {
 // Obtener sugerencias IA
 export async function getIASuggestions() {
   if (useSimulation) {
-    return JSON.parse(localStorage.getItem("qia_suggestions"));
+    const teams = ["América", "Monterrey", "Chivas", "Cruz Azul", "Pumas", "Tigres", "Toluca", "Atlas", "Pachuca", "León", "Santos", "Tijuana", "Querétaro", "Necaxa", "Puebla", "Mazatlán", "San Luis", "Juárez"];
+    const suggestions = [];
+    let currentDate = new Date();
+    
+    // Generar partidos dinámicos para los próximos 21 días
+    for(let i = 0; i < 21; i++) {
+       let numMatches = Math.floor(Math.random() * 3) + 1; // 1 to 3 matches per day
+       let matchDate = new Date(currentDate);
+       matchDate.setDate(currentDate.getDate() + i);
+       
+       let dateStr = matchDate.toLocaleDateString('es-MX', { weekday: 'long', day: '2-digit', month: 'short' });
+       
+       for(let j = 0; j < numMatches; j++) {
+         let t1 = teams[Math.floor(Math.random() * teams.length)];
+         let t2 = teams[Math.floor(Math.random() * teams.length)];
+         while(t1 === t2) t2 = teams[Math.floor(Math.random() * teams.length)];
+         
+         let attract = Math.floor(Math.random() * 40) + 60; // 60 to 99
+         suggestions.push({
+           id: "sug-gen-" + i + "-" + j,
+           team_local: t1,
+           team_visita: t2,
+           date: dateStr + ", 20:00",
+           attraction_index: attract,
+           selected: true
+         });
+       }
+    }
+    return suggestions.sort((a,b) => a.date.localeCompare(b.date)); // Orden cronológico
   }
   const snap = await db.collection("suggestions").get();
   return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
