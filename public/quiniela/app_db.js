@@ -273,7 +273,7 @@ export async function getIASuggestions() {
   
   for (let lg of leagues) {
     try {
-      const res = await fetch(\`https://site.api.espn.com/apis/site/v2/sports/soccer/\${lg}/scoreboard\`);
+      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard`);
       if (!res.ok) continue;
       const data = await res.json();
       if (data.events) {
