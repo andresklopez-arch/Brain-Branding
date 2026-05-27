@@ -1383,16 +1383,82 @@ window.adminSearchAPI = async function() {
 // Buscar partidos más atractivos mediante el Buscador Google con Modo IA
 window.adminSearchGoogleAI = async function(category = 'todos') {
   const queryInput = document.getElementById("google-ai-search-input");
-  const query = queryInput ? queryInput.value.trim() : "";
+  const rawQuery = queryInput ? queryInput.value.trim() : "";
   
-  showToast("Preguntando al buscador de Google con Modo IA...", "info");
-  
+  // Sanitización de seguridad contra XSS e inyecciones (Recomendación 1)
+  const query = rawQuery.replace(/[<>'"&]/g, (match) => {
+    const map = {
+      '<': '&lt;',
+      '>': '&gt;',
+      "'": '&#39;',
+      '"': '&quot;',
+      '&': '&amp;'
+    };
+    return map[match];
+  }).substring(0, 150);
+
   const container = document.getElementById("admin-api-matches-container");
   if (!container) return;
   
-  // Ocultar el overview actual de inmediato
   const overviewContainer = document.getElementById("google-ai-overview-container");
   const overviewText = document.getElementById("google-ai-overview-text");
+
+  // Intentar servir desde la caché estructurada de 8 días (Recomendación 3)
+  const cacheKey = `qia_ai_cache_${category}`;
+  const cachedDataStr = localStorage.getItem(cacheKey);
+  if (cachedDataStr) {
+    try {
+      const cachedData = decryptAISearchData(cachedDataStr);
+      const cacheAge = Date.now() - (cachedData.timestamp || 0);
+      if (cacheAge < 5 * 60 * 1000) { // TTL de 5 minutos
+        console.log(`⚡ [Google AI Mode] Sirviendo caché para la categoría: ${category} (${Math.round(cacheAge/1000)}s de antigüedad)`);
+        
+        if (overviewContainer && overviewText && cachedData.overview) {
+          overviewText.innerHTML = cachedData.overview;
+          overviewContainer.classList.remove("hidden");
+        }
+        
+        container.innerHTML = "";
+        if (!cachedData.matches || cachedData.matches.length === 0) {
+          container.innerHTML = "<div class='text-center text-xs opacity-40 py-20 uppercase tracking-widest'>No se encontraron partidos en los próximos 8 días.</div>";
+        } else {
+          cachedData.matches.forEach(s => {
+            const div = document.createElement("div");
+            div.className = "flex justify-between items-center p-12 bg-white/5 rounded-xl border border-black/5 text-xxs font-bold uppercase tracking-wider hover:bg-white/10 transition-all";
+            div.style.marginBottom = "8px";
+            
+            let dateStr = "TBA";
+            try {
+              const d = new Date(s.date);
+              dateStr = d.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+            } catch(e) {}
+
+            div.innerHTML = `
+              <div class="flex flex-col" style="max-width: 70%; text-align: left;">
+                <span class="text-xs font-black text-primary" style="font-size: 11px; font-weight: 900;">${s.team_local} vs ${s.team_visita}</span>
+                <span class="text-xxxxs opacity-35 mt-2 flex items-center gap-4" style="margin-top: 4px; font-size: 8px;"><i class="ri-calendar-line"></i> ${dateStr}</span>
+                <span class="text-[8px] opacity-45 lowercase italic mt-4" style="text-transform: none; line-height: 1.2; margin-top: 4px; display: block; font-size: 8px;">${s.reason || ''}</span>
+              </div>
+              <div class="flex flex-col items-end gap-6" style="gap: 6px;">
+                <span class="text-[8px] bg-purple-500/10 text-purple-600 px-6 py-2 rounded-full border border-purple-500/20 font-black" style="font-size: 8px; font-weight: 900;">${s.group}</span>
+                <button onclick="window.adminAddFromAPI('${s.id}', '${s.team_local}', '${s.team_visita}', '${s.date}', '${s.group}', ${s.attraction_index})" class="bg-[#4285F4] text-white px-10 py-5 rounded-xl text-[9px] uppercase font-black hover:opacity-90 transition-all shadow-[0_0_10px_rgba(66,133,244,0.15)]" style="border: none; cursor: pointer; border-radius: 12px; font-size: 9px; font-weight: 900; padding: 5px 10px;">Agregar</button>
+              </div>
+            `;
+            container.appendChild(div);
+          });
+        }
+        
+        showToast(`Búsqueda (Caché rápida) completada para: ${category.toUpperCase()}`, "success");
+        return;
+      }
+    } catch(e) {
+      console.warn("Error cargando caché rápida", e);
+    }
+  }
+
+  showToast("Preguntando al buscador de Google con Modo IA...", "info");
+  
+  // Ocultar el overview actual de inmediato
   if (overviewContainer) overviewContainer.classList.add("hidden");
 
   // Mostrar el ESQUELETO DE CARGA (Skeleton Loading UI)
@@ -1468,7 +1534,12 @@ window.adminSearchGoogleAI = async function(category = 'todos') {
         container.appendChild(div);
       });
       
-      // Guardar en caché local encriptada de forma ultra-segura
+      // Guardar en la caché por categorías estructurada con timestamp (Recomendación 3)
+      results.timestamp = Date.now();
+      results.category = category;
+      localStorage.setItem(cacheKey, encryptAISearchData(results));
+      
+      // Guardar también en la caché global del Buscador Google AI para la carga inicial
       localStorage.setItem("qia_last_ai_search", encryptAISearchData(results));
       showToast(`¡Búsqueda con Google AI completada! Se encontraron ${results.matches.length} partidos.`, "success");
     } catch (err) {
@@ -1513,6 +1584,10 @@ window.forceClearAppCache = async function() {
       
       localStorage.removeItem("logo_webp_cache");
       localStorage.removeItem("qia_last_ai_search");
+      localStorage.removeItem("qia_ai_cache_todos");
+      localStorage.removeItem("qia_ai_cache_euro");
+      localStorage.removeItem("qia_ai_cache_copa");
+      localStorage.removeItem("qia_ai_cache_local");
       
       showToast("Caché eliminada con éxito. Reiniciando aplicación...", "success");
       setTimeout(() => {
@@ -2051,13 +2126,32 @@ window.adminAddFixture = async function() {
   if (!away) return;
   const dateStr = prompt("Fecha y Hora (YYYY-MM-DD HH:MM):", "2026-06-11 15:00");
   if (!dateStr) return;
+  
+  // Validación de Rango Dinámico (Recomendación 2)
+  const fixtureDate = new Date(dateStr);
+  if (isNaN(fixtureDate.getTime())) {
+    showToast("❌ Fecha y hora inválida. Debe ser YYYY-MM-DD HH:MM", "error");
+    return;
+  }
+
+  const today = new Date();
+  const limitDate = new Date(today.getTime() + 8 * 24 * 60 * 60 * 1000);
+  
+  if (fixtureDate < today || fixtureDate > limitDate) {
+    const confirmMsg = `⚠️ ATENCIÓN: La fecha seleccionada (${fixtureDate.toLocaleString('es-MX')}) está fuera del rango ideal de los siguientes 8 días (del ${today.toLocaleDateString('es-MX')} al ${limitDate.toLocaleDateString('es-MX')}).\n\n¿Seguro que deseas agregar este partido de todas formas?`;
+    if (!confirm(confirmMsg)) {
+      showToast("❌ Operación cancelada. Fecha fuera de rango.", "info");
+      return;
+    }
+  }
+
   const grp = prompt("Grupo / Fase:", "Group A");
 
   const newFixture = {
     id: `fix_${Date.now()}`,
     team_home: home,
     team_away: away,
-    date: new Date(dateStr).toISOString(),
+    date: fixtureDate.toISOString(),
     group: grp || "Group A",
     status: "pending",
     result_home: null,
