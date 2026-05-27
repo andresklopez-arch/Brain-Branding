@@ -2,7 +2,7 @@
    QUINIELA MUNDIALISTA IA — SERVICE WORKER ZENITH (sw.js)
    ============================================================ */
 
-const CACHE_NAME = "quiniela-ia-cache-v2";
+const CACHE_NAME = "quiniela-ia-cache-v1";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -73,7 +73,7 @@ self.addEventListener("fetch", (e) => {
         return networkResponse;
       }).catch(() => {
         // Retornar fallback básico si no hay red
-        return new Response("Offline Mode Activo en el Estadio Mundialista");
+        return new Response("Offline Mode Activo en el Cyber Stadium");
       });
     })
   );

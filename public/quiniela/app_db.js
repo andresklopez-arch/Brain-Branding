@@ -160,7 +160,8 @@ async function checkSeeds() {
         betting_deadline_day: 5,
         betting_deadline_hour: 18,
         bypass_deadline_testing: true,
-        manual_locked: false
+        manual_locked: false,
+        admin_pin: "569323"
       };
       localStorage.setItem("qia_config", JSON.stringify(defaultConfig));
     }
@@ -191,7 +192,8 @@ async function checkSeeds() {
           betting_deadline_day: 5,
           betting_deadline_hour: 18,
           bypass_deadline_testing: true,
-          manual_locked: false
+          manual_locked: false,
+          admin_pin: "569323"
         };
         await db.collection("config").doc("governance").set(defaultConfig);
       }
@@ -345,10 +347,6 @@ export async function registerOrLoginUser(userData) {
     }
   }
   const encryptedUser = encryptData(userData);
-  
-  // Realizar respaldo resiliente en IndexedDB (Sugerencia 3)
-  backupUserToIndexedDB(encryptedUser);
-
   if (useSimulation) {
     localStorage.setItem("qia_current_user", JSON.stringify(encryptedUser));
     // Guardar en la lista global de usuarios simulados
@@ -590,11 +588,39 @@ export async function executeWeeklyClosure(config) {
     const tickets = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
     if (tickets.length === 0) return { success: false, message: "No hay tickets activos para cerrar esta semana." };
 
+    // Fetch fixtures directly from local storage if using simulation, or just fetch them globally
+    const fixtures = await getFixtures();
+    const fixturesMap = {};
+    fixtures.forEach(f => fixturesMap[f.id] = f);
+
     // 1. Agrupar por usuario y tomar la mejor quiniela
     const userBest = {};
     tickets.forEach(t => {
       t.status = "checked";
-      t.hits = Math.floor(Math.random() * 4) + 4; // de 4 a 7 aciertos simulados
+      let hits = 0;
+      if (t.matches) {
+        t.matches.forEach(m => {
+          const f = fixturesMap[m.match_id];
+          if (f) {
+            if (f.status === "canceled") {
+              hits++; // Auto hit for canceled matches
+            } else if (f.status === "finished") {
+              const isTie = f.result_home === f.result_away;
+              const isHomeWin = f.result_home > f.result_away;
+              const isAwayWin = f.result_away > f.result_home;
+              
+              if (m.prediction === "E" && isTie) hits++;
+              else if (m.prediction === "L" && isHomeWin) hits++;
+              else if (m.prediction === "V" && isAwayWin) hits++;
+            }
+          }
+        });
+      } else {
+        // Mock fallback if structure is broken
+        hits = Math.floor(Math.random() * 4) + 4;
+      }
+      t.hits = hits;
+      
       if (!userBest[t.user_id] || t.hits > userBest[t.user_id].hits) {
         userBest[t.user_id] = t;
       }
@@ -819,131 +845,117 @@ export async function getGovernanceLogs() {
   }
 }
 
-// ── INDEXEDDB RESILIENT BACKUP ENGINE (Sugerencia 3 - Ultra Seguro) ─────────
-export function backupUserToIndexedDB(encryptedUser) {
-  return new Promise((resolve) => {
-    const timeout = setTimeout(() => {
-      console.warn("⚠️ [IndexedDB Backup] La escritura en IndexedDB excedió el tiempo límite.");
-      resolve(false);
-    }, 400);
+// ==========================================
+// ADMIN (GOD MODE) FUNCTIONS
+// ==========================================
 
-    try {
-      if (!window.indexedDB) {
-        clearTimeout(timeout);
-        resolve(false);
-        return;
-      }
-      const request = indexedDB.open("qia_stadium_backup_db", 1);
-      request.onupgradeneeded = (e) => {
-        try {
-          const dbInstance = e.target.result;
-          if (!dbInstance.objectStoreNames.contains("backup_store")) {
-            dbInstance.createObjectStore("backup_store", { keyPath: "id" });
-          }
-        } catch (err) {
-          console.warn("IndexedDB upgrade failed:", err);
-        }
-      };
-      request.onsuccess = (e) => {
-        try {
-          const dbInstance = e.target.result;
-          const tx = dbInstance.transaction("backup_store", "readwrite");
-          const store = tx.objectStore("backup_store");
-          store.put({ id: "current_user_session", data: encryptedUser });
-          tx.oncomplete = () => {
-            clearTimeout(timeout);
-            console.log("💾 [IndexedDB Backup] Sesión del usuario respaldada de forma resiliente.");
-            resolve(true);
-          };
-          tx.onerror = () => {
-            clearTimeout(timeout);
-            resolve(false);
-          };
-        } catch (err) {
-          clearTimeout(timeout);
-          resolve(false);
-        }
-      };
-      request.onerror = () => {
-        clearTimeout(timeout);
-        resolve(false);
-      };
-      request.onblocked = () => {
-        clearTimeout(timeout);
-        resolve(false);
-      };
-    } catch (e) {
-      clearTimeout(timeout);
-      resolve(false);
-    }
-  });
+export async function fetchAllUsers() {
+  if (useSimulation) {
+    const local = JSON.parse(localStorage.getItem("qia_users_mock") || "[]");
+    return local;
+  }
+  try {
+    const snap = await db.collection("users").get();
+    return snap.docs.map(doc => ({ id: doc.id, ...decryptData(doc.data()) }));
+  } catch (e) {
+    console.error("Error fetching all users:", e);
+    return [];
+  }
 }
 
-export function restoreUserFromIndexedDB() {
-  return new Promise((resolve) => {
-    const timeout = setTimeout(() => {
-      console.warn("⚠️ [IndexedDB Backup] La lectura de IndexedDB excedió el tiempo límite. Usando fallback.");
-      resolve(null);
-    }, 400);
-
-    try {
-      if (!window.indexedDB) {
-        clearTimeout(timeout);
-        resolve(null);
-        return;
-      }
-      const request = indexedDB.open("qia_stadium_backup_db", 1);
-      request.onupgradeneeded = (e) => {
-        try {
-          const dbInstance = e.target.result;
-          if (!dbInstance.objectStoreNames.contains("backup_store")) {
-            dbInstance.createObjectStore("backup_store", { keyPath: "id" });
-          }
-        } catch (err) {
-          console.warn("IndexedDB upgrade failed:", err);
-        }
-      };
-      request.onsuccess = (e) => {
-        try {
-          const dbInstance = e.target.result;
-          if (!dbInstance.objectStoreNames.contains("backup_store")) {
-            clearTimeout(timeout);
-            resolve(null);
-            return;
-          }
-          const tx = dbInstance.transaction("backup_store", "readonly");
-          const store = tx.objectStore("backup_store");
-          const getReq = store.get("current_user_session");
-          getReq.onsuccess = () => {
-            clearTimeout(timeout);
-            if (getReq.result) {
-              console.log("⚡ [IndexedDB Backup] Sesión restaurada desde IndexedDB.");
-              resolve(getReq.result.data);
-            } else {
-              resolve(null);
-            }
-          };
-          getReq.onerror = () => {
-            clearTimeout(timeout);
-            resolve(null);
-          };
-        } catch (err) {
-          clearTimeout(timeout);
-          resolve(null);
-        }
-      };
-      request.onerror = () => {
-        clearTimeout(timeout);
-        resolve(null);
-      };
-      request.onblocked = () => {
-        clearTimeout(timeout);
-        resolve(null);
-      };
-    } catch (e) {
-      clearTimeout(timeout);
-      resolve(null);
-    }
-  });
+export async function updateUserBalance(uid, amountToAdd) {
+  if (useSimulation) return false;
+  try {
+    await db.collection("users").doc(uid).update({ 
+      balance: firebase.firestore.FieldValue.increment(Number(amountToAdd)) 
+    });
+    return true;
+  } catch (e) {
+    console.error("Error updating user balance:", e);
+    return false;
+  }
 }
 
+export async function addFixture(f) {
+  if (useSimulation) return false;
+  try {
+    await db.collection("fixtures").doc(f.id).set(f);
+    return true;
+  } catch (e) {
+    console.error("Error adding fixture:", e);
+    return false;
+  }
+}
+
+export async function updateFixtureScore(id, resultHome, resultAway) {
+  if (useSimulation) return false;
+  try {
+    await db.collection("fixtures").doc(id).update({
+      result_home: Number(resultHome),
+      result_away: Number(resultAway),
+      status: "finished"
+    });
+    return true;
+  } catch (e) {
+    console.error("Error updating fixture score:", e);
+    return false;
+  }
+}
+
+export async function cancelFixture(id) {
+  if (useSimulation) return false;
+  try {
+    await db.collection("fixtures").doc(id).update({
+      status: "canceled",
+      result_home: null,
+      result_away: null
+    });
+    return true;
+  } catch (e) {
+    console.error("Error canceling fixture:", e);
+    return false;
+  }
+}
+
+export async function deleteFixture(id) {
+  if (useSimulation) return false;
+  try {
+    await db.collection("fixtures").doc(id).delete();
+    return true;
+  } catch (e) {
+    console.error("Error deleting fixture:", e);
+    return false;
+  }
+}
+
+export async function batchAddFixtures(fixturesArray) {
+  if (useSimulation) return false;
+  try {
+    const batch = db.batch();
+    fixturesArray.forEach(f => {
+      const ref = db.collection("fixtures").doc(f.id);
+      batch.set(ref, f);
+    });
+    await batch.commit();
+    return true;
+  } catch (e) {
+    console.error("Error in batchAddFixtures:", e);
+    return false;
+  }
+}
+
+export async function clearAllFixtures() {
+  if (useSimulation) return false;
+  try {
+    const snap = await db.collection("fixtures").get();
+    const batch = db.batch();
+    snap.docs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+    return true;
+  } catch (e) {
+    console.error("Error in clearAllFixtures:", e);
+    return false;
+  }
+}

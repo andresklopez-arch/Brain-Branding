@@ -23,8 +23,14 @@ import {
   decryptData,
   createGovernanceLog,
   getGovernanceLogs,
-  backupUserToIndexedDB,
-  restoreUserFromIndexedDB
+  fetchAllUsers,
+  updateUserBalance,
+  addFixture,
+  deleteFixture,
+  batchAddFixtures,
+  clearAllFixtures,
+  updateFixtureScore,
+  cancelFixture
 } from './app_db.js';
 
 // ── VARIABLES DE CONTROL GLOBAL ──────────────────────────────────────────
@@ -105,7 +111,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   initStarsBackground();
   
   // Sincronizar reloj antifraude en segundo plano
-  syncServerTime();
+  await syncServerTime();
   
   // Registrar Service Worker para soporte offline PWA
   if ('serviceWorker' in navigator) {
@@ -124,26 +130,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   systemConfig = await getSystemConfig();
   
   // Checar si hay sesión guardada en localStorage (Descifrada)
-  let savedUser = localStorage.getItem("qia_current_user");
-  
-  // Si no está en LocalStorage, intentar restaurar de IndexedDB (Sugerencia 3)
-  if (!savedUser) {
-    const restored = await restoreUserFromIndexedDB();
-    if (restored) {
-      localStorage.setItem("qia_current_user", JSON.stringify(restored));
-      savedUser = JSON.stringify(restored);
-      
-      // Registrar log de telemetría de resiliencia (Sugerencia 3 - Auditoría)
-      import('./app_db.js').then(async dbMod => {
-        const decrypted = dbMod.decryptData(restored);
-        await dbMod.createGovernanceLog(
-          "Rescate de Sesión",
-          `El motor IndexedDB recuperó con éxito la sesión local del usuario: @${decrypted.alias}`,
-          decrypted
-        );
-      });
-    }
-  }
+  const savedUser = localStorage.getItem("qia_current_user");
   
   // Simular carga de splash screen (1.5 segundos)
   setTimeout(() => {
@@ -153,17 +140,6 @@ window.addEventListener("DOMContentLoaded", async () => {
       setTimeout(() => splash.remove(), 800);
     }
     
-    // Cargar selecciones temporales si existen (Sugerencia de Resguardo de Quinielas)
-    const savedSelections = localStorage.getItem("qia_temp_selections");
-    if (savedSelections) {
-      try {
-        currentTicketSelections = JSON.parse(savedSelections);
-        console.log("💾 Selecciones temporales recuperadas:", currentTicketSelections);
-      } catch (e) {
-        console.warn("⚠️ Error al restaurar selecciones temporales:", e);
-      }
-    }
-
     if (savedUser) {
       try {
         currentUser = decryptData(JSON.parse(savedUser));
@@ -172,18 +148,9 @@ window.addEventListener("DOMContentLoaded", async () => {
       }
       loadAppView();
     } else {
-      // Crear perfil de invitado silencioso y fluido (Bypass de Registro)
-      currentUser = {
-        phone: "invitado_" + Date.now(),
-        email: "invitado@quinielamundialista.mx",
-        name: "Invitado",
-        alias: "invitado",
-        balance: 200, // saldo de cortesía
-        is_guest: true, // bandera de invitado
-        is_admin: false,
-        created_at: new Date().toISOString()
-      };
-      loadAppView();
+      // Mostrar Onboarding en primer ingreso para definir Nombre y Apodo
+      const onboard = document.getElementById("onboarding-view");
+      if (onboard) onboard.classList.remove("hidden");
     }
 
     // Solicitar permisos de notificación móvil/PWA tras cargar splash
@@ -191,8 +158,8 @@ window.addEventListener("DOMContentLoaded", async () => {
       if ("Notification" in window && Notification.permission === "default") {
         Notification.requestPermission().then(permission => {
           if (permission === "granted") {
-            showToast("¡Notificaciones de la Quiniela Mundialista activadas!", "success");
-            window.sendLocalNotification("🏟️ ¡BIENVENIDO A LA QUINIELA MUNDIALISTA!", "Recibirás alertas en tu celular sobre partidos, saldos y cierres de quinielas.");
+            showToast("¡Notificaciones del Cyber Stadium activadas!", "success");
+            window.sendLocalNotification("🏟️ ¡BIENVENIDO AL CYBER STADIUM!", "Recibirás alertas en tu celular sobre partidos, saldos y cierres de quinielas.");
           }
         });
       }
@@ -202,7 +169,7 @@ window.addEventListener("DOMContentLoaded", async () => {
 
 // Compresor y Caché WebP en cliente para logotipo
 function cacheLogoAsWebP() {
-  const cached = localStorage.getItem("logo_webp_cache_v2");
+  const cached = localStorage.getItem("logo_webp_cache");
   if (cached) {
     applyCachedLogo(cached);
     return;
@@ -219,7 +186,7 @@ function cacheLogoAsWebP() {
       const ctx = canvas.getContext("2d");
       ctx.drawImage(img, 0, 0);
       const webpUrl = canvas.toDataURL("image/webp", 0.85); // 85% calidad WebP
-      localStorage.setItem("logo_webp_cache_v2", webpUrl);
+      localStorage.setItem("logo_webp_cache", webpUrl);
       applyCachedLogo(webpUrl);
       console.log("⚡ [Performance] Logo comprimido a WebP y cacheado localmente.");
     } catch (e) {
@@ -272,29 +239,20 @@ window.switchLoginTab = function(tab) {
 // Validación de Alias
 window.validateAliasAvailability = function(alias) {
   const feedback = document.getElementById("alias-feedback");
-  const previewContainer = document.getElementById("onboard-avatar-preview-container");
-  const previewImg = document.getElementById("onboard-avatar-preview");
-  
   if (!alias || alias.trim().length < 3) {
     feedback.classList.add("hidden");
-    if (previewContainer) previewContainer.classList.add("hidden");
     return;
   }
   feedback.classList.remove("hidden");
-  
-  // Mostrar previsualización del cyber-robot en tiempo real (Sugerencia 1)
-  if (previewContainer && previewImg) {
-    previewImg.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(alias)}`;
-    previewContainer.classList.remove("hidden");
-  }
-
   // Simple validación cosmética futurista
   if (alias.toLowerCase().includes("admin") || alias.toLowerCase().includes("antigravity")) {
     feedback.textContent = "Alias no disponible / Reservado";
     feedback.style.color = "var(--danger)";
+    document.getElementById("btn-auth-phone-submit").disabled = true;
   } else {
-    feedback.textContent = "¡Alias disponible en la Quiniela Mundialista!";
+    feedback.textContent = "¡Alias disponible en el Cyber Stadium!";
     feedback.style.color = "var(--success)";
+    document.getElementById("btn-auth-phone-submit").disabled = false;
   }
 };
 
@@ -356,7 +314,7 @@ window.simulateOtpVerify = async function() {
   
   const mockUser = {
     phone: phone,
-    email: alias + "@quinielamundialista.mx",
+    email: alias + "@cyberstadium.mx",
     name: name,
     alias: alias,
     balance: 200, // saldo de cortesía
@@ -374,21 +332,6 @@ window.simulateOtpVerify = async function() {
 // Cerrar sesión
 window.handleLogout = function() {
   localStorage.removeItem("qia_current_user");
-  
-  // Limpiar respaldo IndexedDB de forma segura (Sugerencia 3)
-  try {
-    const request = indexedDB.open("qia_stadium_backup_db", 1);
-    request.onsuccess = (e) => {
-      const dbInstance = e.target.result;
-      if (dbInstance.objectStoreNames.contains("backup_store")) {
-        const tx = dbInstance.transaction("backup_store", "readwrite");
-        tx.objectStore("backup_store").delete("current_user_session");
-      }
-    };
-  } catch (e) {
-    console.warn("IndexedDB logout clear failed:", e);
-  }
-  
   showToast("Sesión cerrada. Reiniciando Estadio...", "info");
   setTimeout(() => {
     window.location.reload();
@@ -424,31 +367,12 @@ async function refreshPanelData(panel) {
   if (!currentUser) return;
   
   // Cargar saldo de cabecera siempre
-  let refreshedUser = currentUser;
-  const savedUser = localStorage.getItem("qia_current_user");
-  if (savedUser) {
-    try {
-      refreshedUser = decryptData(JSON.parse(savedUser));
-    } catch (err) {
-      refreshedUser = JSON.parse(savedUser);
-    }
-  }
+  const refreshedUser = localStorage.getItem("qia_current_user") 
+    ? JSON.parse(localStorage.getItem("qia_current_user")) 
+    : currentUser;
   currentUser = refreshedUser;
   
   document.getElementById("header-balance").textContent = `$${Number(currentUser.balance).toFixed(2)}`;
-  
-  const headerUser = document.getElementById("header-username");
-  if (headerUser && currentUser && currentUser.alias) {
-    headerUser.textContent = "@" + currentUser.alias;
-  }
-  
-  const welcomeAlias = document.getElementById("welcome-alias");
-  if (welcomeAlias && currentUser && currentUser.alias) {
-    welcomeAlias.textContent = "@" + currentUser.alias;
-  }
-  
-  // Cargar avatar y tier visual de forma dinámica (Sugerencia 1 y 2)
-  loadUserAvatarAndTier();
   
   if (panel === "dashboard") {
     // 1. Bolsa y Premios (Dinámico)
@@ -471,7 +395,7 @@ async function refreshPanelData(panel) {
         
         prizesContainer.innerHTML += `
           <div class="flex flex-col">
-            <span class="text-[10px] font-black uppercase text-white/50 tracking-widest">${label}</span>
+            <span class="text-[10px] font-black uppercase /50 tracking-widest">${label}</span>
             <span class="text-accent text-lg font-black italic">$${amount.toFixed(2)}</span>
           </div>
         `;
@@ -543,6 +467,7 @@ async function refreshPanelData(panel) {
   
   if (panel === "wallet") {
     document.getElementById("wallet-balance").textContent = `$${Number(currentUser.balance).toFixed(2)}`;
+    renderPerformanceChart();
     // Historial financiero
     const txs = await getTransactions(currentUser.phone || currentUser.email);
     renderTransactionHistory(txs);
@@ -610,15 +535,6 @@ function loadAppView() {
   if (headerUser && currentUser && currentUser.alias) {
     headerUser.textContent = "@" + currentUser.alias;
   }
-  
-  // Mostrar apodo en bienvenida del dashboard
-  const welcomeAlias = document.getElementById("welcome-alias");
-  if (welcomeAlias && currentUser && currentUser.alias) {
-    welcomeAlias.textContent = "@" + currentUser.alias;
-  }
-  
-  // Cargar avatar y tier visual de forma dinámica (Sugerencia 1 y 2)
-  loadUserAvatarAndTier();
   
   // Mostrar dock de admin si es administrador
   if (currentUser.is_admin) {
@@ -707,13 +623,13 @@ function renderLiveScores(fixtures) {
     
     card.innerHTML = `
       <div class="flex justify-between items-center">
-        <span class="text-[8px] bg-white/5 border border-white/5 px-6 py-2 rounded-full font-black uppercase text-accent">LIGA MX</span>
+        <span class="text-[8px] bg-white/5 border border-black/5 px-6 py-2 rounded-full font-black uppercase text-accent">LIGA MX</span>
         ${statusBadge}
       </div>
       <div class="flex items-center justify-between mt-4">
         <div class="flex flex-col">
-          <span class="text-xs font-black text-white uppercase">${f.team_local}</span>
-          <span class="text-xs font-black text-white uppercase mt-4">${f.team_visita}</span>
+          <span class="text-xs font-black  uppercase">${f.team_local}</span>
+          <span class="text-xs font-black  uppercase mt-4">${f.team_visita}</span>
         </div>
         <div class="flex flex-col items-end gap-4">
           <span class="text-md font-black italic text-accent">${f.score_local}</span>
@@ -732,16 +648,9 @@ function renderLeaderboard(leaderboard, containerId = "leaderboard-container") {
   
   leaderboard.forEach(row => {
     const div = document.createElement("div");
-    const isMe = currentUser && row.alias === currentUser.alias;
+    div.className = "board-row flex justify-between items-center py-10";
     
-    // Si soy yo, aplicar borde y fondo bronce de Cyber Stadium para resaltar
-    div.className = `board-row flex justify-between items-center py-10 px-8 rounded-xl border transition-all ${
-      isMe 
-        ? 'border-accent/40 bg-accent/10 shadow-[0_0_15px_rgba(205,127,50,0.15)]' 
-        : 'border-transparent'
-    }`;
-    
-    let medalClass = "bg-white/5 text-white";
+    let medalClass = "bg-white/5 ";
     if (row.rank === 1) medalClass = "rank-1";
     if (row.rank === 2) medalClass = "rank-2";
     if (row.rank === 3) medalClass = "rank-3";
@@ -750,7 +659,7 @@ function renderLeaderboard(leaderboard, containerId = "leaderboard-container") {
       <div class="flex items-center gap-10">
         <span class="rank-badge ${medalClass}">${row.rank}</span>
         <div class="flex flex-col">
-          <span class="text-xs font-black text-white">${isMe ? '✨ Tú (@' + row.alias + ')' : '@' + row.alias}</span>
+          <span class="text-xs font-black ">@${row.alias}</span>
           <span class="text-[8px] opacity-30 uppercase font-black">${row.name}</span>
         </div>
       </div>
@@ -774,9 +683,9 @@ function renderPlayFixtures(fixtures) {
     
     row.innerHTML = `
       <div class="match-play-teams">
-        <span class="text-white">${f.team_local}</span>
+        <span class="">${f.team_local}</span>
         <span class="text-accent italic text-xxxxs tracking-[2px] self-center">VS</span>
-        <span class="text-white text-right">${f.team_visita}</span>
+        <span class=" text-right">${f.team_visita}</span>
       </div>
       <div class="bet-selector-grid">
         <button id="btn-bet-${f.id}-L" class="bet-btn ${sel === 'L' ? 'selected' : ''}" onclick="window.selectBet('${f.id}', 'L')">LOCAL</button>
@@ -790,9 +699,6 @@ function renderPlayFixtures(fixtures) {
 
 window.selectBet = function(matchId, selection) {
   currentTicketSelections[matchId] = selection;
-  
-  // Guardar selecciones temporales en localStorage (Sugerencia de Resguardo)
-  localStorage.setItem("qia_temp_selections", JSON.stringify(currentTicketSelections));
   
   // Actualizar clases de botones
   ["L", "E", "V"].forEach(op => {
@@ -820,17 +726,6 @@ window.updatePoolCost = function() {
 
 // Confirmar y comprar ticket
 window.purchaseTicket = async function() {
-  // Si es un usuario invitado, exigir Onboarding antes de emitir el ticket (Fluidez)
-  if (currentUser && currentUser.is_guest) {
-    showToast("Por favor define tu nombre y apodo para registrar tu ticket.", "info");
-    window.pendingTicketPurchase = true;
-    
-    // Mostrar el onboarding view
-    const onboard = document.getElementById("onboarding-view");
-    if (onboard) onboard.classList.remove("hidden");
-    return;
-  }
-
   // 1. Validar límite de apuestas (Sugerencia 3)
   const isLocked = window.checkBettingDeadlineStatus();
   if (isLocked) {
@@ -887,9 +782,8 @@ window.purchaseTicket = async function() {
     // Enviar notificación local al celular
     window.sendLocalNotification("🎫 TICKET QUINIELA EMITIDO", `Tu ticket ${lastCreatedTicket.id} por $${cost.toFixed(2)} MXN ha sido guardado con éxito.`);
     
-    // Limpiar predicciones y cesta temporal (Sugerencia de Resguardo)
+    // Limpiar predicciones
     currentTicketSelections = {};
-    localStorage.removeItem("qia_temp_selections");
     document.getElementById("sidebet-goals").checked = false;
     document.getElementById("sidebet-striker").checked = false;
     
@@ -905,7 +799,7 @@ function showTicketDetails(ticket) {
   if (!modal || !container) return;
   
   container.innerHTML = `
-    <div class="bg-white/5 p-12 rounded-2xl border border-white/5 space-y-6 text-xxs font-bold uppercase tracking-wider text-white">
+    <div class="bg-white/5 p-12 rounded-2xl border border-black/5 space-y-6 text-xxs font-bold uppercase tracking-wider ">
       <div>Ticket ID: <span class="text-accent">${ticket.id}</span></div>
       <div>Usuario: <span class="text-accent">@${ticket.user_alias}</span></div>
       <div>Fecha de Emisión: <span class="opacity-50">${new Date(ticket.created_at).toLocaleString()}</span></div>
@@ -916,10 +810,10 @@ function showTicketDetails(ticket) {
       <div class="divide-y divide-white/5 space-y-4" id="ticket-modal-predictions"></div>
     </div>
     
-    <div class="bg-white/5 p-12 rounded-2xl border border-white/5 space-y-6 text-xxs font-bold uppercase tracking-wider text-white mt-12">
+    <div class="bg-white/5 p-12 rounded-2xl border border-black/5 space-y-6 text-xxs font-bold uppercase tracking-wider  mt-12">
       <div>Side Bet Goles Totales: <span class="text-accent">${ticket.sidebet_goals ? 'SÍ (+3 goles)' : 'NO'}</span></div>
       <div>Side Bet Primer Gol: <span class="text-accent">${ticket.sidebet_striker ? `SÍ (${ticket.sidebet_striker_value})` : 'NO'}</span></div>
-      <div class="border-t border-white/10 pt-6 mt-6 flex justify-between">
+      <div class="border-t border-black/10 pt-6 mt-6 flex justify-between">
         <span>Costo Total:</span>
         <span class="text-success text-sm font-black">$${ticket.total_cost.toFixed(2)} MXN</span>
       </div>
@@ -955,7 +849,7 @@ window.closeTicketModal = function() {
 window.shareTicketOnWhatsApp = function() {
   if (!lastCreatedTicket) return;
   
-  let msg = `*🎫 QUINIELA MUNDIALISTA IA *\n`;
+  let msg = `*🎫 QUINIELA MUNDIALISTA IA — CYBER STADIUM *\n`;
   msg += `*Ticket ID:* ${lastCreatedTicket.id}\n`;
   msg += `*Usuario:* @${lastCreatedTicket.user_alias}\n`;
   msg += `*Costo:* $${lastCreatedTicket.total_cost.toFixed(2)} MXN\n\n`;
@@ -1002,7 +896,7 @@ function renderTransactionHistory(txs) {
     
     div.innerHTML = `
       <div class="flex flex-col">
-        <span class="text-white">${tx.gateway === 'stripe' ? 'Recarga Stripe' : 'Carga SPEI (Folio ' + tx.ref + ')'}</span>
+        <span class="">${tx.gateway === 'stripe' ? 'Recarga Stripe' : 'Carga SPEI (Folio ' + tx.ref + ')'}</span>
         <span class="text-xxxxs opacity-30 mt-2">${new Date(tx.created_at).toLocaleString()}</span>
       </div>
       <div class="flex flex-col items-end gap-2">
@@ -1085,11 +979,11 @@ function renderIASuggestions(suggestions) {
   
   suggestions.forEach(s => {
     const div = document.createElement("div");
-    div.className = "flex justify-between items-center p-10 bg-white/5 rounded-xl border border-white/5 text-xxs font-bold uppercase tracking-wider";
+    div.className = "flex justify-between items-center p-10 bg-white/5 rounded-xl border border-black/5 text-xxs font-bold uppercase tracking-wider";
     
     div.innerHTML = `
       <div class="flex flex-col">
-        <span class="text-white">${s.team_local} vs ${s.team_visita}</span>
+        <span class="">${s.team_local} vs ${s.team_visita}</span>
         <span class="text-xxxxs opacity-30 mt-2">${s.date}</span>
       </div>
       <div class="flex items-center gap-10">
@@ -1124,15 +1018,15 @@ function renderAdminSPEI(speis) {
   
   speis.forEach(tx => {
     const div = document.createElement("div");
-    div.className = "bg-white/5 p-12 rounded-2xl border border-white/5 space-y-8 text-xxs font-bold uppercase tracking-wider";
+    div.className = "bg-white/5 p-12 rounded-2xl border border-black/5 space-y-8 text-xxs font-bold uppercase tracking-wider";
     
     div.innerHTML = `
       <div class="flex justify-between">
-        <span class="text-white">Usuario: @${tx.user_id}</span>
+        <span class="">Usuario: @${tx.user_id}</span>
         <span class="text-success">$${Number(tx.amount).toFixed(2)} MXN</span>
       </div>
       <div>Referencia/Folio SPEI: <span class="text-accent">${tx.ref}</span></div>
-      <div class="flex gap-4 pt-4 border-t border-white/5">
+      <div class="flex gap-4 pt-4 border-t border-black/5">
         <button onclick="window.approveSPEI('${tx.id}')" class="flex-1 bg-[#00ff88] text-black font-black py-6 rounded-xl text-[8px]">APROBAR</button>
         <button onclick="window.declineSPEI('${tx.id}')" class="w-16 bg-red-500/20 border border-red-500/30 text-red-500 font-black py-6 rounded-xl text-[8px]">RECHAZAR</button>
       </div>
@@ -1282,12 +1176,12 @@ async function renderGovernanceLogs() {
     div.className = "py-8 text-xxs uppercase tracking-wider font-bold space-y-2";
     
     div.innerHTML = `
-      <div class="flex justify-between items-center text-white">
+      <div class="flex justify-between items-center ">
         <span>⚡ Acción: <span class="text-accent">${log.action}</span></span>
         <span class="text-xxxxs opacity-30">${new Date(log.created_at).toLocaleString()}</span>
       </div>
-      <div class="text-[9px] text-white/50 lowercase italic" style="text-transform: none;">${log.details}</div>
-      <div class="text-[8px] text-white/30">Operador: @${log.user_alias} (${log.user_id})</div>
+      <div class="text-[9px] /50 lowercase italic" style="text-transform: none;">${log.details}</div>
+      <div class="text-[8px] /30">Operador: @${log.user_alias} (${log.user_id})</div>
     `;
     container.appendChild(div);
   });
@@ -1310,7 +1204,7 @@ window.fetchMatchesAPI = async function() {
 // Enviar comprobante por WhatsApp (Wallet)
 window.sendVoucherWhatsApp = function() {
   if (!currentUser) return;
-  let msg = `*🎫 QUINIELA MUNDIALISTA - SOLICITUD DE RECARGA *\n`;
+  let msg = `*🎫 QUINIELA CYBER STADIUM - SOLICITUD DE RECARGA *\n`;
   msg += `*Usuario:* @${currentUser.alias}\n`;
   msg += `*Tel/Correo:* ${currentUser.phone || currentUser.email}\n`;
   msg += `\nHe subido un comprobante de transferencia SPEI en la aplicación. Por favor, aprueba la recarga de mi saldo.\n`;
@@ -1447,7 +1341,7 @@ async function renderUserTickets() {
     
     div.innerHTML = `
       <div class="flex flex-col">
-        <span class="text-white">${t.id}</span>
+        <span class="">${t.id}</span>
         <span class="text-xxxxs opacity-30 mt-2">${new Date(t.created_at).toLocaleString()}</span>
       </div>
       <div class="flex flex-col items-end gap-2">
@@ -1567,12 +1461,11 @@ window.completeOnboarding = async function() {
   showToast("Preparando tu estadio personalizado...", "info");
   
   const mockUser = {
-    phone: currentUser.phone && !currentUser.phone.startsWith("invitado_") ? currentUser.phone : "jugador_" + Date.now(),
-    email: alias + "@quinielamundialista.mx",
+    phone: "jugador_" + Date.now(),
+    email: alias + "@cyberstadium.mx",
     name: name,
     alias: alias,
-    balance: currentUser.balance || 200, // Conservar el saldo actual
-    is_guest: false,
+    balance: 200, // Saldo inicial
     is_admin: true, // Habilitar admin para pruebas rápidas
     created_at: new Date().toISOString()
   };
@@ -1581,162 +1474,355 @@ window.completeOnboarding = async function() {
     // Registrar/Login local e inyectar
     currentUser = await dbMod.registerOrLoginUser(mockUser);
     
-    showToast(`🏟️ ¡Bienvenido al Estadio Mundialista, @${alias}!`, "success");
+    showToast(`🏟️ ¡Bienvenido al Estadio, @${alias}!`, "success");
     
-    // Ocultar onboarding
+    // Ocultar onboarding e iniciar
     document.getElementById("onboarding-view").classList.add("hidden");
-    
-    // Recargar vista y avatares
     loadAppView();
-
-    // Si había una compra de ticket pendiente, reintentar comprar de inmediato
-    if (window.pendingTicketPurchase) {
-      window.pendingTicketPurchase = false;
-      setTimeout(() => {
-        window.purchaseTicket();
-      }, 500);
-    }
   });
 };
 
-// ── PERSONALIZACIÓN Y TEMA VISUAL (Sugerencias 1 y 2) ────────────────────
-function loadUserAvatarAndTier() {
-  if (!currentUser || !currentUser.alias) return;
+// ==========================================
+// ADMIN (GOD MODE) LOGIC
+// ==========================================
 
-  const seed = currentUser.avatar_seed || currentUser.alias;
-  const avatarUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(seed)}`;
+window.promptAdminAccess = async function() {
+  const cfg = await getSystemConfig();
+  const adminPin = cfg?.admin_pin || "569323";
   
-  // 1. Mostrar Avatares Generativos DiceBear (Sugerencia 1)
-  const headerAvatar = document.getElementById("header-avatar");
-  if (headerAvatar) {
-    headerAvatar.src = avatarUrl;
-    headerAvatar.classList.remove("hidden");
+  const input = prompt("🔐 INGRESA PIN MAESTRO:");
+  if (input === adminPin) {
+    document.getElementById("god-mode-panel").classList.remove("hidden");
+    loadAdminPanel();
+  } else if (input !== null) {
+    showToast("❌ PIN Incorrecto", "error");
   }
+};
+
+async function loadAdminPanel() {
+  const stats = await getAdminStats();
+  if (document.getElementById("admin-stat-users")) {
+    document.getElementById("admin-stat-users").textContent = stats.users_count || 0;
+    document.getElementById("admin-stat-sales").textContent = `$${(stats.total_sales || 0).toLocaleString()}`;
+    const profitEstim = (stats.total_sales || 0) * 0.2; // 20% Admin Profit
+    document.getElementById("admin-stat-prizes").textContent = `$${profitEstim.toLocaleString()}`;
+  }
+
+  const users = await fetchAllUsers();
+  const tbody = document.getElementById("admin-users-list");
+  tbody.innerHTML = "";
   
-  const welcomeAvatar = document.getElementById("welcome-avatar");
-  if (welcomeAvatar) {
-    welcomeAvatar.src = avatarUrl;
-    welcomeAvatar.classList.remove("hidden");
-  }
+  users.forEach(u => {
+    const tr = document.createElement("tr");
+    tr.className = "border-b border-black border-opacity-10";
+    tr.innerHTML = `
+      <td class="py-10">
+        <div class="font-bold ">${u.name}</div>
+        <div class="text-xs opacity-50">@${u.alias || "user"}</div>
+      </td>
+      <td class="py-10 text-right font-black text-accent">$${(u.balance || 0).toLocaleString()}</td>
+      <td class="py-10 text-center">
+        <button onclick="window.adminAdjustBalance('${u.id}', '${u.name}')" class="btn text-xs px-10 py-5" style="background: rgba(16,185,129,0.2); border: 1px solid var(--color-primary);">+/–</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
 
-  // 2. Personalización del Tema Visual por Aciertos en base a Estrellas (Sugerencia 2 - Ajustado)
-  const tierBadge = document.getElementById("user-tier-badge");
-  if (tierBadge && currentUser.is_guest) {
-    tierBadge.innerHTML = `<i class="ri-user-heart-fill mr-4" style="color:var(--accent);"></i> Espectador`;
-    tierBadge.style.color = "var(--accent)";
-    tierBadge.style.background = "rgba(205, 127, 50, 0.05)";
-    tierBadge.style.borderColor = "rgba(205, 127, 50, 0.15)";
-    tierBadge.style.boxShadow = "none";
-    if (welcomeAvatar) {
-      welcomeAvatar.style.borderColor = "var(--border-glass)";
-      welcomeAvatar.style.boxShadow = "none";
-    }
-  } else if (tierBadge) {
-    const tickets = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
-    const userTickets = tickets.filter(t => t.user_id === currentUser.phone || t.user_id === currentUser.email);
-    const checked = userTickets.filter(t => t.status === "checked");
-    
-    let avgHits = 0;
-    if (checked.length > 0) {
-      avgHits = checked.reduce((sum, t) => sum + t.hits, 0) / checked.length;
-    } else {
-      // Si es nuevo, intentar buscar en el seed del leaderboard por defecto
-      const defaultWeekly = JSON.parse(localStorage.getItem("qia_leaderboard") || "[]");
-      const found = defaultWeekly.find(r => r.alias === currentUser.alias);
-      if (found) avgHits = found.hits;
-    }
+  const fixtures = await getFixtures();
+  const fbody = document.getElementById("admin-fixtures-list");
+  fbody.innerHTML = "";
+  
+  fixtures.forEach(f => {
+    const tr = document.createElement("tr");
+    tr.className = "border-b border-black border-opacity-10";
+    tr.innerHTML = `
+      <td class="py-10 text-xs">
+        <div>${new Date(f.date).toLocaleDateString()}</div>
+        <div class="opacity-50">${new Date(f.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+      </td>
+      <td class="py-10">
+        <div class="font-bold ">${f.team_home} vs ${f.team_away}</div>
+        <div class="text-xs opacity-50">${f.group || "Fase de Grupos"}</div>
+        ${f.status === 'finished' ? `<div class="text-xs text-success font-black mt-2">MARCADOR: ${f.result_home} - ${f.result_away}</div>` : ''}
+      </td>
+      <td class="py-10 text-center flex gap-5 justify-center">
+        <button onclick="window.adminSetScore('${f.id}', '${f.team_home}', '${f.team_away}')" class="btn text-xs px-10 py-5" style="background: rgba(34,197,94,0.2); border: 1px solid #22c55e; color: #22c55e;">🏆</button>
+        <button onclick="window.adminCancelFixture('${f.id}')" class="btn text-xs px-10 py-5" style="background: rgba(227,168,105,0.2); border: 1px solid #e3a869; color: #e3a869;">⛔</button>
+        <button onclick="window.adminDeleteFixture('${f.id}')" class="btn text-xs px-10 py-5" style="background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #ef4444;">🗑</button>
+      </td>
+    `;
+    fbody.appendChild(tr);
+  });
 
-    let numStars = 1;
-    if (avgHits >= 6.5) numStars = 5;
-    else if (avgHits >= 5.5) numStars = 4;
-    else if (avgHits >= 4.5) numStars = 3;
-    else if (avgHits >= 3.0) numStars = 2;
-    else numStars = 1;
-
-    let starString = "";
-    for (let s = 0; s < numStars; s++) {
-      starString += `<i class="ri-star-fill" style="color:#ffd700; text-shadow: 0 0 8px rgba(255,215,0,0.6);"></i>`;
-    }
-
-    tierBadge.innerHTML = `${starString} <span style="margin-left: 4px;">${numStars} ${numStars === 1 ? 'ESTRELLA' : 'ESTRELLAS'}</span>`;
-    
-    // El brillo y color aumentan dinámicamente con las estrellas
-    const opacityFactor = 0.05 + (numStars * 0.04); // de 0.09 a 0.25
-    tierBadge.style.color = "#ffd700";
-    tierBadge.style.background = `rgba(255, 215, 0, ${opacityFactor})`;
-    tierBadge.style.borderColor = `rgba(255, 215, 0, ${opacityFactor + 0.15})`;
-    tierBadge.style.boxShadow = `0 0 ${8 + (numStars * 4)}px rgba(255, 215, 0, ${opacityFactor + 0.1})`;
-    
-    if (welcomeAvatar) {
-      welcomeAvatar.style.borderColor = "#ffd700";
-      welcomeAvatar.style.boxShadow = `0 0 ${6 + (numStars * 3)}px rgba(255, 215, 0, ${opacityFactor + 0.15})`;
-    }
+  const logs = await getGovernanceLogs();
+  const lbody = document.getElementById("admin-logs-list");
+  if (lbody) {
+    lbody.innerHTML = "";
+    logs.forEach(l => {
+      const tr = document.createElement("tr");
+      tr.className = "border-b border-black border-opacity-10 text-xs";
+      tr.innerHTML = `
+        <td class="py-10 opacity-70">${new Date(l.created_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}</td>
+        <td class="py-10 font-bold ">${l.details}</td>
+        <td class="py-10 text-accent opacity-80">@${l.user_alias}</td>
+      `;
+      lbody.appendChild(tr);
+    });
   }
 }
 
-// ── CONTROLADOR DE MODAL DEL PERSONALIZADOR DE AVATAR (Sugerencia 1) ───────────
-window.openAvatarCustomizer = function() {
-  const modal = document.getElementById("avatar-modal");
-  const container = document.getElementById("avatar-presets-grid");
-  if (!modal || !container || !currentUser) return;
+window.adminAdjustBalance = async function(uid, userName) {
+  const input = prompt(`Ajustar saldo de ${userName}\nIngresa el monto a sumar (o valor negativo para restar):`, "0");
+  if (input === null || input.trim() === "") return;
+  const amount = Number(input);
+  if (isNaN(amount)) return showToast("Monto inválido", "error");
+
+  const success = await updateUserBalance(uid, amount);
+  if (success) {
+    await createGovernanceLog("ADMIN_ADJUST_BALANCE", `Ajuste de $${amount} a ${userName}`, currentUser);
+    showToast(`✅ Saldo ajustado en $${amount}`, "success");
+    loadAdminPanel();
+  } else {
+    showToast("❌ Error al ajustar saldo", "error");
+  }
+};
+
+window.adminAddFixture = async function() {
+  const home = prompt("Equipo Local:");
+  if (!home) return;
+  const away = prompt("Equipo Visitante:");
+  if (!away) return;
+  const dateStr = prompt("Fecha y Hora (YYYY-MM-DD HH:MM):", "2026-06-11 15:00");
+  if (!dateStr) return;
+  const grp = prompt("Grupo / Fase:", "Group A");
+
+  const newFixture = {
+    id: `fix_${Date.now()}`,
+    team_home: home,
+    team_away: away,
+    date: new Date(dateStr).toISOString(),
+    group: grp || "Group A",
+    status: "pending",
+    result_home: null,
+    result_away: null,
+    attraction_index: 80
+  };
+
+  const success = await addFixture(newFixture);
+  if (success) {
+    showToast("✅ Partido agregado", "success");
+    loadAdminPanel();
+  } else {
+    showToast("❌ Error al agregar", "error");
+  }
+};
+
+window.adminDeleteFixture = async function(id) {
+  if (confirm("¿Seguro que deseas eliminar este partido?")) {
+    const success = await deleteFixture(id);
+    if (success) {
+      showToast("✅ Partido eliminado", "success");
+      loadAdminPanel();
+    }
+  }
+};
+
+window.adminSetScore = async function(id, home, away) {
+  const resultHome = prompt(`🏆 Goles de ${home}:`, "0");
+  if (resultHome === null) return;
+  const resultAway = prompt(`🏆 Goles de ${away}:`, "0");
+  if (resultAway === null) return;
   
-  if (currentUser.is_guest) {
-    showToast("⚠️ Define tu nombre y apodo participando en una quiniela para poder elegir tu robot personalizado.", "warning");
-    return;
+  if (isNaN(resultHome) || isNaN(resultAway) || resultHome.trim() === "" || resultAway.trim() === "") {
+    return showToast("❌ Los goles deben ser números válidos", "error");
   }
   
-  const presets = [
-    { label: "Básico", suffix: "" },
-    { label: "Guerrero", suffix: "_warrior" },
-    { label: "Titán", suffix: "_titan" },
-    { label: "Gladiador", suffix: "_gladiator" },
-    { label: "Campeón", suffix: "_champion" },
-    { label: "Centinela", suffix: "_sentinel" }
+  const success = await updateFixtureScore(id, resultHome, resultAway);
+  if (success) {
+    await createGovernanceLog("ADMIN_SET_SCORE", `Marcador guardado: ${home} ${resultHome} - ${resultAway} ${away}`, currentUser);
+    localStorage.setItem("qia_live_event", JSON.stringify({ type: 'score', text: `🏆 ¡El partido ${home} vs ${away} ha terminado! Revisa tus aciertos.`, ts: Date.now() }));
+    showToast("✅ Resultado guardado correctamente", "success");
+    loadAdminPanel();
+    window.refreshPanelData('dashboard');
+    window.refreshPanelData('play');
+  } else {
+    showToast("❌ Error al guardar marcador", "error");
+  }
+};
+
+window.adminClearFixtures = async function() {
+  if (confirm("🚨 ¿ESTÁS SEGURO? Esto eliminará TODOS los partidos actuales.")) {
+    const success = await clearAllFixtures();
+    if (success) {
+      showToast("✅ Partidos limpiados", "success");
+      loadAdminPanel();
+      window.refreshPanelData('dashboard');
+      window.refreshPanelData('play');
+    }
+  }
+};
+
+window.adminSimulateAPI = async function() {
+  if (!confirm("Esto descargará e insertará los partidos de la Jornada 1 del Mundial (Mock). ¿Continuar?")) return;
+  
+  const mockFixtures = [
+    { id: "fix_api_1", team_home: "USA", team_away: "Mexico", date: new Date(Date.now() + 86400000).toISOString(), group: "Group A", status: "pending", result_home: null, result_away: null, attraction_index: 95 },
+    { id: "fix_api_2", team_home: "Canada", team_away: "Panama", date: new Date(Date.now() + 86400000*2).toISOString(), group: "Group B", status: "pending", result_home: null, result_away: null, attraction_index: 80 },
+    { id: "fix_api_3", team_home: "Argentina", team_away: "Brazil", date: new Date(Date.now() + 86400000*3).toISOString(), group: "Group C", status: "pending", result_home: null, result_away: null, attraction_index: 100 },
+    { id: "fix_api_4", team_home: "Spain", team_away: "Germany", date: new Date(Date.now() + 86400000*4).toISOString(), group: "Group D", status: "pending", result_home: null, result_away: null, attraction_index: 90 }
   ];
-  
-  container.innerHTML = "";
-  const currentSeed = currentUser.avatar_seed || currentUser.alias;
-  
-  presets.forEach(p => {
-    const seed = currentUser.alias + p.suffix;
-    const isSelected = currentSeed === seed;
-    const url = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(seed)}`;
-    
-    container.innerHTML += `
-      <div class="preset-card glass-card p-10 text-center cursor-pointer flex flex-col items-center gap-6" 
-           onclick="window.selectAvatarPreset('${seed}')" 
-           style="border: 1px solid ${isSelected ? 'var(--accent)' : 'rgba(255,255,255,0.06)'}; 
-                  border-radius:12px; 
-                  padding: 10px;
-                  background:${isSelected ? 'rgba(205,127,50,0.1)' : 'transparent'};">
-        <img src="${url}" class="w-12 h-12 rounded-full border border-white/10" style="width: 48px; height: 48px; border-radius: 50%;">
-        <span class="text-[8px] font-black text-white uppercase" style="margin-top: 6px; display: block;">${p.label}</span>
-      </div>
-    `;
-  });
-  
-  modal.classList.remove("hidden");
+
+  showToast("⏳ Conectando con API-Football...", "info");
+  setTimeout(async () => {
+    const success = await batchAddFixtures(mockFixtures);
+    if (success) {
+      await createGovernanceLog("ADMIN_API_SYNC", "Sincronización masiva de Partidos vía API", currentUser);
+      showToast("✅ API Sincronizada", "success");
+      loadAdminPanel();
+      window.refreshPanelData('dashboard');
+      window.refreshPanelData('play');
+    } else {
+      showToast("❌ Error al guardar datos de API", "error");
+    }
+  }, 1500);
 };
 
-window.closeAvatarCustomizer = function() {
-  document.getElementById("avatar-modal").classList.add("hidden");
+window.handleCSVUpload = function(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const text = e.target.result;
+    const lines = text.split("\n");
+    const fixturesToAdd = [];
+    
+    // Saltamos la línea de encabezado y parseamos
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      const cols = lines[i].split(",");
+      if (cols.length >= 5) {
+        // Anti-injection sanitization
+        const home = cols[0].replace(/[<>"'=\/]/g, "").trim();
+        const away = cols[1].replace(/[<>"'=\/]/g, "").trim();
+        const dateStr = cols[2].trim() + "T" + cols[3].trim() + ":00";
+        const grp = cols[4].replace(/[<>"'=\/]/g, "").trim();
+        
+        try {
+          const validDate = new Date(dateStr);
+          fixturesToAdd.push({
+            id: `fix_csv_${Date.now()}_${i}`,
+            team_home: home,
+            team_away: away,
+            date: validDate.toISOString(),
+            group: grp,
+            status: "pending",
+            result_home: null,
+            result_away: null,
+            attraction_index: 80
+          });
+        } catch (err) {
+          console.warn("Fila con fecha inválida:", lines[i]);
+        }
+      }
+    }
+    
+    if (fixturesToAdd.length > 0) {
+      const success = await batchAddFixtures(fixturesToAdd);
+      if (success) {
+        await createGovernanceLog("ADMIN_CSV_IMPORT", `Importados ${fixturesToAdd.length} partidos por CSV`, currentUser);
+        showToast(`✅ ${fixturesToAdd.length} Partidos importados`, "success");
+        loadAdminPanel();
+        window.refreshPanelData('dashboard');
+        window.refreshPanelData('play');
+      } else {
+        showToast("❌ Error subiendo CSV a la nube", "error");
+      }
+    } else {
+      showToast("⚠️ Archivo vacío o formato incorrecto", "info");
+    }
+    event.target.value = ""; // Limpiar input
+  };
+  
+  reader.readAsText(file);
 };
 
-window.selectAvatarPreset = async function(seed) {
-  if (!currentUser) return;
-  
-  showToast("Actualizando tu cyber-robot...", "success");
-  
-  currentUser.avatar_seed = seed;
-  
-  // Guardar en LocalStorage y IndexedDB
-  import('./app_db.js').then(async dbMod => {
-    const encrypted = dbMod.encryptData(currentUser);
-    localStorage.setItem("qia_current_user", JSON.stringify(encrypted));
-    await dbMod.backupUserToIndexedDB(encrypted);
-    
-    // Actualizar UI
-    loadUserAvatarAndTier();
-    window.closeAvatarCustomizer();
-  });
+window.adminCancelFixture = async function(id) {
+  if (!confirm("🚨 ¿Seguro que deseas CANCELAR este partido? Se dará por acertado a todos los que lo pronosticaron.")) return;
+  const success = await cancelFixture(id);
+  if (success) {
+    await createGovernanceLog("ADMIN_CANCEL_MATCH", `Partido ${id} cancelado`, currentUser);
+    localStorage.setItem("qia_live_event", JSON.stringify({ type: 'cancel', text: `⛔ Un partido ha sido cancelado. Se considerará acierto para todos los participantes.`, ts: Date.now() }));
+    showToast("✅ Partido cancelado", "success");
+    loadAdminPanel();
+    window.refreshPanelData('dashboard');
+    window.refreshPanelData('play');
+  } else {
+    showToast("❌ Error al cancelar", "error");
+  }
 };
+
+let userChart = null;
+async function renderPerformanceChart() {
+  const ctx = document.getElementById('performanceChart');
+  if (!ctx) return;
+  
+  const tickets = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
+  const myTickets = tickets.filter(t => t.user_id === currentUser.alias || t.user_id === currentUser.phone || t.user_id === currentUser.email);
+  
+  const labels = myTickets.map((t, i) => `Jornada ${i + 1}`);
+  const data = myTickets.map(t => t.hits || 0);
+  
+  if (userChart) {
+    userChart.destroy();
+  }
+  
+  userChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels.length > 0 ? labels : ['Semana 1'],
+      datasets: [{
+        label: 'Aciertos por Quiniela',
+        data: data.length > 0 ? data : [0],
+        borderColor: '#cd7f32',
+        backgroundColor: 'rgba(205, 127, 50, 0.2)',
+        borderWidth: 3,
+        tension: 0.4,
+        fill: true,
+        pointBackgroundColor: '#fff',
+        pointBorderColor: '#cd7f32',
+        pointRadius: 5
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        y: { 
+          beginAtZero: true, 
+          max: 14, 
+          ticks: { color: '#000', stepSize: 2 } 
+        },
+        x: { ticks: { color: '#000' } }
+      }
+    }
+  });
+}
+
+// 🌐 Receptor de Notificaciones Globales en Tiempo Real (Cross-Tab)
+window.addEventListener('storage', function(e) {
+  if (e.key === 'qia_live_event') {
+    if (e.newValue) {
+      try {
+        const eventData = JSON.parse(e.newValue);
+        // Evitamos notificaciones repetidas
+        if (Date.now() - eventData.ts < 5000) {
+          showToast(eventData.text, "info");
+        }
+      } catch (err) {}
+    }
+  }
+});
