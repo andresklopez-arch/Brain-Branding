@@ -41,18 +41,8 @@ let lastCreatedTicket = null;
 let serverTimeOffset = 0; // offset antifraude del reloj
 
 async function syncServerTime() {
-  try {
-    const res = await fetch("https://worldtimeapi.org/api/timezone/America/Mexico_City");
-    if (res.ok) {
-      const data = await res.json();
-      const serverTime = new Date(data.datetime).getTime();
-      const localTime = Date.now();
-      serverTimeOffset = serverTime - localTime;
-      console.log(`⏱️ [Reloj Antifraude] Reloj sincronizado con servidor de CDMX. Offset: ${serverTimeOffset}ms`);
-    }
-  } catch (err) {
-    console.warn("⚠️ [Reloj Antifraude] No se pudo conectar al API de tiempo. Usando reloj local.");
-  }
+  console.log("⏱️ [Reloj Antifraude] Usando validación nativa de Firebase en lugar de API externa.");
+  serverTimeOffset = 0;
 }
 
 // ── SISTEMA DE NOTIFICACIONES NATIVAS EN MÓVIL/ESCRITORIO (PWA) ──────────
@@ -130,7 +120,10 @@ window.addEventListener("DOMContentLoaded", async () => {
       new Promise((_, reject) => setTimeout(() => reject(new Error("Firebase Timeout")), 5000))
     ]);
   } catch (err) {
-    console.warn("⚠️ initDatabase tardó demasiado. Continuando...", err);
+    console.warn("⚠️ initDatabase tardó demasiado o falló. Continuando offline...", err);
+    setTimeout(() => {
+      showToast("⚠️ MODO SIN CONEXIÓN: Mostrando datos guardados", "error");
+    }, 2000);
   }
   
   // Cargar configuración de costos con timeout
