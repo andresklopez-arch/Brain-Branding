@@ -181,7 +181,7 @@ body {
 .splash-screen {
   position: fixed;
   inset: 0;
-  background: var(--bg-color);
+  background: #000000;
   z-index: 99999;
   display: flex;
   align-items: center;
@@ -263,7 +263,7 @@ body {
 .login-view {
   position: fixed;
   inset: 0;
-  background: radial-gradient(circle at center, #ffffff 0%, var(--bg-color) 100%);
+  background: radial-gradient(circle at center, #111111 0%, #000000 100%);
   z-index: 10000;
   display: flex;
   align-items: center;
