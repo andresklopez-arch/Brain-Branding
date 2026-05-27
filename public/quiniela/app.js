@@ -106,13 +106,7 @@ async function initApp() {
   // Sincronizar reloj antifraude en segundo plano
   syncServerTime();
   
-  // Registrar Service Worker para soporte offline PWA
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js')
-      .then(reg => console.log('⚙️ [PWA] Service Worker registrado:', reg.scope))
-      .catch(err => console.warn('⚠️ [PWA] Registro de Service Worker fallido:', err));
-  }
-  
+
   // Compresor y caché WebP en cliente para optimización del Logotipo
   cacheLogoAsWebP();
   
