@@ -96,7 +96,7 @@ function showToast(message, type = "info") {
 }
 
 // ── INICIALIZACIÓN DE LA APLICACIÓN ──────────────────────────────────────
-window.addEventListener("DOMContentLoaded", async () => {
+async function initApp() {
   console.log("⚽ Quiniela Mundialista IA inicializando...");
   initStarsBackground();
   
@@ -173,7 +173,13 @@ window.addEventListener("DOMContentLoaded", async () => {
       }
     }, 3000);
   }, 1800);
-});
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initApp);
+} else {
+  initApp();
+}
 
 // Compresor y Caché WebP en cliente para logotipo
 function cacheLogoAsWebP() {
