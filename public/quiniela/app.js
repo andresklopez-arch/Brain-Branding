@@ -295,6 +295,14 @@ window.validateAliasAvailability = async function(alias) {
       if (pinLabel) {
         pinLabel.textContent = "Ingresa tu PIN de Seguridad";
       }
+      
+      // Enfocar automáticamente el input de PIN (Sugerencia 3 del paso anterior)
+      const pinInput = document.getElementById("onboard-pin");
+      if (pinInput) {
+        setTimeout(() => {
+          pinInput.focus();
+        }, 150); // Pequeño delay de 150ms para un efecto visual óptimo
+      }
     } else {
       feedback.textContent = "¡Alias disponible en el Quiniela Mundialista!";
       feedback.style.color = "var(--success)"; // Verde de éxito
