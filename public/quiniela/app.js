@@ -1830,13 +1830,47 @@ window.completeOnboarding = async function() {
       const existingUser = await dbMod.getUserData(email);
       
       if (existingUser) {
-        // Validación de PIN anti-suplantación (Sugerencia 2)
-        if (existingUser.pin && existingUser.pin !== pin) {
-          showToast("❌ PIN de seguridad incorrecto. Intenta de nuevo.", "error");
+        // 1. Verificar si está bloqueado temporalmente (Sugerencia 2)
+        const lockoutTime = localStorage.getItem("qia_lockout_until_" + email);
+        if (lockoutTime && Date.now() < Number(lockoutTime)) {
+          const minsLeft = Math.ceil((Number(lockoutTime) - Date.now()) / 60000);
+          showToast(`❌ Acceso bloqueado. Intenta de nuevo en ${minsLeft} min.`, "error");
           if (loginLoading) loginLoading.classList.add("hidden");
           if (loginForm) loginForm.classList.remove("hidden");
           return;
         }
+
+        // Validación de PIN anti-suplantación (Sugerencia 2)
+        if (existingUser.pin && existingUser.pin !== pin) {
+          // Incrementar intentos fallidos
+          let attempts = Number(localStorage.getItem("qia_failed_attempts_" + email) || 0) + 1;
+          localStorage.setItem("qia_failed_attempts_" + email, attempts);
+          
+          if (attempts >= 3) {
+            // Bloquear por 15 minutos
+            const lockUntil = Date.now() + 15 * 60 * 1000;
+            localStorage.setItem("qia_lockout_until_" + email, lockUntil);
+            localStorage.removeItem("qia_failed_attempts_" + email);
+            showToast("❌ Demasiados intentos fallidos. Bloqueado por 15 minutos.", "error");
+            
+            // Log de auditoría
+            await dbMod.createGovernanceLog(
+              "Bloqueo de Cuenta",
+              `Se bloqueó temporalmente el acceso por 15 minutos al alias @${alias} tras 3 intentos fallidos de PIN.`,
+              { phone: "sistema", email: email, alias: alias }
+            );
+          } else {
+            showToast(`❌ PIN incorrecto. Intentos restantes: ${3 - attempts}`, "error");
+          }
+          
+          if (loginLoading) loginLoading.classList.add("hidden");
+          if (loginForm) loginForm.classList.remove("hidden");
+          return;
+        }
+        
+        // PIN Correcto: Limpiar contadores de bloqueo
+        localStorage.removeItem("qia_failed_attempts_" + email);
+        localStorage.removeItem("qia_lockout_until_" + email);
         
         // Loguear como usuario existente (conserva su saldo y estadísticas!)
         currentUser = existingUser;
