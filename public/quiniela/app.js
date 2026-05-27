@@ -34,7 +34,7 @@ import {
   clearAllFixtures,
   updateFixtureScore,
   cancelFixture
-} from './app_db.js';
+} from './app_db.js?v=15';
 
 // ── VARIABLES DE CONTROL GLOBAL ──────────────────────────────────────────
 let currentUser = null;
@@ -564,9 +564,14 @@ async function refreshPanelData(panel) {
     // 4. Poblar inputs de costos con config actual
     document.getElementById("cfg-pool-cost").value = systemConfig.pool_cost;
     document.getElementById("cfg-pool-fee").value = systemConfig.pool_fee;
-    document.getElementById("cfg-pool-jackpot").value = systemConfig.pool_jackpot;
+    
+    const jackpotInput = document.getElementById("cfg-pool-jackpot");
+    if (jackpotInput) jackpotInput.value = systemConfig.pool_jackpot;
+    
     document.getElementById("cfg-pool-places").value = systemConfig.pool_places || 3;
-    document.getElementById("cfg-pool-extra-goals").value = systemConfig.extra_goals_cost;
+    
+    const extraGoalsInput = document.getElementById("cfg-pool-extra-goals");
+    if (extraGoalsInput) extraGoalsInput.value = systemConfig.extra_goals_cost;
 
     // 5. Poblar restricción de horario (Sugerencia 3)
     document.getElementById("cfg-deadline-day").value = systemConfig.betting_deadline_day !== undefined ? systemConfig.betting_deadline_day : 5;
@@ -802,8 +807,8 @@ window.updatePoolCost = function() {
   let cost = Number(systemConfig.pool_cost) || 50;
   
   // Agregar Side Bets
-  const sidebetGoals = document.getElementById("sidebet-goals").checked;
-  const sidebetStriker = document.getElementById("sidebet-striker").checked;
+  const sidebetGoals = document.getElementById("sidebet-goals")?.checked || false;
+  const sidebetStriker = document.getElementById("sidebet-striker")?.checked || false;
   
   if (sidebetGoals) cost += Number(systemConfig.extra_goals_cost) || 10;
   if (sidebetStriker) cost += Number(systemConfig.extra_striker_cost) || 15;
@@ -843,8 +848,8 @@ window.purchaseTicket = async function() {
   showToast("Emitiendo ticket encriptado...", "info");
   
   setTimeout(async () => {
-    const sidebetGoals = document.getElementById("sidebet-goals").checked;
-    const sidebetStriker = document.getElementById("sidebet-striker").checked;
+    const sidebetGoals = document.getElementById("sidebet-goals")?.checked || false;
+    const sidebetStriker = document.getElementById("sidebet-striker")?.checked || false;
     
     const ticket = {
       id: "tkt-" + Date.now(),
@@ -871,8 +876,10 @@ window.purchaseTicket = async function() {
     
     // Limpiar predicciones
     currentTicketSelections = {};
-    document.getElementById("sidebet-goals").checked = false;
-    document.getElementById("sidebet-striker").checked = false;
+    const elGoals = document.getElementById("sidebet-goals");
+    if (elGoals) elGoals.checked = false;
+    const elStriker = document.getElementById("sidebet-striker");
+    if (elStriker) elStriker.checked = false;
     
     // Abrir Modal de Ticket y Compartir por WhatsApp
     showTicketDetails(lastCreatedTicket);
@@ -1156,9 +1163,14 @@ window.declineSPEI = async function(txId) {
 window.saveAdminConfig = async function() {
   const cost = Number(document.getElementById("cfg-pool-cost").value);
   const fee = Number(document.getElementById("cfg-pool-fee").value);
-  const jackpot = Number(document.getElementById("cfg-pool-jackpot").value);
+  
+  const jackpotInput = document.getElementById("cfg-pool-jackpot");
+  const jackpot = jackpotInput ? Number(jackpotInput.value) : (systemConfig.pool_jackpot || 5000);
+  
   const places = Number(document.getElementById("cfg-pool-places").value) || 3;
-  const extraGoals = Number(document.getElementById("cfg-pool-extra-goals").value);
+  
+  const extraGoalsInput = document.getElementById("cfg-pool-extra-goals");
+  const extraGoals = extraGoalsInput ? Number(extraGoalsInput.value) : (systemConfig.extra_goals_cost || 10);
   
   const deadlineDayStr = document.getElementById("cfg-deadline-day").value;
   const deadlineDay = deadlineDayStr === "-1" ? -1 : Number(deadlineDayStr);
@@ -1756,7 +1768,7 @@ window.completeOnboarding = async function() {
     created_at: new Date().toISOString()
   };
   
-  import('./app_db.js').then(async dbMod => {
+  import('./app_db.js?v=15').then(async dbMod => {
     try {
       currentUser = await dbMod.registerOrLoginUser(mockUser);
       showToast(`🏟️ ¡Bienvenido al Estadio, @${alias}!`, "success");
