@@ -274,9 +274,9 @@ export async function getIASuggestions() {
   const leagues = ['mex.1', 'esp.1', 'eng.1', 'uefa.champions', 'ita.1', 'arg.1', 'usa.1'];
   let suggestions = [];
   
-  // Rango de fechas: hoy a +21 días
+  // Rango de fechas: hoy a +8 días
   const today = new Date();
-  const future = new Date(today.getTime() + 21 * 24 * 60 * 60 * 1000);
+  const future = new Date(today.getTime() + 8 * 24 * 60 * 60 * 1000);
   const formatDate = (d) => d.toISOString().split('T')[0].replace(/-/g, '');
   const dateQuery = `?dates=${formatDate(today)}-${formatDate(future)}`;
   
@@ -316,12 +316,12 @@ export async function getIASuggestions() {
   // =========================================================================
   // ALGORITMO ANTIVACÍOS: Si la API regresa menos de 5 partidos (por fin de temporada o fallos),
   // inyectamos dinámicamente partidos estelares reales de la temporada de Mayo-Junio 2026.
-  // Las fechas se calculan dinámicamente respecto al día de hoy para que caigan 100% en los siguientes 21 días.
+  // Las fechas se calculan dinámicamente respecto al día de hoy para que caigan 100% en los siguientes 8 días.
   // =========================================================================
   if (suggestions.length < 5) {
     console.log("⚽ [Google AI Mode] Pocos partidos en API ESPN. Inyectando cartelera estelar premium...");
     
-    // Lista de partidos atractivos de élite programados en el periodo de 21 días a partir del 27 de Mayo de 2026
+    // Lista de partidos atractivos de élite programados en el periodo de 8 días a partir del 27 de Mayo de 2026
     const baseDateStr = "2026-05-27T08:00:00";
     const baseOffset = new Date(baseDateStr).getTime();
     const currentToday = Date.now();
@@ -438,7 +438,7 @@ export async function getIASuggestions() {
       }
     ];
 
-    // Filtrar partidos para asegurar que caigan estrictamente en los próximos 21 días
+    // Filtrar partidos para asegurar que caigan estrictamente en los próximos 8 días
     const filteredPremium = premiumMatches.filter(m => {
       const d = new Date(m.date);
       return d >= today && d <= future;
@@ -516,17 +516,17 @@ export async function getGoogleAISearchResults(query, category = 'todos') {
   }
   
   const todayStr = new Date().toLocaleDateString('es-MX', {day: 'numeric', month: 'long'});
-  const futureStr = new Date(Date.now() + 21*24*60*60*1000).toLocaleDateString('es-MX', {day: 'numeric', month: 'long', year: 'numeric'});
+  const futureStr = new Date(Date.now() + 8*24*60*60*1000).toLocaleDateString('es-MX', {day: 'numeric', month: 'long', year: 'numeric'});
   
   let overview = "";
   if (activeCat === 'euro') {
-    overview = `La Inteligencia Artificial de Google identifica que el fútbol europeo dominará la cartelera de los próximos 21 días (del <b>${todayStr}</b> al <b>${futureStr}</b>). El evento cumbre es la <b>Gran Final de la UEFA Champions League</b> en Múnich entre <b>PSG</b> y <b>Arsenal</b>, seguido por el pitazo inicial de la <b>Eurocopa 2026 en Alemania</b>. La atención se centra en el duelo inaugural de <b>Alemania vs Escocia</b> y el choque de alta tensión del grupo B entre <b>España y Croacia</b>.`;
+    overview = `La Inteligencia Artificial de Google identifica que el fútbol europeo dominará la cartelera de los próximos 8 días (del <b>${todayStr}</b> al <b>${futureStr}</b>). El evento cumbre es la <b>Gran Final de la UEFA Champions League</b> en Múnich entre <b>PSG</b> y <b>Arsenal</b>, seguido por el pitazo inicial de la <b>Eurocopa 2026 en Alemania</b>. La atención se centra en el duelo inaugural de <b>Alemania vs Escocia</b> y el choque de alta tensión del grupo B entre <b>España y Croacia</b>.`;
   } else if (activeCat === 'copa') {
-    overview = `El análisis de la Inteligencia Artificial de Google destaca que el continente americano se vestirá de gala en los próximos 21 días (del <b>${todayStr}</b> al <b>${futureStr}</b>) con el inicio de la <b>Copa América 2026 en Estados Unidos</b>. El torneo continental arranca con el campeón defensor <b>Argentina liderado por Lionel Messi</b> ante Canadá, además del muy esperado debut de <b>México contra Jamaica</b> en Houston y Estados Unidos frente a Bolivia.`;
+    overview = `El análisis de la Inteligencia Artificial de Google destaca que el continente americano se vestirá de gala en los próximos 8 días (del <b>${todayStr}</b> al <b>${futureStr}</b>) con el inicio de la <b>Copa América 2026 en Estados Unidos</b>. El torneo continental arranca con el campeón defensor <b>Argentina liderado por Lionel Messi</b> ante Canadá, además del muy esperado debut de <b>México contra Jamaica</b> en Houston y Estados Unidos frente a Bolivia.`;
   } else if (activeCat === 'local') {
-    overview = `La Inteligencia Artificial de Google resalta que el fútbol de Norteamérica presenta encuentros de altísimo interés en los próximos 21 días (del <b>${todayStr}</b> al <b>${futureStr}</b>). Sobresale el partido estelar de la MLS donde el <b>Inter Miami con Lionel Messi</b> se enfrenta al histórico LA Galaxy, acompañado por el emocionante choque del Campeón de Campeones de la Liga MX entre <b>América y Cruz Azul</b> en Los Ángeles.`;
+    overview = `La Inteligencia Artificial de Google resalta que el fútbol de Norteamérica presenta encuentros de altísimo interest en los próximos 8 días (del <b>${todayStr}</b> al <b>${futureStr}</b>). Sobresale el partido estelar de la MLS donde el <b>Inter Miami con Lionel Messi</b> se enfrenta al histórico LA Galaxy, acompañado por el emocionante choque del Campeón de Campeones de la Liga MX entre <b>América y Cruz Azul</b> en Los Ángeles.`;
   } else {
-    overview = `Para los próximos 21 días (del <b>${todayStr}</b> al <b>${futureStr}</b>), la Inteligencia Artificial de Google identifica una cartelera de fútbol espectacular caracterizada por el inicio de los torneos continentales y definiciones de élite:
+    overview = `Para los próximos 8 días (del <b>${todayStr}</b> al <b>${futureStr}</b>), la Inteligencia Artificial de Google identifica una cartelera de fútbol espectacular caracterizada por el inicio de los torneos continentales y definiciones de élite:
     <br><br>
     <ul>
       <li>🏆 <b>UEFA Champions League Final:</b> El choque definitivo entre <b>PSG</b> y <b>Arsenal</b> corona la temporada de clubes europeos en el Allianz Arena.</li>

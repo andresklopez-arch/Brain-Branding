@@ -1139,7 +1139,7 @@ function renderIASuggestions(suggestions) {
 }
 
 window.acceptIASuggestion = async function() {
-  showToast("IA Computando fixtures de los próximos 21 días...", "info");
+  showToast("IA Computando fixtures de los próximos 8 días...", "info");
   
   setTimeout(async () => {
     const suggestions = await getIASuggestions();
@@ -1439,7 +1439,7 @@ window.adminSearchGoogleAI = async function(category = 'todos') {
       }
       
       if (!results.matches || results.matches.length === 0) {
-        container.innerHTML = "<div class='text-center text-xs opacity-40 py-20 uppercase tracking-widest'>No se encontraron partidos en los próximos 21 días.</div>";
+        container.innerHTML = "<div class='text-center text-xs opacity-40 py-20 uppercase tracking-widest'>No se encontraron partidos en los próximos 8 días.</div>";
         return;
       }
 

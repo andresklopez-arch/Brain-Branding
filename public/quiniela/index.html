@@ -309,7 +309,7 @@
                 <h3 class="text-xs font-black uppercase text-[#4285F4] tracking-widest flex items-center gap-6">
                   <i class="ri-google-fill"></i> Buscador Google <span class="bg-[#4285F4]/10 text-[#4285F4] border border-[#4285F4]/20 px-8 py-2 rounded-full font-black text-[7px] tracking-wider uppercase animate-pulse" style="font-size: 7px; padding: 2px 8px; border-radius: 9999px;">Modo IA</span>
                 </h3>
-                <p class="text-[8px] opacity-40 font-black uppercase mt-2">Encuentra los partidos más atractivos de los siguientes 21 días con Inteligencia Artificial.</p>
+                <p class="text-[8px] opacity-40 font-black uppercase mt-2">Encuentra los partidos más atractivos de los siguientes 8 días con Inteligencia Artificial.</p>
               </div>
             </div>
             
@@ -317,7 +317,7 @@
             <div class="form-group mb-15">
               <div class="relative flex items-center" style="position: relative; width: 100%;">
                 <i class="ri-search-line absolute left-14 text-sm opacity-40" style="position: absolute; left: 14px; z-index: 10;"></i>
-                <input type="text" id="google-ai-search-input" class="form-input" style="padding-left: 40px; padding-right: 48px; border-radius: 50px; font-weight: 600;" value="¿cuáles son los partidos más atractivos de futbol soccer de los próximos 21 días?" spellcheck="false">
+                <input type="text" id="google-ai-search-input" class="form-input" style="padding-left: 40px; padding-right: 48px; border-radius: 50px; font-weight: 600;" value="¿cuáles son los partidos más atractivos de futbol soccer de los próximos 8 días?" spellcheck="false">
                 <button onclick="window.adminSearchGoogleAI()" class="absolute right-6 bg-[#4285F4] text-white w-32 h-32 rounded-full flex items-center justify-center hover:opacity-90 transition-all" style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: none; cursor: pointer; height: 32px; width: 32px;">
                   <i class="ri-magic-line text-sm" style="color: #ffffff;"></i>
                 </button>
@@ -326,10 +326,10 @@
 
             <!-- Chips de Filtro Rápido (Sugerencia 2) -->
             <div class="flex gap-6 mb-15 overflow-x-auto no-scrollbar" style="gap: 6px; overflow-x: auto; display: flex; margin-bottom: 15px;">
-              <button onclick="window.adminSelectAISearchChip('¿cuáles son los partidos más atractivos de futbol soccer de los próximos 21 días?', 'todos')" class="btn-tab active" id="chip-ai-todos" style="font-size: 8px; padding: 6px 10px; white-space: nowrap; border-radius: 20px;">📅 Todos</button>
-              <button onclick="window.adminSelectAISearchChip('¿cuáles son los partidos más atractivos de la Eurocopa 2026 de los próximos 21 días?', 'euro')" class="btn-tab" id="chip-ai-euro" style="font-size: 8px; padding: 6px 10px; white-space: nowrap; border-radius: 20px;">🇪🇺 Eurocopa 2026</button>
-              <button onclick="window.adminSelectAISearchChip('¿cuáles son los partidos más atractivos de la Copa América 2026 de los próximos 21 días?', 'copa')" class="btn-tab" id="chip-ai-copa" style="font-size: 8px; padding: 6px 10px; white-space: nowrap; border-radius: 20px;">🌎 Copa América</button>
-              <button onclick="window.adminSelectAISearchChip('¿cuáles son los partidos más atractivos de la Liga MX y MLS de los próximos 21 días?', 'local')" class="btn-tab" id="chip-ai-local" style="font-size: 8px; padding: 6px 10px; white-space: nowrap; border-radius: 20px;">🇲🇽 Liga MX / MLS</button>
+              <button onclick="window.adminSelectAISearchChip('¿cuáles son los partidos más atractivos de futbol soccer de los próximos 8 días?', 'todos')" class="btn-tab active" id="chip-ai-todos" style="font-size: 8px; padding: 6px 10px; white-space: nowrap; border-radius: 20px;">📅 Todos</button>
+              <button onclick="window.adminSelectAISearchChip('¿cuáles son los partidos más atractivos de la Eurocopa 2026 de los próximos 8 días?', 'euro')" class="btn-tab" id="chip-ai-euro" style="font-size: 8px; padding: 6px 10px; white-space: nowrap; border-radius: 20px;">🇪🇺 Eurocopa 2026</button>
+              <button onclick="window.adminSelectAISearchChip('¿cuáles son los partidos más atractivos de la Copa América 2026 de los próximos 8 días?', 'copa')" class="btn-tab" id="chip-ai-copa" style="font-size: 8px; padding: 6px 10px; white-space: nowrap; border-radius: 20px;">🌎 Copa América</button>
+              <button onclick="window.adminSelectAISearchChip('¿cuáles son los partidos más atractivos de la Liga MX y MLS de los próximos 8 días?', 'local')" class="btn-tab" id="chip-ai-local" style="font-size: 8px; padding: 6px 10px; white-space: nowrap; border-radius: 20px;">🇲🇽 Liga MX / MLS</button>
             </div>
             
             <!-- Contenedor del Resumen de la IA (Google Search AI Overview) -->
