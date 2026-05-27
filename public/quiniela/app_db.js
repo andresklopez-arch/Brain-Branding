@@ -361,10 +361,13 @@ export async function registerOrLoginUser(userData) {
   
   const uid = userData.phone || userData.email.replace(/[^a-zA-Z0-9]/g, "_");
   try {
-    await db.collection("users").doc(uid).set({
-      ...encryptedUser,
-      updated_at: new Date().toISOString()
-    }, { merge: true });
+    await Promise.race([
+      db.collection("users").doc(uid).set({
+        ...encryptedUser,
+        updated_at: new Date().toISOString()
+      }, { merge: true }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout_Firebase")), 3500))
+    ]);
   } catch(e) {
     console.warn("⚠️ Firebase denegó la escritura. Activando Simulación Local:", e.message);
     useSimulation = true;

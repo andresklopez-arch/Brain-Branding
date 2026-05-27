@@ -41,8 +41,8 @@
   <!-- 🛡️ ONBOARDING VIEW -->
   <section id="onboarding-view" class="login-view hidden">
     <div class="stars-container" id="login-stars"></div>
-    <div class="login-card dark-glass animate-scale-in">
-      <img src="/quiniela/logo-quiniela.png" class="w-24 h-24 mx-auto mb-15 filter-neon" alt="Logo">
+    <div class="login-card dark-glass animate-scale-in" style="max-width: 800px; width: 90vw;">
+      <img src="/quiniela/logo-quiniela.png" style="width: 120px; height: 120px; object-fit: contain;" class="mx-auto mb-15 filter-neon" alt="Logo">
       <h2 class="text-3xl font-black italic tracking-tighter  uppercase mb-5">PREPARA TU <span class="text-accent">FICHA</span></h2>
       <p class="text-xxs font-bold opacity-30 uppercase tracking-[4px] mb-30">Ingresa tu Nombre y Apodo</p>
       
@@ -62,10 +62,10 @@
       </div>
 
       <div id="login-loading-container" class="hidden flex flex-col items-center justify-center py-20 relative">
-        <div class="logo-glow-ring animate-spin-slow" style="width: 120px; height: 120px; margin: 0 auto;"></div>
-        <img src="/quiniela/logo-quiniela.png" class="w-20 h-20 filter-neon absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 mt-[-30px]" alt="Logo">
-        <h3 class="text-2xl font-black italic tracking-tighter text-accent uppercase mt-12 animate-pulse">PREPARANDO ESTADIO...</h3>
-        <p class="text-xs font-bold opacity-50 uppercase tracking-widest mt-3">Estableciendo conexión segura</p>
+        <div class="logo-glow-ring animate-spin-slow" style="width: 140px; height: 140px; margin: 0 auto; position: absolute; left: 50%; transform: translateX(-50%); z-index: 1;"></div>
+        <img src="/quiniela/logo-quiniela.png" style="width: 100px; height: 100px; object-fit: contain; position: relative; z-index: 2; margin-top: 20px;" class="mx-auto filter-neon" alt="Logo">
+        <h3 class="text-2xl font-black italic tracking-tighter text-accent uppercase mt-12 animate-pulse" style="position: relative; z-index: 2;">PREPARANDO ESTADIO...</h3>
+        <p class="text-xs font-bold opacity-50 uppercase tracking-widest mt-3" style="position: relative; z-index: 2;">Estableciendo conexión segura</p>
       </div>
     </div>
   </section>
