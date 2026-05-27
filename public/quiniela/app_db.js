@@ -271,9 +271,15 @@ export async function getIASuggestions() {
   const leagues = ['mex.1', 'esp.1', 'eng.1', 'uefa.champions', 'ita.1', 'arg.1', 'usa.1'];
   let suggestions = [];
   
+  // Format dates: today to +21 days
+  const today = new Date();
+  const future = new Date(today.getTime() + 21 * 24 * 60 * 60 * 1000);
+  const formatDate = (d) => d.toISOString().split('T')[0].replace(/-/g, '');
+  const dateQuery = `?dates=${formatDate(today)}-${formatDate(future)}`;
+  
   for (let lg of leagues) {
     try {
-      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard`);
+      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard${dateQuery}`);
       if (!res.ok) continue;
       const data = await res.json();
       if (data.events) {

@@ -2,10 +2,10 @@
    QUINIELA MUNDIALISTA IA — SERVICE WORKER ZENITH (sw.js)
    ============================================================ */
 
-const CACHE_NAME = "quiniela-ia-cache-v11";
+const CACHE_NAME = "quiniela-ia-cache-v12";
 const ASSETS_TO_CACHE = [
   "./",
-  "./index.html",
+  "./index.html?v=" + Date.now(),
   "./index.css",
   "./app.js",
   "./app_db.js",
