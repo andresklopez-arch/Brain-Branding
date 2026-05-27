@@ -48,6 +48,11 @@
         <div id="alias-feedback" class="text-[9px] font-black uppercase mt-4 hidden"></div>
       </div>
       
+      <div class="form-group mb-24" id="onboard-pin-group">
+        <label class="form-label text-left block" id="pin-label">Crea tu PIN de Seguridad (4 dígitos)</label>
+        <input type="password" id="onboard-pin" class="form-input text-accent font-black text-center" placeholder="••••" maxlength="4" style="letter-spacing: 8px; font-size: 16px;" pattern="\d{4}" inputmode="numeric">
+      </div>
+      
       <button onclick="window.completeOnboarding()" class="btn btn-primary w-full py-14 font-black uppercase text-xs tracking-widest shadow-[0_0_20px_rgba(205,127,50,0.3)]">INGRESAR AL ESTADIO</button>
     </div>
   </section>

@@ -247,17 +247,29 @@ window.switchLoginTab = function(tab) {
   document.getElementById("form-otp").classList.add("hidden");
 };
 
-// Validación de Alias
+// Validación de Alias Real, Alfanumérico e Irrepetible
 window.validateAliasAvailability = async function(alias) {
   const feedback = document.getElementById("alias-feedback");
+  const pinLabel = document.getElementById("pin-label");
+  const nameInput = document.getElementById("onboard-name");
+  
   if (!alias || alias.trim().length < 3) {
     feedback.classList.add("hidden");
+    if (nameInput) nameInput.disabled = false;
+    if (pinLabel) pinLabel.textContent = "Crea tu PIN de Seguridad (4 dígitos)";
     return;
   }
   feedback.classList.remove("hidden");
   
-  // Normalizar alias
+  // 1. Regla de Validación de Caracteres en el Alias (Sugerencia 1)
+  const aliasRegex = /^[a-zA-Z0-9_]{3,15}$/;
   const cleanAlias = alias.trim().toLowerCase();
+  
+  if (!aliasRegex.test(cleanAlias)) {
+    feedback.textContent = "Alias no válido. Solo letras, números o guiones bajos (3-15 carac.).";
+    feedback.style.color = "var(--danger)";
+    return;
+  }
   
   if (cleanAlias.includes("admin") || cleanAlias.includes("antigravity")) {
     feedback.textContent = "Alias no disponible / Reservado";
@@ -273,9 +285,28 @@ window.validateAliasAvailability = async function(alias) {
     if (existingUser) {
       feedback.textContent = "¡Perfil encontrado! Al ingresar, iniciarás sesión en tu cuenta.";
       feedback.style.color = "#ffd700"; // Oro para indicar perfil existente
+      
+      // Autocompletar y deshabilitar Nombre Completo (Sugerencia 3)
+      if (nameInput) {
+        nameInput.value = existingUser.name;
+        nameInput.disabled = true;
+      }
+      // Ajustar etiqueta de PIN para Login (Sugerencia 2)
+      if (pinLabel) {
+        pinLabel.textContent = "Ingresa tu PIN de Seguridad";
+      }
     } else {
       feedback.textContent = "¡Alias disponible en el Quiniela Mundialista!";
       feedback.style.color = "var(--success)"; // Verde de éxito
+      
+      // Habilitar Nombre Completo para Registro
+      if (nameInput) {
+        nameInput.disabled = false;
+      }
+      // Ajustar etiqueta de PIN para Registro (Sugerencia 2)
+      if (pinLabel) {
+        pinLabel.textContent = "Crea tu PIN de Seguridad (4 dígitos)";
+      }
     }
   } catch(e) {
     feedback.textContent = "¡Alias disponible en el Quiniela Mundialista!";
@@ -1759,14 +1790,29 @@ function drawAdminAnalyticsChart() {
 window.completeOnboarding = async function() {
   const nameInput = document.getElementById("onboard-name");
   const aliasInput = document.getElementById("onboard-alias");
+  const pinInput = document.getElementById("onboard-pin");
   
-  if (!nameInput || !aliasInput) return;
+  if (!nameInput || !aliasInput || !pinInput) return;
   
   const name = nameInput.value.trim();
   const alias = aliasInput.value.trim();
+  const pin = pinInput.value.trim();
   
   if (!name || !alias || alias.length < 3) {
     showToast("Por favor ingresa tu nombre y un apodo de al menos 3 caracteres.", "error");
+    return;
+  }
+  
+  // Validar formato del alias (Sugerencia 1)
+  const aliasRegex = /^[a-zA-Z0-9_]{3,15}$/;
+  if (!aliasRegex.test(alias.toLowerCase())) {
+    showToast("Alias no válido. Solo letras, números o guiones bajos (3-15 carac.).", "error");
+    return;
+  }
+  
+  // Validar PIN (4 dígitos numéricos) (Sugerencia 2)
+  if (!/^\d{4}$/.test(pin)) {
+    showToast("Por favor ingresa un PIN de seguridad de exactamente 4 dígitos numéricos.", "error");
     return;
   }
   
@@ -1784,18 +1830,27 @@ window.completeOnboarding = async function() {
       const existingUser = await dbMod.getUserData(email);
       
       if (existingUser) {
+        // Validación de PIN anti-suplantación (Sugerencia 2)
+        if (existingUser.pin && existingUser.pin !== pin) {
+          showToast("❌ PIN de seguridad incorrecto. Intenta de nuevo.", "error");
+          if (loginLoading) loginLoading.classList.add("hidden");
+          if (loginForm) loginForm.classList.remove("hidden");
+          return;
+        }
+        
         // Loguear como usuario existente (conserva su saldo y estadísticas!)
         currentUser = existingUser;
         // Asegurar que el current user local esté guardado (encriptado)
         localStorage.setItem("qia_current_user", JSON.stringify(dbMod.encryptData(existingUser)));
         showToast(`🏟️ ¡Bienvenido de nuevo, @${alias}!`, "success");
       } else {
-        // Crear un usuario nuevo e irrepetible
+        // Crear un usuario nuevo e irrepetible con su PIN seguro
         const newUser = {
           phone: "jugador_" + Date.now(),
           email: email,
           name: name,
           alias: alias,
+          pin: pin, // Guardar el PIN (será encriptado en registerOrLoginUser)
           balance: 200, // Saldo inicial de cortesía
           is_admin: true, // Habilitar admin para pruebas
           created_at: new Date().toISOString()

@@ -21,7 +21,7 @@ export function encryptData(obj) {
   try {
     if (!obj) return obj;
     const copy = JSON.parse(JSON.stringify(obj));
-    const fieldsToEncrypt = ['name', 'phone', 'alias', 'email', 'balance'];
+    const fieldsToEncrypt = ['name', 'phone', 'alias', 'email', 'balance', 'pin'];
     
     fieldsToEncrypt.forEach(field => {
       if (copy[field] !== undefined && copy[field] !== null) {
@@ -47,7 +47,7 @@ export function decryptData(obj) {
       return obj.map(item => decryptData(item));
     }
     const copy = JSON.parse(JSON.stringify(obj));
-    const fieldsToDecrypt = ['name', 'phone', 'alias', 'email', 'balance'];
+    const fieldsToDecrypt = ['name', 'phone', 'alias', 'email', 'balance', 'pin'];
     
     fieldsToDecrypt.forEach(field => {
       if (copy[field] && typeof copy[field] === 'string' && copy[field].startsWith('enc_qia:')) {
