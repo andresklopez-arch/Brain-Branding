@@ -1014,7 +1014,10 @@ export async function batchAddFixtures(fixturesArray) {
 }
 
 export async function clearAllFixtures() {
-  if (useSimulation) return false;
+  if (useSimulation) {
+    localStorage.setItem("qia_fixtures", JSON.stringify([]));
+    return true;
+  }
   try {
     const snap = await db.collection("fixtures").get();
     const batch = db.batch();
