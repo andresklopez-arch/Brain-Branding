@@ -487,6 +487,9 @@ async function refreshPanelData(panel) {
     document.getElementById("adm-stat-sales").textContent = `$${stats.total_sales.toFixed(2)}`;
     document.getElementById("adm-stat-users").textContent = stats.users_count;
     
+    // Llenar listas heredadas de god-mode
+    loadAdminPanel();
+    
     // 2. Sugerencias IA
     const suggestions = await getIASuggestions();
     renderIASuggestions(suggestions);
@@ -1509,8 +1512,9 @@ window.promptAdminAccess = async function() {
   
   const input = prompt("🔐 INGRESA PIN MAESTRO:");
   if (input === adminPin) {
-    document.getElementById("god-mode-panel").classList.remove("hidden");
-    loadAdminPanel();
+    if (currentUser) currentUser.is_admin = true;
+    document.getElementById("dock-admin").classList.remove("hidden");
+    window.appNavigate("admin");
   } else if (input !== null) {
     showToast("❌ PIN Incorrecto", "error");
   }
