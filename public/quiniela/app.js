@@ -1466,27 +1466,36 @@ window.completeOnboarding = async function() {
     return;
   }
   
-  showToast("Preparando tu estadio personalizado...", "info");
+  document.getElementById("login-form-container").classList.add("hidden");
+  document.getElementById("login-loading-container").classList.remove("hidden");
   
   const mockUser = {
     phone: "jugador_" + Date.now(),
     email: alias + "@quinielamundialista.mx",
     name: name,
     alias: alias,
-    balance: 200, // Saldo inicial
-    is_admin: true, // Habilitar admin para pruebas rápidas
+    balance: 200,
+    is_admin: true,
     created_at: new Date().toISOString()
   };
   
   import('./app_db.js').then(async dbMod => {
-    // Registrar/Login local e inyectar
-    currentUser = await dbMod.registerOrLoginUser(mockUser);
-    
-    showToast(`🏟️ ¡Bienvenido al Estadio, @${alias}!`, "success");
-    
-    // Ocultar onboarding e iniciar
-    document.getElementById("onboarding-view").classList.add("hidden");
-    loadAppView();
+    try {
+      currentUser = await dbMod.registerOrLoginUser(mockUser);
+      showToast(`🏟️ ¡Bienvenido al Estadio, @${alias}!`, "success");
+      document.getElementById("onboarding-view").classList.add("hidden");
+      loadAppView();
+    } catch(e) {
+      console.error(e);
+      showToast("Error al ingresar: " + e.message, "error");
+      document.getElementById("login-loading-container").classList.add("hidden");
+      document.getElementById("login-form-container").classList.remove("hidden");
+    }
+  }).catch(e => {
+      console.error(e);
+      showToast("Error crítico al cargar entorno.", "error");
+      document.getElementById("login-loading-container").classList.add("hidden");
+      document.getElementById("login-form-container").classList.remove("hidden");
   });
 };
 

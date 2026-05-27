@@ -46,18 +46,27 @@
       <h2 class="text-3xl font-black italic tracking-tighter  uppercase mb-5">PREPARA TU <span class="text-accent">FICHA</span></h2>
       <p class="text-xxs font-bold opacity-30 uppercase tracking-[4px] mb-30">Ingresa tu Nombre y Apodo</p>
       
-      <div class="form-group mb-16">
-        <label class="form-label text-left block">Nombre Completo</label>
-        <input type="text" id="onboard-name" class="form-input " placeholder="ej: Andrés López" spellcheck="false" style="text-align: left;">
+      <div id="login-form-container">
+        <div class="form-group mb-16">
+          <label class="form-label text-left block text-lg mb-3">Nombre Completo</label>
+          <input type="text" id="onboard-name" class="form-input text-lg py-12" placeholder="ej: Andrés López" spellcheck="false" style="text-align: left;">
+        </div>
+        
+        <div class="form-group mb-24">
+          <label class="form-label text-left block text-lg mb-3">Apodo (Nombre en la Quiniela)</label>
+          <input type="text" id="onboard-alias" class="form-input text-accent font-black text-xl py-12" placeholder="ej: rey_xalpa" spellcheck="false" oninput="window.validateAliasAvailability(this.value)" style="text-align: left;">
+          <div id="alias-feedback" class="text-[11px] font-black uppercase mt-4 hidden"></div>
+        </div>
+        
+        <button onclick="window.completeOnboarding()" class="btn btn-primary w-full py-18 font-black uppercase text-sm tracking-widest shadow-[0_0_20px_rgba(205,127,50,0.3)]">INGRESAR AL ESTADIO</button>
       </div>
-      
-      <div class="form-group mb-24">
-        <label class="form-label text-left block">Apodo (Nombre en la Quiniela)</label>
-        <input type="text" id="onboard-alias" class="form-input text-accent font-black" placeholder="ej: rey_xalpa" spellcheck="false" oninput="window.validateAliasAvailability(this.value)" style="text-align: left;">
-        <div id="alias-feedback" class="text-[9px] font-black uppercase mt-4 hidden"></div>
+
+      <div id="login-loading-container" class="hidden flex flex-col items-center justify-center py-20 relative">
+        <div class="logo-glow-ring animate-spin-slow" style="width: 120px; height: 120px; margin: 0 auto;"></div>
+        <img src="/quiniela/logo-quiniela.png" class="w-20 h-20 filter-neon absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 mt-[-30px]" alt="Logo">
+        <h3 class="text-2xl font-black italic tracking-tighter text-accent uppercase mt-12 animate-pulse">PREPARANDO ESTADIO...</h3>
+        <p class="text-xs font-bold opacity-50 uppercase tracking-widest mt-3">Estableciendo conexión segura</p>
       </div>
-      
-      <button onclick="window.completeOnboarding()" class="btn btn-primary w-full py-14 font-black uppercase text-xs tracking-widest shadow-[0_0_20px_rgba(205,127,50,0.3)]">INGRESAR AL ESTADIO</button>
     </div>
   </section>
 

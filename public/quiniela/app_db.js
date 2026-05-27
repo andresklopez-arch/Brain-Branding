@@ -360,10 +360,20 @@ export async function registerOrLoginUser(userData) {
   }
   
   const uid = userData.phone || userData.email.replace(/[^a-zA-Z0-9]/g, "_");
-  await db.collection("users").doc(uid).set({
-    ...encryptedUser,
-    updated_at: new Date().toISOString()
-  }, { merge: true });
+  try {
+    await db.collection("users").doc(uid).set({
+      ...encryptedUser,
+      updated_at: new Date().toISOString()
+    }, { merge: true });
+  } catch(e) {
+    console.warn("⚠️ Firebase denegó la escritura. Activando Simulación Local:", e.message);
+    useSimulation = true;
+    localStorage.setItem("qia_current_user", JSON.stringify(encryptedUser));
+    let allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
+    allUsers.push(encryptedUser);
+    localStorage.setItem("qia_users_list", JSON.stringify(allUsers));
+    return userData;
+  }
   
   localStorage.setItem("qia_current_user", JSON.stringify(encryptedUser));
   return userData;

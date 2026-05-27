@@ -295,7 +295,7 @@ body {
 }
 .login-card {
   width: 100%;
-  max-width: 440px;
+  max-width: 800px;
   padding: clamp(30px, 6vw, 48px);
   border-radius: var(--radius-lg);
   text-align: center;
