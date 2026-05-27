@@ -547,12 +547,8 @@ function loadAppView() {
     headerUser.textContent = "@" + currentUser.alias;
   }
   
-  // Mostrar dock de admin si es administrador
-  if (currentUser.is_admin) {
-    document.getElementById("dock-admin").classList.remove("hidden");
-  } else {
-    document.getElementById("dock-admin").classList.add("hidden");
-  }
+  // Mostrar dock de admin SIEMPRE OCULTO hasta ingresar PIN
+  document.getElementById("dock-admin").classList.add("hidden");
   
   window.appNavigate("dashboard");
 }
