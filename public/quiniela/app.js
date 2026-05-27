@@ -111,7 +111,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   initStarsBackground();
   
   // Sincronizar reloj antifraude en segundo plano
-  await syncServerTime();
+  syncServerTime();
   
   // Registrar Service Worker para soporte offline PWA
   if ('serviceWorker' in navigator) {
@@ -123,11 +123,26 @@ window.addEventListener("DOMContentLoaded", async () => {
   // Compresor y caché WebP en cliente para optimización del Logotipo
   cacheLogoAsWebP();
   
-  // Inicializar DB
-  await initDatabase();
+  // Inicializar DB con timeout antifallo
+  try {
+    await Promise.race([
+      initDatabase(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Firebase Timeout")), 5000))
+    ]);
+  } catch (err) {
+    console.warn("⚠️ initDatabase tardó demasiado. Continuando...", err);
+  }
   
-  // Cargar configuración de costos
-  systemConfig = await getSystemConfig();
+  // Cargar configuración de costos con timeout
+  try {
+    systemConfig = await Promise.race([
+      getSystemConfig(),
+      new Promise((_, r) => setTimeout(() => r(null), 3000))
+    ]);
+  } catch (err) {}
+  if (!systemConfig) {
+    systemConfig = { pool_cost: 50, pool_fee: 10, pool_jackpot: 5000, pool_places: 3, extra_goals_cost: 10, extra_striker_cost: 15, betting_deadline_day: 5, betting_deadline_hour: 18, bypass_deadline_testing: true, manual_locked: false };
+  }
   
   // Checar si hay sesión guardada en localStorage (Descifrada)
   const savedUser = localStorage.getItem("qia_current_user");
