@@ -248,22 +248,38 @@ window.switchLoginTab = function(tab) {
 };
 
 // Validación de Alias
-window.validateAliasAvailability = function(alias) {
+window.validateAliasAvailability = async function(alias) {
   const feedback = document.getElementById("alias-feedback");
   if (!alias || alias.trim().length < 3) {
     feedback.classList.add("hidden");
     return;
   }
   feedback.classList.remove("hidden");
-  // Simple validación cosmética futurista
-  if (alias.toLowerCase().includes("admin") || alias.toLowerCase().includes("antigravity")) {
+  
+  // Normalizar alias
+  const cleanAlias = alias.trim().toLowerCase();
+  
+  if (cleanAlias.includes("admin") || cleanAlias.includes("antigravity")) {
     feedback.textContent = "Alias no disponible / Reservado";
     feedback.style.color = "var(--danger)";
-    document.getElementById("btn-auth-phone-submit").disabled = true;
-  } else {
+    return;
+  }
+  
+  // Buscar en la base de datos si ya existe el usuario por su email
+  try {
+    const email = cleanAlias + "@quinielamundialista.mx";
+    const existingUser = await getUserData(email);
+    
+    if (existingUser) {
+      feedback.textContent = "¡Perfil encontrado! Al ingresar, iniciarás sesión en tu cuenta.";
+      feedback.style.color = "#ffd700"; // Oro para indicar perfil existente
+    } else {
+      feedback.textContent = "¡Alias disponible en el Quiniela Mundialista!";
+      feedback.style.color = "var(--success)"; // Verde de éxito
+    }
+  } catch(e) {
     feedback.textContent = "¡Alias disponible en el Quiniela Mundialista!";
     feedback.style.color = "var(--success)";
-    document.getElementById("btn-auth-phone-submit").disabled = false;
   }
 };
 
@@ -1741,44 +1757,66 @@ function drawAdminAnalyticsChart() {
 
 // ── COMPLETAR ONBOARDING MINIMALISTA (Sugerencia) ────────────────────────
 window.completeOnboarding = async function() {
-  const name = document.getElementById("onboard-name").value;
-  const alias = document.getElementById("onboard-alias").value;
+  const nameInput = document.getElementById("onboard-name");
+  const aliasInput = document.getElementById("onboard-alias");
   
-  if (!name || !alias || alias.trim().length < 3) {
+  if (!nameInput || !aliasInput) return;
+  
+  const name = nameInput.value.trim();
+  const alias = aliasInput.value.trim();
+  
+  if (!name || !alias || alias.length < 3) {
     showToast("Por favor ingresa tu nombre y un apodo de al menos 3 caracteres.", "error");
     return;
   }
   
-  document.getElementById("login-form-container").classList.add("hidden");
-  document.getElementById("login-loading-container").classList.remove("hidden");
+  const loginForm = document.getElementById("login-form-container");
+  if (loginForm) loginForm.classList.add("hidden");
+  const loginLoading = document.getElementById("login-loading-container");
+  if (loginLoading) loginLoading.classList.remove("hidden");
   
-  const mockUser = {
-    phone: "jugador_" + Date.now(),
-    email: alias + "@quinielamundialista.mx",
-    name: name,
-    alias: alias,
-    balance: 200,
-    is_admin: true,
-    created_at: new Date().toISOString()
-  };
+  const cleanAlias = alias.toLowerCase();
+  const email = cleanAlias + "@quinielamundialista.mx";
   
   import('./app_db.js?v=15').then(async dbMod => {
     try {
-      currentUser = await dbMod.registerOrLoginUser(mockUser);
-      showToast(`🏟️ ¡Bienvenido al Estadio, @${alias}!`, "success");
+      // Intentar buscar si el usuario ya existe en base de datos
+      const existingUser = await dbMod.getUserData(email);
+      
+      if (existingUser) {
+        // Loguear como usuario existente (conserva su saldo y estadísticas!)
+        currentUser = existingUser;
+        // Asegurar que el current user local esté guardado (encriptado)
+        localStorage.setItem("qia_current_user", JSON.stringify(dbMod.encryptData(existingUser)));
+        showToast(`🏟️ ¡Bienvenido de nuevo, @${alias}!`, "success");
+      } else {
+        // Crear un usuario nuevo e irrepetible
+        const newUser = {
+          phone: "jugador_" + Date.now(),
+          email: email,
+          name: name,
+          alias: alias,
+          balance: 200, // Saldo inicial de cortesía
+          is_admin: true, // Habilitar admin para pruebas
+          created_at: new Date().toISOString()
+        };
+        currentUser = await dbMod.registerOrLoginUser(newUser);
+        showToast(`🏟️ ¡Bienvenido al Estadio, @${alias}!`, "success");
+      }
+      
       document.getElementById("onboarding-view").classList.add("hidden");
       loadAppView();
     } catch(e) {
       console.error(e);
       showToast("Error al ingresar: " + e.message, "error");
-      document.getElementById("login-loading-container").classList.add("hidden");
-      document.getElementById("login-form-container").classList.remove("hidden");
+      if (loginLoading) loginLoading.classList.add("hidden");
+      if (loginForm) loginForm.classList.remove("hidden");
     }
   }).catch(e => {
       console.error(e);
       showToast("Error crítico al cargar entorno.", "error");
-      document.getElementById("login-loading-container").classList.add("hidden");
-      document.getElementById("login-form-container").classList.remove("hidden");
+      if (loginLoading) loginLoading.classList.add("hidden");
+      if (loginForm) loginForm.classList.remove("hidden");
   });
 };
 
