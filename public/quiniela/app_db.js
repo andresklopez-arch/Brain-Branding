@@ -266,47 +266,54 @@ export async function getFixtures() {
   }
 }
 
-// Obtener sugerencias IA
+// Obtener sugerencias IA (AHORA DESDE ESPN API)
 export async function getIASuggestions() {
-  if (useSimulation) {
-    const teams = ["América", "Monterrey", "Chivas", "Cruz Azul", "Pumas", "Tigres", "Toluca", "Atlas", "Pachuca", "León", "Santos", "Tijuana", "Querétaro", "Necaxa", "Puebla", "Mazatlán", "San Luis", "Juárez"];
-    const suggestions = [];
-    let currentDate = new Date();
-    
-    // Generar partidos dinámicos para los próximos 21 días
-    for(let i = 0; i < 21; i++) {
-       let numMatches = Math.floor(Math.random() * 3) + 1; // 1 to 3 matches per day
-       let matchDate = new Date(currentDate);
-       matchDate.setDate(currentDate.getDate() + i);
-       
-       let dateStr = matchDate.toLocaleDateString('es-MX', { weekday: 'long', day: '2-digit', month: 'short' });
-       
-       for(let j = 0; j < numMatches; j++) {
-         let t1 = teams[Math.floor(Math.random() * teams.length)];
-         let t2 = teams[Math.floor(Math.random() * teams.length)];
-         while(t1 === t2) t2 = teams[Math.floor(Math.random() * teams.length)];
-         
-         let attract = Math.floor(Math.random() * 40) + 60; // 60 to 99
-         suggestions.push({
-           id: "sug-gen-" + i + "-" + j,
-           team_local: t1,
-           team_visita: t2,
-           date: dateStr + ", 20:00",
-           attraction_index: attract,
-           selected: true
-         });
-       }
+  const leagues = ['mex.1', 'esp.1', 'eng.1', 'uefa.champions', 'ita.1', 'arg.1', 'usa.1'];
+  let suggestions = [];
+  
+  for (let lg of leagues) {
+    try {
+      const res = await fetch(\`https://site.api.espn.com/apis/site/v2/sports/soccer/\${lg}/scoreboard\`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.events) {
+        data.events.forEach(ev => {
+          try {
+            const comp = ev.competitions[0];
+            const home = comp.competitors.find(c => c.homeAway === 'home');
+            const away = comp.competitors.find(c => c.homeAway === 'away');
+            
+            let attract = Math.floor(Math.random() * 40) + 60; // 60 to 99
+            if (lg === 'mex.1' || lg === 'uefa.champions') attract += 10;
+            
+            suggestions.push({
+              id: ev.id,
+              team_local: home.team.shortDisplayName || home.team.name,
+              team_visita: away.team.shortDisplayName || away.team.name,
+              date: ev.date, // ISO string
+              attraction_index: attract,
+              selected: true,
+              group: data.leagues[0].name
+            });
+          } catch(e) {}
+        });
+      }
+    } catch(e) {
+      console.warn("ESPN Fetch Error for", lg, e);
     }
-    return suggestions.sort((a,b) => a.date.localeCompare(b.date)); // Orden cronológico
   }
-  const snap = await db.collection("suggestions").get();
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  
+  // Ordenar cronológicamente
+  suggestions.sort((a,b) => new Date(a.date) - new Date(b.date));
+  
+  // Limitar la "Cartelera" a 25 partidos próximos
+  return suggestions.slice(0, 25);
 }
 
 // Aceptar sugerencia IA para Quiniela de la semana
 export async function acceptSuggestionsAsFixtures(suggestions) {
   const converted = suggestions.map((s, idx) => ({
-    id: "mx-ia-" + idx,
+    id: "espn-" + s.id,
     team_local: s.team_local,
     team_visita: s.team_visita,
     score_local: 0,
@@ -314,7 +321,8 @@ export async function acceptSuggestionsAsFixtures(suggestions) {
     status: "upcoming",
     priority: s.attraction_index > 85 ? "high" : "normal",
     date: s.date,
-    attraction_index: s.attraction_index
+    attraction_index: s.attraction_index,
+    group: s.group
   }));
 
   if (useSimulation) {
@@ -639,7 +647,25 @@ export async function executeWeeklyClosure(config) {
     tickets.forEach(t => {
       t.status = "checked";
       let hits = 0;
-      if (t.matches) {
+      if (t.selections) {
+        Object.keys(t.selections).forEach(matchId => {
+          const prediction = t.selections[matchId];
+          const f = fixturesMap[matchId];
+          if (f) {
+            if (f.status === "canceled") {
+              hits++; // Auto hit for canceled matches
+            } else if (f.status === "finished") {
+              const isTie = f.result_home === f.result_away;
+              const isHomeWin = f.result_home > f.result_away;
+              const isAwayWin = f.result_away > f.result_home;
+              
+              if (prediction === "E" && isTie) hits++;
+              else if (prediction === "L" && isHomeWin) hits++;
+              else if (prediction === "V" && isAwayWin) hits++;
+            }
+          }
+        });
+      } else if (t.matches) {
         t.matches.forEach(m => {
           const f = fixturesMap[m.match_id];
           if (f) {

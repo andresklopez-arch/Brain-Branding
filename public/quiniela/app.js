@@ -705,15 +705,32 @@ function renderPlayFixtures(fixtures) {
 }
 
 window.selectBet = function(matchId, selection) {
-  currentTicketSelections[matchId] = selection;
+  if (currentTicketSelections[matchId] === selection) {
+    // Deselect if already selected the same
+    delete currentTicketSelections[matchId];
+  } else {
+    // Check limit if adding new match
+    if (!currentTicketSelections[matchId]) {
+      const count = Object.keys(currentTicketSelections).length;
+      if (count >= 10) {
+        if (typeof showToast === "function") showToast("Ya elegiste 10 partidos. Quita uno si quieres cambiar.", "error");
+        return;
+      }
+    }
+    currentTicketSelections[matchId] = selection;
+  }
   
   // Actualizar clases de botones
   ["L", "E", "V"].forEach(op => {
     const btn = document.getElementById(`btn-bet-${matchId}-${op}`);
     if (btn) {
-      btn.classList.toggle("selected", op === selection);
+      btn.classList.toggle("selected", op === currentTicketSelections[matchId]);
     }
   });
+  
+  const currentCount = Object.keys(currentTicketSelections).length;
+  const countEl = document.getElementById("play-selections-count");
+  if (countEl) countEl.textContent = currentCount;
   
   window.updatePoolCost();
 };
