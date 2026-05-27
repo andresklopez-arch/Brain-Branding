@@ -219,7 +219,9 @@ export async function getSystemConfig() {
       const doc = await db.collection("config").doc("governance").get();
       cfg = doc.exists ? doc.data() : null;
     } catch (e) {
-      cfg = null;
+      console.warn("⚠️ [Cloud DB] Falló getSystemConfig. Activando modo simulación...", e);
+      useSimulation = true;
+      return getSystemConfig();
     }
   }
   
@@ -261,8 +263,9 @@ export async function getFixtures() {
     const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     return list.sort((a, b) => b.attraction_index - a.attraction_index);
   } catch (e) {
-    console.warn("Error fetching cloud fixtures, falling back to local seed:", e);
-    return LIGA_MX_MATCHES.sort((a, b) => b.attraction_index - a.attraction_index);
+    console.warn("⚠️ [Cloud DB] Falló getFixtures. Activando modo simulación...", e);
+    useSimulation = true;
+    return getFixtures();
   }
 }
 
@@ -660,8 +663,14 @@ export async function getUserData(phoneOrEmail) {
     return found ? decryptData(found) : null;
   }
   const uid = phoneOrEmail.replace(/[^a-zA-Z0-9]/g, "_");
-  const doc = await db.collection("users").doc(uid).get();
-  return doc.exists ? decryptData(doc.data()) : null;
+  try {
+    const doc = await db.collection("users").doc(uid).get();
+    return doc.exists ? decryptData(doc.data()) : null;
+  } catch (e) {
+    console.warn("⚠️ [Cloud DB] Falló getUserData. Activando modo simulación...", e);
+    useSimulation = true;
+    return getUserData(phoneOrEmail); // Re-intentar con simulación local
+  }
 }
 
 // Transacciones y Billetera
