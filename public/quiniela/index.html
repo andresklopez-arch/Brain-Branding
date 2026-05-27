@@ -7,7 +7,7 @@
   <link rel="apple-touch-icon" href="/quiniela/logo-quiniela.png">
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;900&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
-  <link rel="stylesheet" href="/quiniela/index.css?v=10">
+  <link rel="stylesheet" href="/quiniela/index.css?v=11">
   <link rel="manifest" href="/quiniela/manifest.json">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
@@ -286,20 +286,19 @@
                 <p class="text-[8px] opacity-40 font-black uppercase mt-2">Agrega, limpia o carga partidos vía API y CSV.</p>
               </div>
               <div class="flex gap-10 items-center">
-                <button onclick="window.fetchMatchesAPI()" class="bg-accent text-black font-black px-6 py-2 rounded-full text-[9px] uppercase tracking-wider hover:opacity-90">Sincronizar API</button>
                 <label for="csv-upload" class="cursor-pointer text-xs font-bold uppercase tracking-widest hover:text-accent"><i class="ri-file-excel-2-line"></i> CSV</label>
                 <input type="file" id="csv-upload" accept=".csv" class="hidden" onchange="window.handleCSVUpload(event)">
                 <button onclick="window.adminAddFixture()" class="bg-accent text-black px-10 py-4 rounded text-[9px] font-black uppercase hover:opacity-90">Nuevo Partido</button>
                 <button onclick="window.adminClearFixtures()" class="bg-red-500 px-10 py-4 rounded text-[9px] font-black uppercase hover:opacity-90">Limpiar</button>
               </div>
             </div>
-            <div class="w-full overflow-x-auto" style="max-height: 300px;">
-              <table class="w-full text-left border-collapse">
+            <div class="w-full overflow-x-auto overflow-y-auto" style="max-height: 300px;">
+              <table class="w-full text-left border-collapse" style="table-layout: fixed;">
                 <thead>
-                  <tr class="border-b border-black border-opacity-10 text-xxs uppercase tracking-widest opacity-50">
-                    <th class="py-10">Fecha</th>
-                    <th class="py-10">Partido</th>
-                    <th class="py-10 text-center">Acciones</th>
+                  <tr class="border-b border-black border-opacity-10 text-[9px] uppercase tracking-widest opacity-50">
+                    <th class="py-10 w-1/4">Fecha</th>
+                    <th class="py-10 w-1/2">Partido</th>
+                    <th class="py-10 w-1/4 text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="admin-fixtures-list">
@@ -307,7 +306,20 @@
                 </tbody>
               </table>
             </div>
-            <div class="space-y-8" id="admin-ia-matches-container"></div>
+          </div>
+
+          <div class="glass-card p-20 mb-20" style="border-color: rgba(139, 92, 246, 0.2);">
+            <div class="flex justify-between items-center mb-12">
+              <div>
+                <h3 class="text-xs font-black uppercase text-purple-400 tracking-widest"><i class="ri-radar-fill mr-4"></i> Explorador API ESPN</h3>
+                <p class="text-[8px] opacity-40 font-black uppercase mt-2">Busca partidos globales y agrégalos a tu Quiniela activa.</p>
+              </div>
+              <button onclick="window.adminSearchAPI()" class="bg-purple-500 text-black font-black px-6 py-2 rounded-full text-[9px] uppercase tracking-wider hover:opacity-90">Buscar Partidos</button>
+            </div>
+            
+            <div class="space-y-8 max-h-[300px] overflow-y-auto no-scrollbar" id="admin-api-matches-container">
+              <div class="text-center text-xs opacity-40 py-20 uppercase tracking-widest">Haz clic en Buscar Partidos para cargar la cartelera global</div>
+            </div>
           </div>
         </div>
 
@@ -522,12 +534,12 @@
 
   <!-- Core Javascript Engines -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-  <script type="module" src="app_db.js?v=10"></script>
-  <script type="module" src="app.js?v=10"></script>
+  <script type="module" src="app_db.js?v=11"></script>
+  <script type="module" src="app.js?v=11"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=10').then(registration => {
+        navigator.serviceWorker.register('sw.js?v=11').then(registration => {
           console.log('SW registered');
         });
       });

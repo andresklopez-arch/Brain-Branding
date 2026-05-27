@@ -1218,17 +1218,69 @@ async function renderGovernanceLogs() {
 }
 
 // Actualizar cartelera desde Google / API-Football (Simulado)
-window.fetchMatchesAPI = async function() {
-  showToast("Conectando con ESPN API...", "info");
+// Buscar partidos en ESPN API y mostrarlos para agregar manualmente
+window.adminSearchAPI = async function() {
+  showToast("Buscando partidos globales...", "info");
   
-  setTimeout(async () => {
+  const container = document.getElementById("admin-api-matches-container");
+  if (!container) return;
+  container.innerHTML = "<div class='text-center text-xs opacity-40 py-20 uppercase tracking-widest'>Conectando con ESPN...</div>";
+
+  try {
     const suggestions = await getIASuggestions();
-    await acceptSuggestionsAsFixtures(suggestions);
-    showToast("¡Partidos sincronizados exitosamente!", "success");
-    loadAdminPanel();
-    window.refreshPanelData('dashboard');
-    window.refreshPanelData('play');
-  }, 2000);
+    container.innerHTML = "";
+    
+    if (!suggestions || suggestions.length === 0) {
+      container.innerHTML = "<div class='text-center text-xs opacity-40 py-20 uppercase tracking-widest'>No se encontraron partidos próximos.</div>";
+      return;
+    }
+
+    suggestions.forEach(s => {
+      const div = document.createElement("div");
+      div.className = "flex justify-between items-center p-10 bg-white/5 rounded-xl border border-black/5 text-xxs font-bold uppercase tracking-wider";
+      
+      let dateStr = "TBA";
+      try {
+        dateStr = new Date(s.date).toLocaleString();
+      } catch(e) {}
+
+      div.innerHTML = `
+        <div class="flex flex-col">
+          <span class="">${s.team_local} vs ${s.team_visita}</span>
+          <span class="text-xxxxs opacity-30 mt-2">${dateStr}</span>
+        </div>
+        <div class="flex items-center gap-10">
+          <span class="text-[8px] bg-purple-500/20 text-purple-400 px-6 py-2 rounded-full border border-purple-500/25">${s.group}</span>
+          <button onclick="window.adminAddFromAPI('${s.id}', '${s.team_local}', '${s.team_visita}', '${s.date}', '${s.group}', ${s.attraction_index})" class="bg-green-500 text-black px-8 py-4 rounded text-[9px] uppercase font-black hover:bg-green-400 border border-green-400">Agregar</button>
+        </div>
+      `;
+      container.appendChild(div);
+    });
+    showToast(`Se encontraron ${suggestions.length} partidos.`, "success");
+  } catch (err) {
+    container.innerHTML = "<div class='text-center text-red-500 py-20 uppercase tracking-widest'>Error de conexión con la API.</div>";
+  }
+};
+
+window.adminAddFromAPI = async function(id, local, visita, date, group, attraction) {
+  const f = {
+    id: "espn-" + id,
+    team_local: local,
+    team_visita: visita,
+    score_local: 0,
+    score_visita: 0,
+    status: "upcoming",
+    priority: attraction > 85 ? "high" : "normal",
+    date: date,
+    attraction_index: attraction,
+    group: group
+  };
+  
+  await addFixture(f);
+  showToast(`¡${local} vs ${visita} agregado a la Quiniela!`, "success");
+  loadAdminPanel();
+  window.refreshPanelData('dashboard');
+  window.refreshPanelData('play');
 };
 
 // Enviar comprobante por WhatsApp (Wallet)
