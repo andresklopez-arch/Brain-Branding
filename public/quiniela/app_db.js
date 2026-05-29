@@ -570,16 +570,19 @@ export async function getLeaderboard(type = 'weekly') {
   if (useSimulation) {
     const allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]").map(u => decryptData(u));
     
-    let board = allUsers.map(u => {
-      const currentHits = dynamicHits[u.alias] || 0;
-      let score = 0;
-      if (type === 'accumulated') {
-        score = (u.total_hits || 0) + currentHits;
-      } else {
-        score = currentHits;
-      }
-      return { alias: u.alias, name: u.name, hits: score };
-    });
+    let board = allUsers
+      .map(u => {
+        if (!u || !u.alias || u.alias === "user_ia" || u.role === "master") return null;
+        const currentHits = dynamicHits[u.alias] || 0;
+        let score = 0;
+        if (type === 'accumulated') {
+          score = (u.total_hits || 0) + currentHits;
+        } else {
+          score = currentHits;
+        }
+        return { alias: u.alias, name: u.name, hits: score };
+      })
+      .filter(u => u !== null);
     
     board = board.sort((a, b) => b.hits - a.hits).slice(0, 15);
     return board.map((r, idx) => ({ ...r, rank: idx + 1 }));
@@ -589,12 +592,15 @@ export async function getLeaderboard(type = 'weekly') {
   const dynamicHitsFB = await calculateDynamicHits();
   const snap = await db.collection("users").get();
   
-  let board = snap.docs.map(doc => {
-    const u = doc.data();
-    const currentHits = dynamicHitsFB[u.alias] || 0;
-    let score = type === 'accumulated' ? (u.total_hits || 0) + currentHits : currentHits;
-    return { alias: u.alias || "user_ia", name: u.name || "Usuario", hits: score };
-  });
+  let board = snap.docs
+    .map(doc => {
+      const u = doc.data();
+      if (!u || !u.alias || u.alias === "user_ia" || u.role === "master") return null;
+      const currentHits = dynamicHitsFB[u.alias] || 0;
+      let score = type === 'accumulated' ? (u.total_hits || 0) + currentHits : currentHits;
+      return { alias: u.alias, name: u.name || "Usuario", hits: score };
+    })
+    .filter(u => u !== null);
 
   board = board.sort((a, b) => b.hits - a.hits).slice(0, 15);
   return board.map((r, idx) => ({ ...r, rank: idx + 1 }));
