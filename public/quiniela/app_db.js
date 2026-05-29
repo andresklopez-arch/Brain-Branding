@@ -1373,11 +1373,14 @@ export async function syncWithApiFootball(apiKey) {
       return name.toLowerCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]/g, "")
         .replace("fc", "")
         .replace("cf", "")
         .replace("club", "")
         .replace("universidad", "u")
+        .replace("republic of", "rep")
+        .replace("rep of", "rep")
+        .replace("republic", "rep")
+        .replace(/[^a-z0-9]/g, "")
         .trim();
     };
 

@@ -2546,8 +2546,7 @@ window.adminAddSelectedBulk = async function() {
   
   // Recargar vistas de administración y cliente
   loadAdminPanel();
-  window.refreshPanelData('dashboard');
-  window.refreshPanelData('play');
+  setTimeout(() => window.location.reload(), 1500);
 };
 
 // Limpiar de forma manual y absoluta la caché del navegador/Service Worker
@@ -2601,8 +2600,7 @@ window.adminAddFromAPI = async function(id, local, visita, date, group, attracti
   await addFixture(f);
   showToast(`¡${local} vs ${visita} agregado a la Quiniela!`, "success");
   loadAdminPanel();
-  window.refreshPanelData('dashboard');
-  window.refreshPanelData('play');
+  setTimeout(() => window.location.reload(), 1500);
 };
 
 // Enviar comprobante por WhatsApp (Wallet)
@@ -3229,8 +3227,7 @@ window.adminSaveMasterQuiniela = async function() {
   showToast(`✅ Se guardaron ${successCount} resultados correctamente.`, "success");
   
   loadAdminPanel();
-  window.refreshPanelData('dashboard');
-  window.refreshPanelData('play');
+  setTimeout(() => window.location.reload(), 1500);
 };
 
 window.adminConsultMatchResults = async function() {
@@ -3248,8 +3245,7 @@ window.adminConsultMatchResults = async function() {
       showToast(`¡Listo! Se actualizaron automáticamente ${res.updated} partidos.`, "success");
       localStorage.setItem("qia_live_event", JSON.stringify({ type: 'score', text: `¡Los marcadores oficiales han sido actualizados en vivo!`, ts: Date.now() }));
       loadAdminPanel();
-      window.refreshPanelData('dashboard');
-      window.refreshPanelData('play');
+      setTimeout(() => window.location.reload(), 1500);
     } else if (res.success && res.updated === 0) {
       showToast(res.msg || "No se encontraron resultados nuevos.", "info");
     } else {
@@ -3409,8 +3405,7 @@ window.adminSetScore = async function(id, home, away) {
     localStorage.setItem("qia_live_event", JSON.stringify({ type: 'score', text: `🏆 ¡El partido ${home} vs ${away} ha terminado! Revisa tus aciertos.`, ts: Date.now() }));
     showToast("✅ Resultado guardado correctamente", "success");
     loadAdminPanel();
-    window.refreshPanelData('dashboard');
-    window.refreshPanelData('play');
+    setTimeout(() => window.location.reload(), 1500);
   } else {
     showToast("❌ Error al guardar marcador", "error");
   }
@@ -3430,8 +3425,7 @@ window.adminClearFixtures = async function() {
       if (success) {
         showToast("Partidos limpiados", "success");
         loadAdminPanel();
-        window.refreshPanelData('dashboard');
-        window.refreshPanelData('play');
+        setTimeout(() => window.location.reload(), 1500);
       }
     }
   });
@@ -3510,8 +3504,7 @@ window.adminSimulateAPI = async function() {
       await createGovernanceLog("ADMIN_API_SYNC", "Sincronización masiva de Partidos vía API", currentUser);
       showToast("✅ API Sincronizada", "success");
       loadAdminPanel();
-      window.refreshPanelData('dashboard');
-      window.refreshPanelData('play');
+      setTimeout(() => window.location.reload(), 1500);
     } else {
       showToast("❌ Error al guardar datos de API", "error");
     }
@@ -3564,8 +3557,7 @@ window.handleCSVUpload = function(event) {
         await createGovernanceLog("ADMIN_CSV_IMPORT", `Importados ${fixturesToAdd.length} partidos por CSV`, currentUser);
         showToast(`✅ ${fixturesToAdd.length} Partidos importados`, "success");
         loadAdminPanel();
-        window.refreshPanelData('dashboard');
-        window.refreshPanelData('play');
+        setTimeout(() => window.location.reload(), 1500);
       } else {
         showToast("❌ Error subiendo CSV a la nube", "error");
       }
@@ -3586,8 +3578,7 @@ window.adminCancelFixture = async function(id) {
     localStorage.setItem("qia_live_event", JSON.stringify({ type: 'cancel', text: `⛔ Un partido ha sido cancelado. Se considerará acierto para todos los participantes.`, ts: Date.now() }));
     showToast("✅ Partido cancelado", "success");
     loadAdminPanel();
-    window.refreshPanelData('dashboard');
-    window.refreshPanelData('play');
+    setTimeout(() => window.location.reload(), 1500);
   } else {
     showToast("❌ Error al cancelar", "error");
   }
@@ -3708,8 +3699,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const res = await syncWithApiFootball('34c8e5e450da905d34480516f6876eaa');
           if (res.success && res.updated > 0) {
             showToast(`¡Listo! Se actualizaron automáticamente ${res.updated} partidos.`, "success");
-            window.refreshPanelData('dashboard');
-            window.refreshPanelData('play');
+            setTimeout(() => window.location.reload(), 1500);
           } else if (res.success && res.updated === 0) {
             showToast(res.msg || "No se encontraron resultados nuevos.", "info");
           } else {
