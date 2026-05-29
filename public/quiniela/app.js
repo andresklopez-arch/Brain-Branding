@@ -1034,24 +1034,43 @@ function renderLiveScores(fixtures) {
     return;
   }
   
-  // Mapear partidos en vivo o terminados de Liga MX
+  // Ordenar por fecha cronológicamente
+  fixtures.sort((a, b) => {
+    const tsA = new Date(a.date).getTime();
+    const tsB = new Date(b.date).getTime();
+    if (!isNaN(tsA) && !isNaN(tsB)) return tsA - tsB;
+    return 0;
+  });
+  
+  // Mapear todos los partidos de la quiniela
   fixtures.forEach(f => {
     const card = document.createElement("div");
     const isLive = f.status === "live";
+    const isFinished = f.status === "finished";
     card.className = `live-match-card ${isLive ? 'is-live' : ''}`;
     
     let statusBadge = "";
-    if (f.status === "live") {
+    if (isLive) {
       statusBadge = `<span class="pulsing-live text-xxs font-black text-red-500 uppercase tracking-widest"><span class="live-dot mr-4"></span>En Vivo</span>`;
-    } else if (f.status === "finished") {
+    } else if (isFinished) {
       statusBadge = `<span class="text-xxs font-black opacity-30 uppercase tracking-widest">Finalizado</span>`;
     } else {
-      statusBadge = `<span class="text-xxs font-black opacity-40 uppercase tracking-widest">${f.date}</span>`;
+      let dateLabel = f.date;
+      try {
+        const d = new Date(f.date);
+        if (!isNaN(d.getTime())) {
+          dateLabel = d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) + " " + d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true });
+        }
+      } catch(e) {}
+      statusBadge = `<span class="text-xxs font-black opacity-40 uppercase tracking-widest">${dateLabel}</span>`;
     }
+
+    let localScore = (isLive || isFinished) && typeof f.score_local === 'number' ? f.score_local : '-';
+    let visitaScore = (isLive || isFinished) && typeof f.score_visita === 'number' ? f.score_visita : '-';
     
     card.innerHTML = `
       <div class="flex justify-between items-center">
-        <span class="text-[8px] bg-white/5 border border-black/5 px-6 py-2 rounded-full font-black uppercase text-accent">${f.group || "LIGA MX"}</span>
+        <span class="text-[8px] bg-white/5 border border-black/5 px-6 py-2 rounded-full font-black uppercase text-accent">${f.group || "QUINIELA"}</span>
         ${statusBadge}
       </div>
       <div class="flex items-center justify-between mt-4">
@@ -1060,8 +1079,8 @@ function renderLiveScores(fixtures) {
           <span class="text-xs font-black  uppercase mt-4">${f.team_visita}</span>
         </div>
         <div class="flex flex-col items-end gap-4">
-          <span class="text-md font-black italic text-accent">${f.score_local}</span>
-          <span class="text-md font-black italic text-accent">${f.score_visita}</span>
+          <span class="text-md font-black italic text-accent">${localScore}</span>
+          <span class="text-md font-black italic text-accent">${visitaScore}</span>
         </div>
       </div>
     `;
