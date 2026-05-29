@@ -594,7 +594,7 @@ export async function getLeaderboard(type = 'weekly') {
   
   let board = snap.docs
     .map(doc => {
-      const u = doc.data();
+      const u = decryptData(doc.data());
       if (!u || !u.alias || u.alias === "user_ia" || u.role === "master") return null;
       const currentHits = dynamicHitsFB[u.alias] || 0;
       let score = type === 'accumulated' ? (u.total_hits || 0) + currentHits : currentHits;
