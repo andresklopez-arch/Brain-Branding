@@ -1669,12 +1669,15 @@ function showTicketDetails(ticket) {
   getFixtures().then(fixtures => {
     const predContainer = document.getElementById("ticket-modal-predictions");
     let totalHits = 0;
+    let totalMisses = 0;
+    let totalPending = 0;
+
     ticket.matches.forEach(m => {
       const f = fixtures.find(match => match.id === m.match_id);
       if (f) {
         let realResult = null;
         let scoreStr = "";
-        let isFinishedOrLive = f.status === 'finished' || f.status === 'live' || (typeof f.score_local === 'number' && typeof f.score_visita === 'number');
+        let isFinishedOrLive = f.status === 'finished' || f.status === 'live';
         
         if (isFinishedOrLive && typeof f.score_local === 'number' && typeof f.score_visita === 'number') {
            scoreStr = ` <span class="text-accent ml-2">(${f.score_local} - ${f.score_visita})</span>`;
@@ -1693,7 +1696,10 @@ function showTicketDetails(ticket) {
           } else {
             predClass = "bg-red-500 text-white";
             resultIcon = "❌";
+            totalMisses++;
           }
+        } else {
+          totalPending++;
         }
 
         const row = document.createElement("div");
@@ -1708,6 +1714,15 @@ function showTicketDetails(ticket) {
         predContainer.appendChild(row);
       }
     });
+    
+    const summaryRow = document.createElement("div");
+    summaryRow.className = "flex justify-between items-center pt-6 mt-6 border-t border-white/10 text-[10px] font-black uppercase";
+    summaryRow.innerHTML = `
+      <div class="text-[#00ff88]">✅ ${totalHits} PTS (ACIERTOS)</div>
+      <div class="text-red-500">❌ ${totalMisses} ERRORES</div>
+      <div class="text-white/50">⏳ ${totalPending} PENDIENTES</div>
+    `;
+    predContainer.appendChild(summaryRow);
     
     const hitsEl = document.getElementById("modal-total-hits");
     if (hitsEl) hitsEl.textContent = totalHits;
