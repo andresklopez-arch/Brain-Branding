@@ -1186,7 +1186,7 @@ function renderLeaderboard(leaderboard, containerId = "leaderboard-container") {
           <span class="text-[8px] opacity-30 uppercase font-black">${row.name}</span>
         </div>
       </div>
-      <span class="text-xs font-black text-accent">${row.hits} Aciertos</span>
+      <span class="text-xs font-black text-accent">${row.hits} PTS</span>
     `;
     container.appendChild(div);
   });

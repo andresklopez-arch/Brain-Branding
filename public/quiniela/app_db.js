@@ -526,30 +526,78 @@ export async function acceptSuggestionsAsFixtures(suggestions) {
 }
 
 // Clasificación / Leaderboard (Semanal y Acumulada)
-export async function getLeaderboard(type = 'weekly') {
-  if (useSimulation) {
-    if (type === 'accumulated') {
-      return JSON.parse(localStorage.getItem("qia_leaderboard_accumulated") || "[]");
-    }
-    return JSON.parse(localStorage.getItem("qia_leaderboard") || "[]");
-  }
-  const collectionName = type === 'accumulated' ? "users" : "users"; // Ajustar después para estructura completa
-  const orderField = type === 'accumulated' ? "total_hits" : "avg_hits";
+// Funciǭn auxiliar para calcular aciertos dinǭmicos
+async function calculateDynamicHits() {
+  const tickets = useSimulation 
+    ? JSON.parse(localStorage.getItem("qia_tickets") || "[]")
+    : (await db.collection("tickets").where("status", "==", "active").get()).docs.map(d => d.data());
+    
+  const fixtures = await getFixtures();
+  const fixturesMap = {};
+  fixtures.forEach(f => fixturesMap[f.id] = f);
+
+  const userBest = {};
   
-  const snap = await db.collection(collectionName)
-    .orderBy(orderField, "desc")
-    .limit(10)
-    .get();
-  let rank = 1;
-  return snap.docs.map(doc => {
-    const u = doc.data();
-    return {
-      rank: rank++,
-      alias: u.alias || "user_ia",
-      name: u.name || "Usuario",
-      hits: type === 'accumulated' ? (u.total_hits || 0) : (u.avg_hits || 0)
-    };
+  tickets.forEach(t => {
+    let hits = 0;
+    const matchesArray = t.matches || (t.selections ? Object.keys(t.selections).map(k => ({match_id: k, prediction: t.selections[k]})) : []);
+    
+    matchesArray.forEach(m => {
+      const f = fixturesMap[m.match_id];
+      if (f && f.status === 'finished') {
+        let realResult = null;
+        if (f.score_local > f.score_visita) realResult = 'L';
+        else if (f.score_local === f.score_visita) realResult = 'E';
+        else realResult = 'V';
+        
+        if (m.prediction === realResult) hits++;
+      } else if (f && f.status === 'canceled') {
+        hits++; // Partido cancelado = acierto automático
+      }
+    });
+
+    if (!userBest[t.user_alias] || hits > userBest[t.user_alias].hits) {
+      userBest[t.user_alias] = hits;
+    }
   });
+  
+  return userBest;
+}
+
+export async function getLeaderboard(type = 'weekly') {
+  const dynamicHits = await calculateDynamicHits();
+  
+  if (useSimulation) {
+    const allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]").map(u => decryptData(u));
+    
+    let board = allUsers.map(u => {
+      const currentHits = dynamicHits[u.alias] || 0;
+      let score = 0;
+      if (type === 'accumulated') {
+        score = (u.total_hits || 0) + currentHits;
+      } else {
+        score = currentHits;
+      }
+      return { alias: u.alias, name: u.name, hits: score };
+    });
+    
+    board = board.sort((a, b) => b.hits - a.hits).slice(0, 15);
+    return board.map((r, idx) => ({ ...r, rank: idx + 1 }));
+  }
+
+  // Live Firebase Mode
+  const dynamicHitsFB = await calculateDynamicHits();
+  const snap = await db.collection("users").get();
+  
+  let board = snap.docs.map(doc => {
+    const u = doc.data();
+    const currentHits = dynamicHitsFB[u.alias] || 0;
+    let score = type === 'accumulated' ? (u.total_hits || 0) + currentHits : currentHits;
+    return { alias: u.alias || "user_ia", name: u.name || "Usuario", hits: score };
+  });
+
+  board = board.sort((a, b) => b.hits - a.hits).slice(0, 15);
+  return board.map((r, idx) => ({ ...r, rank: idx + 1 }));
 }
 
 // Auth de usuario simulado e integrado con Roles
@@ -1014,7 +1062,7 @@ export async function executeWeeklyClosure(config) {
     // Actualizar Leaderboards
     const newWeeklyLeaderboard = bestTickets.map((t, idx) => ({
       rank: idx + 1, alias: t.user_alias, name: t.user_alias, hits: t.hits
-    })).slice(0, 10);
+    })).slice(0, 15);
     localStorage.setItem("qia_leaderboard", JSON.stringify(newWeeklyLeaderboard));
 
     let accBoard = JSON.parse(localStorage.getItem("qia_leaderboard_accumulated") || "[]");
