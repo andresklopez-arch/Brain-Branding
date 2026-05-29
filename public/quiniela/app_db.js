@@ -1327,6 +1327,8 @@ export async function deleteFixture(id) {
     console.error("Error deleting fixture:", e);
     return false;
   }
+}
+
 export async function syncWithApiFootball(apiKey) {
   try {
     const allFixtures = await getFixtures();
