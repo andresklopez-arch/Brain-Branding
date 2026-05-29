@@ -1327,8 +1327,6 @@ export async function deleteFixture(id) {
     console.error("Error deleting fixture:", e);
     return false;
   }
-}
-
 export async function syncWithApiFootball(apiKey) {
   try {
     const allFixtures = await getFixtures();
@@ -1338,10 +1336,16 @@ export async function syncWithApiFootball(apiKey) {
     if (activeFixtures.length === 0) return { success: true, updated: 0, msg: "Todos están terminados" };
 
     const datesNeeded = new Set();
-    datesNeeded.add(new Date().toISOString().split("T")[0]);
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    datesNeeded.add(yesterday.toISOString().split("T")[0]);
+    const today = new Date();
+    datesNeeded.add(today.toISOString().split("T")[0]);
+    for (let i = 1; i <= 3; i++) {
+      const past = new Date(today);
+      past.setDate(today.getDate() - i);
+      datesNeeded.add(past.toISOString().split("T")[0]);
+      const future = new Date(today);
+      future.setDate(today.getDate() + i);
+      datesNeeded.add(future.toISOString().split("T")[0]);
+    }
 
     activeFixtures.forEach(f => {
       if (f.date) {
@@ -1361,6 +1365,20 @@ export async function syncWithApiFootball(apiKey) {
     }
     localStorage.setItem("last_api_sync_time", Date.now().toString());
 
+    // Normalizar nombres de equipos
+    const normalize = (name) => {
+      if (!name) return "";
+      return name.toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]/g, "")
+        .replace("fc", "")
+        .replace("cf", "")
+        .replace("club", "")
+        .replace("universidad", "u")
+        .trim();
+    };
+
     for (const dateStr of datesNeeded) {
       const res = await fetch(`https://v3.football.api-sports.io/fixtures?date=${dateStr}`, {
         headers: { "x-apisports-key": apiKey }
@@ -1369,15 +1387,15 @@ export async function syncWithApiFootball(apiKey) {
       if (!data || !data.response) continue;
 
       for (const apiMatch of data.response) {
-        const hName = apiMatch.teams.home.name.toLowerCase();
-        const aName = apiMatch.teams.away.name.toLowerCase();
+        const hName = normalize(apiMatch.teams.home.name);
+        const aName = normalize(apiMatch.teams.away.name);
         const apiStatus = apiMatch.fixture.status.short;
 
         for (const f of activeFixtures) {
           if (f.updated_from_api_this_run) continue;
           
-          const dbLocal = (f.team_local || "").toLowerCase();
-          const dbVisita = (f.team_visita || "").toLowerCase();
+          const dbLocal = normalize(f.team_local);
+          const dbVisita = normalize(f.team_visita);
 
           // Fuzzy match cruzado
           const isMatch = (hName.includes(dbLocal) || dbLocal.includes(hName)) && 
