@@ -1331,22 +1331,18 @@ export async function deleteFixture(id) {
 
 export async function syncWithApiFootball(apiKey) {
   try {
-    const fixturesRef = db.collection("fixtures");
-    const snapshot = await fixturesRef.get();
-    if (snapshot.empty) return { success: true, updated: 0, msg: "No hay partidos" };
+    const allFixtures = await getFixtures();
+    if (!allFixtures || allFixtures.length === 0) return { success: true, updated: 0, msg: "No hay partidos" };
 
-    const activeFixtures = [];
-    snapshot.forEach(doc => {
-      const f = doc.data();
-      f.id = doc.id;
-      if (f.status !== "finished" && f.status !== "canceled") {
-        activeFixtures.push(f);
-      }
-    });
-
+    const activeFixtures = allFixtures.filter(f => f.status !== "finished" && f.status !== "canceled");
     if (activeFixtures.length === 0) return { success: true, updated: 0, msg: "Todos están terminados" };
 
     const datesNeeded = new Set();
+    datesNeeded.add(new Date().toISOString().split("T")[0]);
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    datesNeeded.add(yesterday.toISOString().split("T")[0]);
+
     activeFixtures.forEach(f => {
       if (f.date) {
         const d = new Date(f.date);
