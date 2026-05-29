@@ -35,7 +35,8 @@ import {
   updateFixtureScore,
   cancelFixture,
   getActiveTickets,
-  getUserTickets
+  getUserTickets,
+  syncWithApiFootball
 } from './app_db.js';
 // ── VARIABLES DE CONTROL GLOBAL ──────────────────────────────────────────
 let currentUser = null;
