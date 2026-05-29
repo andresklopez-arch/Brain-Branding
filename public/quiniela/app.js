@@ -1183,7 +1183,6 @@ function renderLeaderboard(leaderboard, containerId = "leaderboard-container") {
         <span class="rank-badge ${medalClass}">${row.rank}</span>
         <div class="flex flex-col">
           <span class="text-xs font-black ">@${row.alias}</span>
-          <span class="text-[8px] opacity-30 uppercase font-black">${row.name}</span>
         </div>
       </div>
       <span class="text-xs font-black text-accent">${row.hits} PTS</span>
