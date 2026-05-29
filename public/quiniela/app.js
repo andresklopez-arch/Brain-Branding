@@ -1103,7 +1103,7 @@ function renderLiveScores(fixtures) {
       if (m && m.prediction === realResult) {
         card.style.borderColor = 'rgba(0, 255, 136, 0.4)';
         card.style.background = 'rgba(0, 255, 136, 0.05)';
-        hitBadge = `<span class="text-[9px] ml-4 bg-[#00ff88]/20 px-4 py-1 rounded-full text-[#00ff88] font-black uppercase" title="¡Atinaste!">✅ Acertado</span>`;
+        hitBadge = `<span class="text-xxs font-black uppercase" style="margin-left: 4px; background: rgba(0,255,136,0.2); color: #00ff88; padding: 2px 8px; border-radius: 9999px;" title="¡Atinaste!">✅ Acertado</span>`;
       }
     }
 
@@ -1133,7 +1133,7 @@ function renderLiveScores(fixtures) {
     } else {
       card.innerHTML = `
         <div class="flex justify-between items-center">
-          <span class="text-[8px] bg-white/5 border border-black/5 px-6 py-2 rounded-full font-black uppercase text-accent">${f.group || "QUINIELA"} ${hitBadge}</span>
+          <span class="text-xxxxs px-6 font-black uppercase text-accent" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(0,0,0,0.05); padding-top: 2px; padding-bottom: 2px; border-radius: 9999px;">${f.group || "QUINIELA"} ${hitBadge}</span>
           ${statusBadge}
         </div>
         <div class="flex items-center justify-between mt-4">
@@ -1366,8 +1366,10 @@ function renderPlayFixtures(fixtures) {
 
     if (currentGroup !== lastDateGroup) {
       const divider = document.createElement("div");
-      divider.className = "date-divider my-10 text-center border-b border-white/10 pb-4";
-      divider.innerHTML = `<span class="text-[9px] font-black tracking-[4px] uppercase text-accent bg-[#121212] px-6 py-2 rounded-full border border-accent/30 shadow-[0_0_15px_rgba(205,127,50,0.15)]">${currentGroup}</span>`;
+      divider.className = "date-divider text-center mb-10 mt-10";
+      divider.style.borderBottom = "1px solid rgba(255,255,255,0.1)";
+      divider.style.paddingBottom = "16px";
+      divider.innerHTML = `<span class="text-xxs font-black uppercase text-accent px-6" style="letter-spacing: 4px; background: #121212; padding-top: 4px; padding-bottom: 4px; border-radius: 9999px; border: 1px solid rgba(205,127,50,0.3); box-shadow: 0 0 15px rgba(205,127,50,0.15);">${currentGroup}</span>`;
       container.appendChild(divider);
       lastDateGroup = currentGroup;
     }
