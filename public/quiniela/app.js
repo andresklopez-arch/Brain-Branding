@@ -3691,3 +3691,38 @@ window.addEventListener('storage', function(e) {
     }
   }
 });
+
+
+// Event listener para el botón de sincronización manual de API-Football
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    const btn = document.getElementById('btn-api-sync');
+    if (btn) {
+      btn.addEventListener('click', async () => {
+        let originalText = btn.innerHTML;
+        btn.innerHTML = `<i class="ri-loader-4-line animate-spin mr-4"></i> Consultando API...`;
+        btn.disabled = true;
+        
+        try {
+          // LLamada global de sincronización API-Football
+          const res = await syncWithApiFootball('34c8e5e450da905d34480516f6876eaa');
+          if (res.success && res.updated > 0) {
+            showToast(`¡Listo! Se actualizaron automáticamente ${res.updated} partidos.`, "success");
+            window.refreshPanelData('dashboard');
+            window.refreshPanelData('play');
+          } else if (res.success && res.updated === 0) {
+            showToast(res.msg || "No se encontraron resultados nuevos.", "info");
+          } else {
+            showToast(res.msg || "No se encontraron resultados.", "info");
+          }
+        } catch(e) {
+          showToast("Error al consultar resultados.", "error");
+          console.error(e);
+        } finally {
+          btn.innerHTML = originalText;
+          btn.disabled = false;
+        }
+      });
+    }
+  }, 1000); // Esperar a que el DOM y componentes se rendericen
+});
