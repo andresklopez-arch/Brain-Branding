@@ -1042,12 +1042,37 @@ function renderLiveScores(fixtures) {
     return 0;
   });
   
+  let latestTicket = null;
+  if (typeof currentUser !== 'undefined' && currentUser) {
+    try {
+      const localList = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
+      const myTickets = localList.filter(t => t.user_id === currentUser.phone || t.user_id === currentUser.email);
+      if (myTickets.length > 0) {
+        myTickets.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+        latestTicket = myTickets[0];
+      }
+    } catch(e) {}
+  }
+
+  const template = document.getElementById("carousel-card-template");
+  let firstActiveCard = null;
+
+  window._prevScores = window._prevScores || {};
+
   // Mapear todos los partidos de la quiniela
   fixtures.forEach(f => {
-    const card = document.createElement("div");
     const isLive = f.status === "live";
     const isFinished = f.status === "finished";
-    card.className = `live-match-card ${isLive ? 'is-live' : ''}`;
+
+    let card;
+    if (template) {
+      card = template.content.cloneNode(true).querySelector('.live-match-card');
+    } else {
+      card = document.createElement("div");
+      card.className = "live-match-card";
+    }
+    
+    if (isLive) card.classList.add('is-live');
     
     let statusBadge = "";
     if (isLive) {
@@ -1068,24 +1093,74 @@ function renderLiveScores(fixtures) {
     let localScore = (isLive || isFinished) && typeof f.score_local === 'number' ? f.score_local : '-';
     let visitaScore = (isLive || isFinished) && typeof f.score_visita === 'number' ? f.score_visita : '-';
     
-    card.innerHTML = `
-      <div class="flex justify-between items-center">
-        <span class="text-[8px] bg-white/5 border border-black/5 px-6 py-2 rounded-full font-black uppercase text-accent">${f.group || "QUINIELA"}</span>
-        ${statusBadge}
-      </div>
-      <div class="flex items-center justify-between mt-4">
-        <div class="flex flex-col">
-          <span class="text-xs font-black  uppercase">${f.team_local}</span>
-          <span class="text-xs font-black  uppercase mt-4">${f.team_visita}</span>
+    // Check hit
+    let hitBadge = "";
+    if (latestTicket && isFinished && typeof f.score_local === 'number' && typeof f.score_visita === 'number') {
+      let realResult = 'E';
+      if (f.score_local > f.score_visita) realResult = 'L';
+      else if (f.score_local < f.score_visita) realResult = 'V';
+      const m = latestTicket.matches.find(x => x.match_id === f.id);
+      if (m && m.prediction === realResult) {
+        card.style.borderColor = 'rgba(0, 255, 136, 0.4)';
+        card.style.background = 'rgba(0, 255, 136, 0.05)';
+        hitBadge = `<span class="text-[9px] ml-4 bg-[#00ff88]/20 px-4 py-1 rounded-full text-[#00ff88] font-black uppercase" title="¡Atinaste!">✅ Acertado</span>`;
+      }
+    }
+
+    // Check blink for live score changes
+    let scoreClassLocal = "text-md font-black italic text-accent score-local";
+    let scoreClassVisita = "text-md font-black italic text-accent score-visita";
+    if (isLive) {
+      const prev = window._prevScores[f.id] || { l: localScore, v: visitaScore };
+      if (prev.l !== localScore) scoreClassLocal += " animate-pulse text-white";
+      if (prev.v !== visitaScore) scoreClassVisita += " animate-pulse text-white";
+      window._prevScores[f.id] = { l: localScore, v: visitaScore };
+    }
+
+    if (template) {
+      card.querySelector('.group-badge').innerHTML = (f.group || "QUINIELA") + hitBadge;
+      card.querySelector('.status-badge').innerHTML = statusBadge;
+      card.querySelector('.team-local').textContent = f.team_local;
+      card.querySelector('.team-visita').textContent = f.team_visita;
+      
+      const sLocal = card.querySelector('.score-local');
+      sLocal.className = scoreClassLocal;
+      sLocal.textContent = localScore;
+      
+      const sVisita = card.querySelector('.score-visita');
+      sVisita.className = scoreClassVisita;
+      sVisita.textContent = visitaScore;
+    } else {
+      card.innerHTML = `
+        <div class="flex justify-between items-center">
+          <span class="text-[8px] bg-white/5 border border-black/5 px-6 py-2 rounded-full font-black uppercase text-accent">${f.group || "QUINIELA"} ${hitBadge}</span>
+          ${statusBadge}
         </div>
-        <div class="flex flex-col items-end gap-4">
-          <span class="text-md font-black italic text-accent">${localScore}</span>
-          <span class="text-md font-black italic text-accent">${visitaScore}</span>
+        <div class="flex items-center justify-between mt-4">
+          <div class="flex flex-col">
+            <span class="text-xs font-black uppercase">${f.team_local}</span>
+            <span class="text-xs font-black uppercase mt-4">${f.team_visita}</span>
+          </div>
+          <div class="flex flex-col items-end gap-4">
+            <span class="${scoreClassLocal}">${localScore}</span>
+            <span class="${scoreClassVisita}">${visitaScore}</span>
+          </div>
         </div>
-      </div>
-    `;
+      `;
+    }
+    
     container.appendChild(card);
+    if (!isFinished && !firstActiveCard) {
+      firstActiveCard = card;
+    }
   });
+
+  // Auto-scroll al partido activo
+  if (firstActiveCard) {
+    setTimeout(() => {
+      container.scrollTo({ left: firstActiveCard.offsetLeft - container.offsetLeft - 20, behavior: 'smooth' });
+    }, 500);
+  }
 }
 
 function renderLeaderboard(leaderboard, containerId = "leaderboard-container") {
@@ -1259,7 +1334,44 @@ function renderPlayFixtures(fixtures) {
     return 0;
   });
   
+  let lastDateGroup = "";
+
   fixtures.forEach((f, idx) => {
+    // Generate date group
+    let currentGroup = "PRÓXIMAMENTE";
+    if (f.date) {
+      try {
+        const d = new Date(f.date);
+        if (!isNaN(d.getTime())) {
+          const now = new Date();
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+          const fDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+          
+          if (fDate.getTime() < today.getTime()) {
+            currentGroup = "JUGADOS";
+          } else if (fDate.getTime() === today.getTime()) {
+            currentGroup = "HOY";
+          } else if (fDate.getTime() === tomorrow.getTime()) {
+            currentGroup = "MAÑANA";
+          } else {
+            const tzOpts = { timeZone: typeof USER_TZ !== 'undefined' ? USER_TZ : 'America/Mexico_City' };
+            const weekday = d.toLocaleDateString('es-MX', { ...tzOpts, weekday: 'long' });
+            const dayMonth = d.toLocaleDateString('es-MX', { ...tzOpts, day: 'numeric', month: 'short' });
+            currentGroup = `${weekday.toUpperCase()} ${dayMonth.toUpperCase()}`;
+          }
+        }
+      } catch(e) {}
+    }
+
+    if (currentGroup !== lastDateGroup) {
+      const divider = document.createElement("div");
+      divider.className = "date-divider my-10 text-center border-b border-white/10 pb-4";
+      divider.innerHTML = `<span class="text-[9px] font-black tracking-[4px] uppercase text-accent bg-[#121212] px-6 py-2 rounded-full border border-accent/30 shadow-[0_0_15px_rgba(205,127,50,0.15)]">${currentGroup}</span>`;
+      container.appendChild(divider);
+      lastDateGroup = currentGroup;
+    }
+
     const row = document.createElement("div");
     row.className = "match-play-row";
     
