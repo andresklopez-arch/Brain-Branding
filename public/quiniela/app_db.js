@@ -1329,6 +1329,111 @@ export async function deleteFixture(id) {
   }
 }
 
+export async function syncWithApiFootball(apiKey) {
+  try {
+    const fixturesRef = db.collection("fixtures");
+    const snapshot = await fixturesRef.get();
+    if (snapshot.empty) return { success: true, updated: 0, msg: "No hay partidos" };
+
+    const activeFixtures = [];
+    snapshot.forEach(doc => {
+      const f = doc.data();
+      f.id = doc.id;
+      if (f.status !== "finished" && f.status !== "canceled") {
+        activeFixtures.push(f);
+      }
+    });
+
+    if (activeFixtures.length === 0) return { success: true, updated: 0, msg: "Todos están terminados" };
+
+    const datesNeeded = new Set();
+    activeFixtures.forEach(f => {
+      if (f.date) {
+        const d = new Date(f.date);
+        if (!isNaN(d.getTime())) {
+          datesNeeded.add(d.toISOString().split("T")[0]);
+        }
+      }
+    });
+
+    let totalUpdated = 0;
+    
+    // Antispam local (30 segundos max entre consultas globales por seguridad de créditos)
+    const lastSync = localStorage.getItem("last_api_sync_time");
+    if (lastSync && Date.now() - parseInt(lastSync) < 30000) {
+      return { success: false, updated: 0, msg: "Se actualizó recientemente. Espera unos segundos." };
+    }
+    localStorage.setItem("last_api_sync_time", Date.now().toString());
+
+    for (const dateStr of datesNeeded) {
+      const res = await fetch(`https://v3.football.api-sports.io/fixtures?date=${dateStr}`, {
+        headers: { "x-apisports-key": apiKey }
+      });
+      const data = await res.json();
+      if (!data || !data.response) continue;
+
+      for (const apiMatch of data.response) {
+        const hName = apiMatch.teams.home.name.toLowerCase();
+        const aName = apiMatch.teams.away.name.toLowerCase();
+        const apiStatus = apiMatch.fixture.status.short;
+
+        for (const f of activeFixtures) {
+          if (f.updated_from_api_this_run) continue;
+          
+          const dbLocal = (f.team_local || "").toLowerCase();
+          const dbVisita = (f.team_visita || "").toLowerCase();
+
+          // Fuzzy match cruzado
+          const isMatch = (hName.includes(dbLocal) || dbLocal.includes(hName)) && 
+                          (aName.includes(dbVisita) || dbVisita.includes(aName));
+
+          if (isMatch) {
+             const homeGoals = apiMatch.goals.home;
+             const awayGoals = apiMatch.goals.away;
+             
+             let newStatus = f.status;
+             if (apiStatus === "FT" || apiStatus === "AET" || apiStatus === "PEN") {
+               newStatus = "finished";
+             } else if (["1H", "HT", "2H", "ET", "P"].includes(apiStatus)) {
+               newStatus = "live";
+             }
+
+             if (homeGoals !== null && awayGoals !== null) {
+                if (useSimulation) {
+                  const list = JSON.parse(localStorage.getItem("qia_fixtures") || "[]");
+                  const item = list.find(x => x.id === f.id);
+                  if (item) {
+                    item.result_home = Number(homeGoals);
+                    item.result_away = Number(awayGoals);
+                    item.score_local = Number(homeGoals);
+                    item.score_visita = Number(awayGoals);
+                    item.status = newStatus;
+                    localStorage.setItem("qia_fixtures", JSON.stringify(list));
+                  }
+                } else {
+                  await db.collection("fixtures").doc(f.id).update({
+                    result_home: Number(homeGoals),
+                    result_away: Number(awayGoals),
+                    score_local: Number(homeGoals),
+                    score_visita: Number(awayGoals),
+                    status: newStatus
+                  });
+                }
+                f.updated_from_api_this_run = true;
+                totalUpdated++;
+             }
+          }
+        }
+      }
+    }
+
+    return { success: true, updated: totalUpdated, msg: `Se encontraron actualizaciones para ${totalUpdated} partido(s).` };
+  } catch(e) {
+    console.error(e);
+    return { success: false, updated: 0, msg: "Error al conectar con la API." };
+  }
+}
+
 export async function batchAddFixtures(fixturesArray) {
   if (useSimulation) {
     let list = JSON.parse(localStorage.getItem("qia_fixtures") || "[]");

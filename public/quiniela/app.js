@@ -1,5 +1,5 @@
-/* ============================================================
-   QUINIELA MUNDIALISTA IA — CORE APPLICATION CONTROLLER (app.js)
+﻿/* ============================================================
+   QUINIELA MUNDIALISTA IA â€” CORE APPLICATION CONTROLLER (app.js)
    ============================================================ */
 
 import {
@@ -35,9 +35,10 @@ import {
   updateFixtureScore,
   cancelFixture,
   getActiveTickets,
-  getUserTickets
+  getUserTickets,
+  syncWithApiFootball
 } from './app_db.js';
-// ── VARIABLES DE CONTROL GLOBAL ──────────────────────────────────────────
+// â”€â”€ VARIABLES DE CONTROL GLOBAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let currentUser = null;
 let systemConfig = null;
 let currentTicketSelections = {}; // match_id -> 'L'|'E'|'V'
@@ -48,11 +49,11 @@ let cachedUsersList = [];
 let adminMasterSelections = {}; // match_id -> 'L'|'E'|'V'|'C'
 let isPurchasing = false;
 async function syncServerTime() {
-  console.log("⏱️ [Reloj Antifraude] Usando validación nativa de Firebase en lugar de API externa.");
+  console.log("â±ï¸ [Reloj Antifraude] Usando validaciÃ³n nativa de Firebase en lugar de API externa.");
   serverTimeOffset = 0;
 }
 
-// ── SISTEMA DE NOTIFICACIONES NATIVAS EN MÓVIL/ESCRITORIO (PWA) ──────────
+// â”€â”€ SISTEMA DE NOTIFICACIONES NATIVAS EN MÃ“VIL/ESCRITORIO (PWA) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window.sendLocalNotification = function(title, body) {
   if (!("Notification" in window)) {
     console.warn("Notifications not supported in this browser.");
@@ -79,7 +80,7 @@ window.sendLocalNotification = function(title, body) {
   }
 };
 
-// ── TOAST MESSAGING ENGINE ───────────────────────────────────────────────
+// â”€â”€ TOAST MESSAGING ENGINE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function showToast(message, type = "info") {
   const container = document.getElementById("toast-container");
   if (!container) return;
@@ -94,7 +95,7 @@ function showToast(message, type = "info") {
   toast.innerHTML = `<i class="${icon}"></i> <span>${message}</span>`;
   container.appendChild(toast);
   
-  // Remover con animación suave
+  // Remover con animaciÃ³n suave
   setTimeout(() => {
     toast.style.opacity = "0";
     toast.style.transform = "translateY(-10px)";
@@ -102,9 +103,9 @@ function showToast(message, type = "info") {
   }, 4000);
 }
 
-// ── INICIALIZACIÓN DE LA APLICACIÓN ──────────────────────────────────────
+// â”€â”€ INICIALIZACIÃ“N DE LA APLICACIÃ“N â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function initApp() {
-  console.log("⚽ Quiniela Mundialista IA inicializando...");
+  console.log("âš½ Quiniela Mundialista IA inicializando...");
   
   // Registro de actividad global para seguridad (Auto-logout)
   document.addEventListener('click', () => {
@@ -117,7 +118,7 @@ async function initApp() {
   syncServerTime();
   
 
-  // Compresor y caché WebP en cliente para optimización del Logotipo
+  // Compresor y cachÃ© WebP en cliente para optimizaciÃ³n del Logotipo
   cacheLogoAsWebP();
   
   // Inicializar DB con timeout antifallo
@@ -127,9 +128,9 @@ async function initApp() {
       new Promise((_, reject) => setTimeout(() => reject(new Error("Firebase Timeout")), 5000))
     ]);
   } catch (err) {
-    console.warn("⚠️ initDatabase tardó demasiado o falló. Continuando offline...", err);
+    console.warn("âš ï¸ initDatabase tardÃ³ demasiado o fallÃ³. Continuando offline...", err);
     setTimeout(() => {
-      showToast("⚠️ MODO SIN CONEXIÓN: Mostrando datos guardados", "error");
+      showToast("âš ï¸ MODO SIN CONEXIÃ“N: Mostrando datos guardados", "error");
     }, 2000);
   }
   
@@ -138,14 +139,14 @@ async function initApp() {
     try {
       const updated = await autoUpdateMatchResults(true);
       if (updated > 0) {
-        console.log(`✅ [Google Search AI] Se han auto-actualizado ${updated} partidos.`);
+        console.log(`âœ… [Google Search AI] Se han auto-actualizado ${updated} partidos.`);
       }
     } catch(e) {
       console.warn("Error auto-actualizando marcadores:", e);
     }
   }, 3500);
   
-  // Cargar configuración de costos con timeout
+  // Cargar configuraciÃ³n de costos con timeout
   try {
     systemConfig = await Promise.race([
       getSystemConfig(),
@@ -156,7 +157,7 @@ async function initApp() {
     systemConfig = { pool_cost: 50, pool_fee: 10, pool_jackpot: 5000, pool_places: 3, extra_goals_cost: 10, extra_striker_cost: 15, betting_deadline_day: 5, betting_deadline_hour: 18, bypass_deadline_testing: true, manual_locked: false };
   }
   
-  // Checar si hay sesión guardada en localStorage (Descifrada)
+  // Checar si hay sesiÃ³n guardada en localStorage (Descifrada)
   const savedUser = localStorage.getItem("qia_current_user");
   
   // Simular carga de splash screen (1.5 segundos)
@@ -174,7 +175,7 @@ async function initApp() {
         // Auto-logout (24 horas de inactividad)
         const lastActivity = parseInt(localStorage.getItem("qia_last_activity")) || Date.now();
         if (Date.now() - lastActivity > 24 * 60 * 60 * 1000) {
-          showToast("🔒 Sesión expirada por inactividad de 24 horas. Por favor reingresa.", "error");
+          showToast("ðŸ”’ SesiÃ³n expirada por inactividad de 24 horas. Por favor reingresa.", "error");
           localStorage.removeItem("qia_current_user");
           throw new Error("Session expired due to inactivity");
         }
@@ -184,7 +185,7 @@ async function initApp() {
         }
         loadAppView();
       } catch (err) {
-        console.warn("⚠️ Sesión de usuario corrupta o antigua detectada. Cerrando sesión...", err);
+        console.warn("âš ï¸ SesiÃ³n de usuario corrupta o antigua detectada. Cerrando sesiÃ³n...", err);
         localStorage.removeItem("qia_current_user");
         currentUser = null;
         const onboard = document.getElementById("onboarding-view");
@@ -196,13 +197,13 @@ async function initApp() {
       if (onboard) onboard.classList.remove("hidden");
     }
 
-    // Solicitar permisos de notificación móvil/PWA tras cargar splash
+    // Solicitar permisos de notificaciÃ³n mÃ³vil/PWA tras cargar splash
     setTimeout(() => {
       if ("Notification" in window && Notification.permission === "default") {
         Notification.requestPermission().then(permission => {
           if (permission === "granted") {
-            showToast("¡Notificaciones del Quiniela Mundialista activadas!", "success");
-            window.sendLocalNotification("🏟️ ¡BIENVENIDO AL Quiniela Mundialista!", "Recibirás alertas en tu celular sobre partidos, saldos y cierres de quinielas.");
+            showToast("Â¡Notificaciones del Quiniela Mundialista activadas!", "success");
+            window.sendLocalNotification("ðŸŸï¸ Â¡BIENVENIDO AL Quiniela Mundialista!", "RecibirÃ¡s alertas en tu celular sobre partidos, saldos y cierres de quinielas.");
           }
         });
       }
@@ -216,7 +217,7 @@ if (document.readyState === "loading") {
   initApp();
 }
 
-// Compresor y Caché WebP en cliente para logotipo
+// Compresor y CachÃ© WebP en cliente para logotipo
 function cacheLogoAsWebP() {
   const cached = localStorage.getItem("logo_webp_cache");
   if (cached) {
@@ -237,15 +238,15 @@ function cacheLogoAsWebP() {
       const webpUrl = canvas.toDataURL("image/webp", 0.85); // 85% calidad WebP
       localStorage.setItem("logo_webp_cache", webpUrl);
       applyCachedLogo(webpUrl);
-      console.log("⚡ [Performance] Logo comprimido a WebP y cacheado localmente.");
+      console.log("âš¡ [Performance] Logo comprimido a WebP y cacheado localmente.");
     } catch (e) {
-      console.warn("Fallo conversión de logo a WebP:", e);
+      console.warn("Fallo conversiÃ³n de logo a WebP:", e);
     }
   };
 }
 
 function applyCachedLogo(dataUrl) {
-  // Buscar todas las imágenes e inyectar base64 WebP de inmediato
+  // Buscar todas las imÃ¡genes e inyectar base64 WebP de inmediato
   setTimeout(() => {
     const images = document.querySelectorAll('img[src="logo-quiniela.png"], img.splash-logo, img.w-24, img.w-10');
     images.forEach(img => {
@@ -254,13 +255,13 @@ function applyCachedLogo(dataUrl) {
   }, 50);
 }
 
-// ── FONDO DE ESTRELLAS INTERACTIVO ───────────────────────────────────────
+// â”€â”€ FONDO DE ESTRELLAS INTERACTIVO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function initStarsBackground() {
   const containers = ["splash-stars", "login-stars"];
   containers.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    // Generar estrellas dinámicas
+    // Generar estrellas dinÃ¡micas
     let starsStr = "";
     for (let i = 0; i < 40; i++) {
       const x = Math.random() * 100;
@@ -272,7 +273,7 @@ function initStarsBackground() {
   });
 }
 
-// ── AUTHENTICATION LAYERS (SIMULATION) ──────────────────────────────────
+// â”€â”€ AUTHENTICATION LAYERS (SIMULATION) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let selectedAuthTab = "google";
 
 window.switchLoginTab = function(tab) {
@@ -285,7 +286,7 @@ window.switchLoginTab = function(tab) {
   document.getElementById("form-otp").classList.add("hidden");
 };
 
-// Validación de Alias Real, Alfanumérico e Irrepetible
+// ValidaciÃ³n de Alias Real, AlfanumÃ©rico e Irrepetible
 window.validateAliasAvailability = async function(alias) {
   const feedback = document.getElementById("alias-feedback");
   const pinLabel = document.getElementById("pin-label");
@@ -294,19 +295,19 @@ window.validateAliasAvailability = async function(alias) {
   if (!alias || alias.trim().length < 3) {
     feedback.classList.add("hidden");
     if (nameInput) nameInput.disabled = false;
-    if (pinLabel) pinLabel.textContent = "Crea tu PIN de Seguridad (4 dígitos)";
+    if (pinLabel) pinLabel.textContent = "Crea tu PIN de Seguridad (4 dÃ­gitos)";
     return;
   }
   feedback.classList.remove("hidden");
   
-  // 1. Regla de Validación de Caracteres en el Alias (Sugerencia 1)
+  // 1. Regla de ValidaciÃ³n de Caracteres en el Alias (Sugerencia 1)
   const aliasRegex = /^[a-zA-Z0-9_]{3,15}$/;
   const cleanAlias = alias.trim().toLowerCase();
   
   const submitBtn = document.querySelector("#onboarding-view button");
 
   if (!aliasRegex.test(cleanAlias)) {
-    feedback.textContent = "Alias no válido. Solo letras, números o guiones bajos (3-15 carac.).";
+    feedback.textContent = "Alias no vÃ¡lido. Solo letras, nÃºmeros o guiones bajos (3-15 carac.).";
     feedback.style.color = "var(--danger)";
     if (submitBtn) submitBtn.disabled = true;
     return;
@@ -325,7 +326,7 @@ window.validateAliasAvailability = async function(alias) {
     const existingUser = await getUserData(email);
     
     if (existingUser) {
-      feedback.textContent = "¡Perfil encontrado! Al ingresar, iniciarás sesión en tu cuenta.";
+      feedback.textContent = "Â¡Perfil encontrado! Al ingresar, iniciarÃ¡s sesiÃ³n en tu cuenta.";
       feedback.style.color = "#ffd700"; // Oro para indicar perfil existente
       if (submitBtn) submitBtn.disabled = false;
       
@@ -339,16 +340,16 @@ window.validateAliasAvailability = async function(alias) {
         pinLabel.textContent = "Ingresa tu PIN de Seguridad";
       }
       
-      // Enfocar automáticamente el input de PIN (Sugerencia 3 del paso anterior)
+      // Enfocar automÃ¡ticamente el input de PIN (Sugerencia 3 del paso anterior)
       const pinInput = document.getElementById("onboard-pin");
       if (pinInput) {
         setTimeout(() => {
           pinInput.focus();
-        }, 150); // Pequeño delay de 150ms para un efecto visual óptimo
+        }, 150); // PequeÃ±o delay de 150ms para un efecto visual Ã³ptimo
       }
     } else {
-      feedback.textContent = "¡Alias disponible en el Quiniela Mundialista!";
-      feedback.style.color = "var(--success)"; // Verde de éxito
+      feedback.textContent = "Â¡Alias disponible en el Quiniela Mundialista!";
+      feedback.style.color = "var(--success)"; // Verde de Ã©xito
       if (submitBtn) submitBtn.disabled = false;
       
       // Habilitar Nombre Completo para Registro
@@ -357,18 +358,18 @@ window.validateAliasAvailability = async function(alias) {
       }
       // Ajustar etiqueta de PIN para Registro (Sugerencia 2)
       if (pinLabel) {
-        pinLabel.textContent = "Crea tu PIN de Seguridad (4 dígitos)";
+        pinLabel.textContent = "Crea tu PIN de Seguridad (4 dÃ­gitos)";
       }
     }
   } catch(e) {
     console.error("Error verificando alias:", e);
-    feedback.textContent = "⚠️ Error al conectar con la base de datos. Intenta de nuevo.";
+    feedback.textContent = "âš ï¸ Error al conectar con la base de datos. Intenta de nuevo.";
     feedback.style.color = "var(--danger)";
     if (submitBtn) submitBtn.disabled = true;
   }
 };
 
-// Autenticación por Google (Simulada con Popup Futurista)
+// AutenticaciÃ³n por Google (Simulada con Popup Futurista)
 window.simulateGoogleAuth = async function() {
   showToast("Abriendo portal seguro de Google...", "info");
   
@@ -385,38 +386,38 @@ window.simulateGoogleAuth = async function() {
     };
     
     currentUser = await registerOrLoginUser(mockUser);
-    showToast("¡Autenticación con Google exitosa!", "success");
+    showToast("Â¡AutenticaciÃ³n con Google exitosa!", "success");
     
     document.getElementById("login-view").classList.add("hidden");
     loadAppView();
   }, 1200);
 };
 
-// Autenticación por Teléfono (Paso 1: SMS)
+// AutenticaciÃ³n por TelÃ©fono (Paso 1: SMS)
 window.simulatePhoneAuth = function() {
   const name = document.getElementById("auth-name").value;
   const alias = document.getElementById("auth-alias").value;
   const phone = document.getElementById("auth-phone").value;
   
   if (!name || !alias || !phone || phone.length < 10) {
-    showToast("Por favor completa los campos correctamente (Teléfono 10 dígitos).", "error");
+    showToast("Por favor completa los campos correctamente (TelÃ©fono 10 dÃ­gitos).", "error");
     return;
   }
   
-  showToast("Enviando código de verificación SMS...", "info");
+  showToast("Enviando cÃ³digo de verificaciÃ³n SMS...", "info");
   
   setTimeout(() => {
     document.getElementById("form-phone").classList.add("hidden");
     document.getElementById("form-otp").classList.remove("hidden");
-    showToast("Código SMS enviado: 888888 (Ingresa este código para validar)", "success");
+    showToast("CÃ³digo SMS enviado: 888888 (Ingresa este cÃ³digo para validar)", "success");
   }, 1000);
 };
 
-// Paso 2: Validación OTP
+// Paso 2: ValidaciÃ³n OTP
 window.simulateOtpVerify = async function() {
   const otp = document.getElementById("auth-otp").value;
   if (otp !== "888888") {
-    showToast("Código incorrecto. Ingresa 888888.", "error");
+    showToast("CÃ³digo incorrecto. Ingresa 888888.", "error");
     return;
   }
   
@@ -435,22 +436,22 @@ window.simulateOtpVerify = async function() {
   };
   
   currentUser = await registerOrLoginUser(mockUser);
-  showToast("¡Teléfono verificado en la cadena de bloques!", "success");
+  showToast("Â¡TelÃ©fono verificado en la cadena de bloques!", "success");
   
   document.getElementById("login-view").classList.add("hidden");
   loadAppView();
 };
 
-// Cerrar sesión
+// Cerrar sesiÃ³n
 window.handleLogout = function() {
   localStorage.removeItem("qia_current_user");
-  showToast("Sesión cerrada. Reiniciando Estadio...", "info");
+  showToast("SesiÃ³n cerrada. Reiniciando Estadio...", "info");
   setTimeout(() => {
     window.location.reload();
   }, 1000);
 };
 
-// ── NAVIGATION CONTROLLER ────────────────────────────────────────────────
+// â”€â”€ NAVIGATION CONTROLLER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let currentPanel = "dashboard";
 
 window.appNavigate = function(panelName) {
@@ -470,11 +471,11 @@ window.appNavigate = function(panelName) {
   
   currentPanel = panelName;
   
-  // Recargar datos dinámicos según el panel abierto
+  // Recargar datos dinÃ¡micos segÃºn el panel abierto
   refreshPanelData(panelName);
 };
 
-// ── RECOLECCIÓN DE DATOS DINÁMICOS POR PANEL ──────────────────────────────
+// â”€â”€ RECOLECCIÃ“N DE DATOS DINÃMICOS POR PANEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function refreshPanelData(panel) {
   if (!currentUser) return;
   
@@ -487,7 +488,7 @@ async function refreshPanelData(panel) {
   document.getElementById("header-balance").textContent = `$${Number(currentUser.balance).toFixed(2)}`;
   
   if (panel === "dashboard") {
-    // 1. Bolsa y Premios (Dinámico)
+    // 1. Bolsa y Premios (DinÃ¡mico)
     const dbMod = await import('./app_db.js');
     const activeTickets = await dbMod.getActiveTickets();
     const poolCost = Number(systemConfig.pool_cost) || 50;
@@ -529,7 +530,7 @@ async function refreshPanelData(panel) {
       });
     }
     
-    // 2. Cargar Estadísticas del Jugador y Limpiar Expirados
+    // 2. Cargar EstadÃ­sticas del Jugador y Limpiar Expirados
     let tickets = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
     
     // 2.1 Limpieza de Tickets Expirados (6 Horas para RESERVED)
@@ -593,13 +594,13 @@ async function refreshPanelData(panel) {
     // Mostrar todos los partidos activos asignados por el administrador (soporta 11, 15 o mas partidos en cartelera)
     fixtures = fixtures;
     
-    // Poblar de forma dinámica las etiquetas de requeridos y contadores
+    // Poblar de forma dinÃ¡mica las etiquetas de requeridos y contadores
     const reqEl = document.getElementById("play-required-count");
     if (reqEl) reqEl.textContent = reqSelections;
     
     const instrEl = document.getElementById("play-instruction-text");
     if (instrEl) {
-      instrEl.textContent = `Elige tus ${reqSelections} partidos estratégicos y selecciona Local (L), Empate (E) o Visita (V).`;
+      instrEl.textContent = `Elige tus ${reqSelections} partidos estratÃ©gicos y selecciona Local (L), Empate (E) o Visita (V).`;
     }
     
     renderPlayFixtures(fixtures);
@@ -607,7 +608,7 @@ async function refreshPanelData(panel) {
     startMatchCountdownTimer();      // Mejora 1: countdown en tiempo real
     scheduleMatchReminder30min(fixtures); // Mejora 3: notif 30 min antes
 
-    // 2. Verificar límite de apuestas (Sugerencia 3)
+    // 2. Verificar lÃ­mite de apuestas (Sugerencia 3)
     const isLocked = window.checkBettingDeadlineStatus();
     const alertEl = document.getElementById("betting-deadline-alert");
     const submitBtn = document.querySelector("#panel-play button[onclick='window.purchaseTicket()']");
@@ -649,18 +650,18 @@ async function refreshPanelData(panel) {
         
         let titleMsg = isManual 
           ? "APUESTAS CERRADAS POR EL ADMIN" 
-          : (isFirstMatchStarted ? "APUESTAS CERRADAS (JORNADA EN CURSO)" : "APUESTAS CERRADAS (LÍMITE ALCANZADO)");
+          : (isFirstMatchStarted ? "APUESTAS CERRADAS (JORNADA EN CURSO)" : "APUESTAS CERRADAS (LÃMITE ALCANZADO)");
         let subMsg = isManual 
           ? "El registro ha sido clausurado manualmente." 
-          : (isFirstMatchStarted ? "El primer partido de la quiniela ya ha comenzado." : "El registro de quinielas se reabrirá el lunes.");
+          : (isFirstMatchStarted ? "El primer partido de la quiniela ya ha comenzado." : "El registro de quinielas se reabrirÃ¡ el lunes.");
         
         if (isAdminBypass) {
           alertEl.className = "p-12 rounded-2xl border mb-15 text-xxs uppercase tracking-wider font-bold bg-amber-500/10 border-amber-500/20 text-amber-500 animate-pulse";
-          alertEl.innerHTML = `<i class="ri-alert-line mr-6 text-sm"></i> 🟢 ${titleMsg} <br><span class="text-[9px] opacity-80 mt-4 block">* MODO ADMIN PRUEBAS: Tienes permiso para saltar el bloqueo y comprar.</span>`;
+          alertEl.innerHTML = `<i class="ri-alert-line mr-6 text-sm"></i> ðŸŸ¢ ${titleMsg} <br><span class="text-[9px] opacity-80 mt-4 block">* MODO ADMIN PRUEBAS: Tienes permiso para saltar el bloqueo y comprar.</span>`;
           if (submitBtn) submitBtn.disabled = false;
         } else {
           alertEl.className = "p-12 rounded-2xl border mb-15 text-xxs uppercase tracking-wider font-bold bg-red-500/10 border-red-500/20 text-red-500 animate-pulse";
-          alertEl.innerHTML = `<i class="ri-lock-2-line mr-6 text-sm"></i> 🔴 ${titleMsg} <br><span class="text-[9px] opacity-80 mt-4 block">${subMsg}</span>`;
+          alertEl.innerHTML = `<i class="ri-lock-2-line mr-6 text-sm"></i> ðŸ”´ ${titleMsg} <br><span class="text-[9px] opacity-80 mt-4 block">${subMsg}</span>`;
           if (submitBtn) submitBtn.disabled = true;
         }
       } else {
@@ -687,13 +688,13 @@ async function refreshPanelData(panel) {
     // Llenar listas heredadas de god-mode
     loadAdminPanel();
     
-    // Cargar caché encriptada del Buscador Google AI si existe
+    // Cargar cachÃ© encriptada del Buscador Google AI si existe
     const cachedAISearch = localStorage.getItem("qia_last_ai_search");
     if (cachedAISearch) {
       try {
         const results = decryptAISearchData(cachedAISearch);
         if (results) {
-          // Sincronizar el chip activo guardado en la caché
+          // Sincronizar el chip activo guardado en la cachÃ©
           const categories = ["todos", "euro", "copa", "local"];
           categories.forEach(cat => {
             const el = document.getElementById(`chip-ai-${cat}`);
@@ -737,7 +738,7 @@ async function refreshPanelData(panel) {
           }
         }
       } catch(e) {
-        console.error("Error cargando caché de búsqueda IA:", e);
+        console.error("Error cargando cachÃ© de bÃºsqueda IA:", e);
       }
     }
     
@@ -767,32 +768,32 @@ async function refreshPanelData(panel) {
     const reqSelInput = document.getElementById("cfg-required-selections");
     if (reqSelInput) reqSelInput.value = systemConfig.required_selections !== undefined ? systemConfig.required_selections : 10;
 
-    // 5. Poblar restricción de horario (Sugerencia 3)
+    // 5. Poblar restricciÃ³n de horario (Sugerencia 3)
     document.getElementById("cfg-deadline-day").value = systemConfig.betting_deadline_day !== undefined ? systemConfig.betting_deadline_day : 5;
     document.getElementById("cfg-deadline-hour").value = systemConfig.betting_deadline_hour !== undefined ? systemConfig.betting_deadline_hour : 18;
     document.getElementById("cfg-deadline-bypass").checked = systemConfig.bypass_deadline_testing !== undefined ? systemConfig.bypass_deadline_testing : true;
 
-    // 6. Configurar botón de bloqueo manual
+    // 6. Configurar botÃ³n de bloqueo manual
     const lockBtn = document.getElementById("btn-toggle-manual-lock");
     if (lockBtn) {
       const isLockedManual = systemConfig.manual_locked || false;
       if (isLockedManual) {
-        lockBtn.textContent = "🔓 ABRIR APUESTAS AHORA";
+        lockBtn.textContent = "ðŸ”“ ABRIR APUESTAS AHORA";
         lockBtn.style.background = "#22c55e"; // verde
         lockBtn.style.color = "#000";
         lockBtn.style.boxShadow = "0 0 20px rgba(34,197,94,0.3)";
       } else {
-        lockBtn.textContent = "🔒 CERRAR APUESTAS AHORA";
+        lockBtn.textContent = "ðŸ”’ CERRAR APUESTAS AHORA";
         lockBtn.style.background = "var(--accent)"; // bronce
         lockBtn.style.color = "#000";
         lockBtn.style.boxShadow = "0 0 20px rgba(205,127,50,0.2)";
       }
     }
 
-    // 7. Renderizar bitácora de gobernanza (Auditoría)
+    // 7. Renderizar bitÃ¡cora de gobernanza (AuditorÃ­a)
     renderGovernanceLogs();
 
-    // 8. Dibujar gráficos estadísticos interactivos (Sugerencia 2)
+    // 8. Dibujar grÃ¡ficos estadÃ­sticos interactivos (Sugerencia 2)
     setTimeout(() => {
       drawAdminAnalyticsChart();
     }, 100);
@@ -803,7 +804,7 @@ async function refreshPanelData(panel) {
 function loadAppView() {
   document.getElementById("app-container").classList.remove("hidden");
   
-  // Mostrar apodo y nombre completo en la cabecera para personalización de marca
+  // Mostrar apodo y nombre completo en la cabecera para personalizaciÃ³n de marca
   const headerUser = document.getElementById("header-username");
   const headerFull = document.getElementById("header-fullname");
   const headerAvatar = document.getElementById("header-avatar");
@@ -822,7 +823,7 @@ function loadAppView() {
       headerFull.textContent = currentUser.name;
     }
     
-    // 1. Avatar dinámico con inicial y gradiente premium
+    // 1. Avatar dinÃ¡mico con inicial y gradiente premium
     if (headerAvatar) {
       const firstLetter = (currentUser.name || currentUser.alias || "U").substring(0, 1).toUpperCase();
       headerAvatar.textContent = firstLetter;
@@ -832,7 +833,7 @@ function loadAppView() {
         headerAvatar.style.color = "#000";
         headerAvatar.style.boxShadow = "0 0 15px rgba(255, 215, 0, 0.45)";
       } else {
-        headerAvatar.style.background = "linear-gradient(135deg, #00e5ff, #00ff88)"; // Verde / Azul neón
+        headerAvatar.style.background = "linear-gradient(135deg, #00e5ff, #00ff88)"; // Verde / Azul neÃ³n
         headerAvatar.style.color = "#000";
         headerAvatar.style.boxShadow = "0 0 15px rgba(0, 229, 255, 0.25)";
       }
@@ -849,7 +850,7 @@ function loadAppView() {
       }
     }
     
-    // 3. Menú flotante: Nombre y Rol
+    // 3. MenÃº flotante: Nombre y Rol
     if (menuName && currentUser.name) {
       menuName.textContent = currentUser.name;
     }
@@ -863,7 +864,7 @@ function loadAppView() {
       }
     }
     
-    // 4. Mostrar botón de Modo Admin en menú flotante
+    // 4. Mostrar botÃ³n de Modo Admin en menÃº flotante
     if (menuBtnAdmin) {
       if (isMaster) {
         menuBtnAdmin.style.display = "flex";
@@ -881,7 +882,7 @@ function loadAppView() {
   window.appNavigate("dashboard");
 }
 
-// Controladores para menú flotante de perfil en cabecera
+// Controladores para menÃº flotante de perfil en cabecera
 window.toggleHeaderProfileMenu = function() {
   const menu = document.getElementById("header-profile-menu");
   if (!menu) return;
@@ -899,14 +900,14 @@ window.toggleHeaderProfileMenu = function() {
 window.copyUserAliasToClipboard = function() {
   if (currentUser && currentUser.alias) {
     navigator.clipboard.writeText("@" + currentUser.alias).then(() => {
-      showToast("¡Apodo copiado al portapapeles!", "success");
+      showToast("Â¡Apodo copiado al portapapeles!", "success");
     }).catch(() => {
       showToast("Error al copiar apodo", "error");
     });
   }
 };
 
-// Cerrar menú flotante si el usuario hace clic en el estadio fuera del perfil
+// Cerrar menÃº flotante si el usuario hace clic en el estadio fuera del perfil
 document.addEventListener("click", function(event) {
   const badge = document.querySelector(".user-profile-badge");
   const menu = document.getElementById("header-profile-menu");
@@ -917,7 +918,7 @@ document.addEventListener("click", function(event) {
   }
 });
 
-// ── ADMIN TABS CONTROLLER ────────────────────────────────────────────────
+// â”€â”€ ADMIN TABS CONTROLLER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window.switchAdminTab = function(tabName) {
   const tabs = ["matches", "rules", "payments", "users", "reports"];
   tabs.forEach(t => {
@@ -939,22 +940,22 @@ window.switchAdminTab = function(tabName) {
 
 /**
  * @function checkBettingDeadlineStatus
- * @description Evalúa si el registro de quinielas se encuentra bloqueado.
+ * @description EvalÃºa si el registro de quinielas se encuentra bloqueado.
  * El bloqueo ocurre por tres factores:
- *   1. Bloqueo manual explícito por parte del administrador.
- *   2. Cierre automático si ya inició el primer partido de la cartelera activa.
- *   3. Límite de tiempo programado tradicional (Gobernanza de Día y Hora).
- * @returns {boolean} True si las apuestas están cerradas, False si continúan abiertas.
+ *   1. Bloqueo manual explÃ­cito por parte del administrador.
+ *   2. Cierre automÃ¡tico si ya iniciÃ³ el primer partido de la cartelera activa.
+ *   3. LÃ­mite de tiempo programado tradicional (Gobernanza de DÃ­a y Hora).
+ * @returns {boolean} True si las apuestas estÃ¡n cerradas, False si continÃºan abiertas.
  */
 window.checkBettingDeadlineStatus = function() {
   if (!systemConfig) return false;
   
-  // El bloqueo manual del Administrador prevalece sobre la fecha límite
+  // El bloqueo manual del Administrador prevalece sobre la fecha lÃ­mite
   if (systemConfig.manual_locked) {
     return true;
   }
   
-  // 1. CIERRE AUTOMÁTICO: Bloqueo inmediato al iniciar el primer partido de la quiniela
+  // 1. CIERRE AUTOMÃTICO: Bloqueo inmediato al iniciar el primer partido de la quiniela
   try {
     let fixturesList = [...cachedFixturesList];
     if (fixturesList.length === 0) {
@@ -967,7 +968,7 @@ window.checkBettingDeadlineStatus = function() {
     if (fixturesList && fixturesList.length > 0) {
       const poolMatchesCount = Number(systemConfig.pool_matches_count) || 10;
       
-      // Ordenar fixtures por atracción idéntico al Estadio para mapear la cartelera activa
+      // Ordenar fixtures por atracciÃ³n idÃ©ntico al Estadio para mapear la cartelera activa
       const sortedFixtures = fixturesList
         .sort((a, b) => {
           const attractionA = Number(a.attraction_index || a.attraction) || 0;
@@ -989,15 +990,15 @@ window.checkBettingDeadlineStatus = function() {
       
       const nowTs = Date.now() + serverTimeOffset;
       if (earliestTimestamp !== Infinity && nowTs >= earliestTimestamp) {
-        console.log("🔒 [Cierre Automático] Bloqueo activo: Ya inició el partido de apertura:", new Date(earliestTimestamp));
+        console.log("ðŸ”’ [Cierre AutomÃ¡tico] Bloqueo activo: Ya iniciÃ³ el partido de apertura:", new Date(earliestTimestamp));
         return true;
       }
     }
   } catch(e) {
-    console.warn("⚠️ [Seguridad Horario] Error evaluando el inicio del partido de apertura:", e);
+    console.warn("âš ï¸ [Seguridad Horario] Error evaluando el inicio del partido de apertura:", e);
   }
   
-  // 2. Límite tradicional por día/hora de gobernanza
+  // 2. LÃ­mite tradicional por dÃ­a/hora de gobernanza
   const deadlineDay = systemConfig.betting_deadline_day !== undefined ? systemConfig.betting_deadline_day : 5; // default Friday (5)
   const deadlineHour = systemConfig.betting_deadline_hour !== undefined ? systemConfig.betting_deadline_hour : 18; // default 6 PM (18:00)
   
@@ -1008,7 +1009,7 @@ window.checkBettingDeadlineStatus = function() {
   const day = now.getDay(); // 0: Sunday, 1: Monday, ..., 5: Friday, 6: Saturday
   const hour = now.getHours();
   
-  // Normalizar Sunday (0) a 7 para hacer la comparación secuencial
+  // Normalizar Sunday (0) a 7 para hacer la comparaciÃ³n secuencial
   let normDay = day === 0 ? 7 : day;
   let normDeadlineDay = deadlineDay === 0 ? 7 : deadlineDay;
   
@@ -1021,7 +1022,7 @@ window.checkBettingDeadlineStatus = function() {
   return false;
 };
 
-// ── RENDERS Y POPULATORS DE DOCK ─────────────────────────────────────────
+// â”€â”€ RENDERS Y POPULATORS DE DOCK â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // Renderizadores de Dashboard
 function renderLiveScores(fixtures) {
@@ -1034,7 +1035,7 @@ function renderLiveScores(fixtures) {
     return;
   }
   
-  // Ordenar por fecha cronológicamente
+  // Ordenar por fecha cronolÃ³gicamente
   fixtures.sort((a, b) => {
     const tsA = new Date(a.date).getTime();
     const tsB = new Date(b.date).getTime();
@@ -1111,7 +1112,7 @@ function renderLiveScores(fixtures) {
       if (m && m.prediction === realResult) {
         card.style.borderColor = 'rgba(0, 255, 136, 0.4)';
         card.style.background = 'rgba(0, 255, 136, 0.05)';
-        hitBadge = `<span class="text-xxs font-black uppercase" style="margin-left: 6px; background: rgba(0,255,136,0.2); color: #00ff88; padding: 2px 8px; border-radius: 9999px;" title="¡Atinaste!">✅ Acertado</span>`;
+        hitBadge = `<span class="text-xxs font-black uppercase" style="margin-left: 6px; background: rgba(0,255,136,0.2); color: #00ff88; padding: 2px 8px; border-radius: 9999px;" title="Â¡Atinaste!">âœ… Acertado</span>`;
       }
     }
 
@@ -1164,7 +1165,7 @@ function renderLeaderboard(leaderboard, containerId = "leaderboard-container") {
   container.innerHTML = "";
   
   if (!leaderboard || leaderboard.length === 0) {
-    container.innerHTML = `<p class="text-xxs opacity-40 text-center uppercase tracking-widest py-20 w-full" style="font-size: 10px; color: var(--text-primary); text-transform: uppercase;">No hay aciertos registrados de jugadores reales todavía esta semana.</p>`;
+    container.innerHTML = `<p class="text-xxs opacity-40 text-center uppercase tracking-widest py-20 w-full" style="font-size: 10px; color: var(--text-primary); text-transform: uppercase;">No hay aciertos registrados de jugadores reales todavÃ­a esta semana.</p>`;
     return;
   }
   
@@ -1191,15 +1192,15 @@ function renderLeaderboard(leaderboard, containerId = "leaderboard-container") {
   });
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-// MEJORAS DE CARTELERA — Countdown, Timezone, Notificación 30 min
-// ══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// MEJORAS DE CARTELERA â€” Countdown, Timezone, NotificaciÃ³n 30 min
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// ── Mejora 2: Detectar zona horaria del usuario ───────────────────────────
+// â”€â”€ Mejora 2: Detectar zona horaria del usuario â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const USER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Mexico_City';
-console.log('🌍 Zona horaria detectada:', USER_TZ);
+console.log('ðŸŒ Zona horaria detectada:', USER_TZ);
 
-// ── Mejora 1: Countdown en tiempo real ───────────────────────────────────
+// â”€â”€ Mejora 1: Countdown en tiempo real â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let _countdownInterval = null;
 
 function startMatchCountdownTimer() {
@@ -1216,8 +1217,8 @@ function startMatchCountdownTimer() {
       const now = Date.now() + (typeof serverTimeOffset !== 'undefined' ? serverTimeOffset : 0);
       const diffMs = ts - now;
       if (diffMs <= 0) {
-        // Partido iniciado — mostrar EN CURSO y deshabilitar botones
-        chip.innerHTML = '<span style="color:#ef4444;font-weight:900;animation:pulse 1s infinite;">🔴 EN CURSO</span>';
+        // Partido iniciado â€” mostrar EN CURSO y deshabilitar botones
+        chip.innerHTML = '<span style="color:#ef4444;font-weight:900;animation:pulse 1s infinite;">ðŸ”´ EN CURSO</span>';
         // Deshabilitar botones de ese partido
         const matchId = chip.getAttribute('data-match-id');
         if (matchId) {
@@ -1234,22 +1235,22 @@ function startMatchCountdownTimer() {
       let rel = '';
       if (diffMins < 60) rel = `En ${diffMins} min`;
       else if (diffHours < 24) rel = `En ${diffHours} h`;
-      else if (diffDays === 1) rel = 'Mañana';
-      else if (diffDays === 2) rel = 'Pasado mañana';
-      else rel = `En ${diffDays} días`;
-      chip.textContent = `⚡ ${rel}`;
+      else if (diffDays === 1) rel = 'MaÃ±ana';
+      else if (diffDays === 2) rel = 'Pasado maÃ±ana';
+      else rel = `En ${diffDays} dÃ­as`;
+      chip.textContent = `âš¡ ${rel}`;
     });
   }, 60000);
 }
 
-// ── Mejora 3: Notificación 30 min antes del primer partido ───────────────
+// â”€â”€ Mejora 3: NotificaciÃ³n 30 min antes del primer partido â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let _reminderTimeout = null;
 
 function scheduleMatchReminder30min(fixtures) {
   if (_reminderTimeout) { clearTimeout(_reminderTimeout); _reminderTimeout = null; }
   if (!fixtures || fixtures.length === 0) return;
 
-  // Encontrar el partido más próximo que aún no haya iniciado
+  // Encontrar el partido mÃ¡s prÃ³ximo que aÃºn no haya iniciado
   const now = Date.now() + (typeof serverTimeOffset !== 'undefined' ? serverTimeOffset : 0);
   let earliest = Infinity;
   let earliestName = '';
@@ -1266,21 +1267,21 @@ function scheduleMatchReminder30min(fixtures) {
   if (earliest === Infinity) return;
 
   const msUntil30MinBefore = (earliest - now) - (30 * 60 * 1000);
-  if (msUntil30MinBefore <= 0) return; // ya pasó la ventana de 30 min
+  if (msUntil30MinBefore <= 0) return; // ya pasÃ³ la ventana de 30 min
 
-  console.log(`🔔 Recordatorio programado en ${Math.round(msUntil30MinBefore/60000)} min para: ${earliestName}`);
+  console.log(`ðŸ”” Recordatorio programado en ${Math.round(msUntil30MinBefore/60000)} min para: ${earliestName}`);
 
   _reminderTimeout = setTimeout(() => {
     if (typeof window.sendLocalNotification === 'function') {
       window.sendLocalNotification(
-        '⚡ ¡30 MIN PARA EL PRIMER PARTIDO!',
-        `${earliestName} está por comenzar. ¡Ingresa tus predicciones antes de que cierre la quiniela!`
+        'âš¡ Â¡30 MIN PARA EL PRIMER PARTIDO!',
+        `${earliestName} estÃ¡ por comenzar. Â¡Ingresa tus predicciones antes de que cierre la quiniela!`
       );
     }
   }, msUntil30MinBefore);
 }
 
-// ── Helper: tiempo relativo en español ────────────────────────────────────
+// â”€â”€ Helper: tiempo relativo en espaÃ±ol â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function getRelativeTime(dateObj) {
   const now = Date.now() + (typeof serverTimeOffset !== 'undefined' ? serverTimeOffset : 0);
   const diffMs = dateObj.getTime() - now;
@@ -1288,30 +1289,30 @@ function getRelativeTime(dateObj) {
   const diffHours = Math.round(diffMs / 3600000);
   const diffDays = Math.round(diffMs / 86400000);
 
-  if (diffMs < 0) return null; // ya inició
+  if (diffMs < 0) return null; // ya iniciÃ³
   if (diffMins < 60) return `En ${diffMins} min`;
   if (diffHours < 24) return `En ${diffHours} h`;
-  if (diffDays === 1) return 'Mañana';
-  if (diffDays === 2) return 'Pasado mañana';
-  return `En ${diffDays} días`;
+  if (diffDays === 1) return 'MaÃ±ana';
+  if (diffDays === 2) return 'Pasado maÃ±ana';
+  return `En ${diffDays} dÃ­as`;
 }
 
-// ── Helper: color de badge según liga/grupo ───────────────────────────────
+// â”€â”€ Helper: color de badge segÃºn liga/grupo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function getLeagueBadge(group) {
   if (!group) return '';
   const g = group.toUpperCase();
   let bg, color, icon;
-  if (g.includes('LIGA MX') || g.includes('MEX')) { bg='rgba(0,189,60,0.15)'; color='#00bd3c'; icon='🇲🇽'; }
-  else if (g.includes('CHAMPIONS') || g.includes('UCL')) { bg='rgba(0,120,255,0.15)'; color='#0078ff'; icon='⭐'; }
-  else if (g.includes('EUROPA') || g.includes('UEL')) { bg='rgba(255,140,0,0.15)'; color='#ff8c00'; icon='🟠'; }
-  else if (g.includes('PREMIER') || g.includes('PL')) { bg='rgba(103,0,255,0.15)'; color='#6700ff'; icon='🏴󠁧󠁢󠁥󠁮󠁧󠁿'; }
-  else if (g.includes('LALIGA') || g.includes('ESP')) { bg='rgba(255,0,60,0.15)'; color='#ff003c'; icon='🇪🇸'; }
-  else if (g.includes('SERIE A') || g.includes('ITA')) { bg='rgba(0,90,170,0.15)'; color='#005aaa'; icon='🇮🇹'; }
-  else if (g.includes('BUNDESLIGA') || g.includes('GER')) { bg='rgba(230,0,0,0.15)'; color='#e60000'; icon='🇩🇪'; }
-  else if (g.includes('MLS') || g.includes('USA')) { bg='rgba(12,35,64,0.15)'; color='#0c2340'; icon='🇺🇸'; }
-  else if (g.includes('COPA') || g.includes('AMERICA')) { bg='rgba(255,215,0,0.15)'; color='#cd7f32'; icon='🌎'; }
-  else if (g.includes('MUNDIAL') || g.includes('FIFA') || g.includes('FRIENDLY')) { bg='rgba(255,215,0,0.15)'; color='#ffd700'; icon='🌍'; }
-  else { bg='rgba(255,255,255,0.08)'; color='rgba(255,255,255,0.5)'; icon='⚽'; }
+  if (g.includes('LIGA MX') || g.includes('MEX')) { bg='rgba(0,189,60,0.15)'; color='#00bd3c'; icon='ðŸ‡²ðŸ‡½'; }
+  else if (g.includes('CHAMPIONS') || g.includes('UCL')) { bg='rgba(0,120,255,0.15)'; color='#0078ff'; icon='â­'; }
+  else if (g.includes('EUROPA') || g.includes('UEL')) { bg='rgba(255,140,0,0.15)'; color='#ff8c00'; icon='ðŸŸ '; }
+  else if (g.includes('PREMIER') || g.includes('PL')) { bg='rgba(103,0,255,0.15)'; color='#6700ff'; icon='ðŸ´ó §ó ¢ó ¥ó ®ó §ó ¿'; }
+  else if (g.includes('LALIGA') || g.includes('ESP')) { bg='rgba(255,0,60,0.15)'; color='#ff003c'; icon='ðŸ‡ªðŸ‡¸'; }
+  else if (g.includes('SERIE A') || g.includes('ITA')) { bg='rgba(0,90,170,0.15)'; color='#005aaa'; icon='ðŸ‡®ðŸ‡¹'; }
+  else if (g.includes('BUNDESLIGA') || g.includes('GER')) { bg='rgba(230,0,0,0.15)'; color='#e60000'; icon='ðŸ‡©ðŸ‡ª'; }
+  else if (g.includes('MLS') || g.includes('USA')) { bg='rgba(12,35,64,0.15)'; color='#0c2340'; icon='ðŸ‡ºðŸ‡¸'; }
+  else if (g.includes('COPA') || g.includes('AMERICA')) { bg='rgba(255,215,0,0.15)'; color='#cd7f32'; icon='ðŸŒŽ'; }
+  else if (g.includes('MUNDIAL') || g.includes('FIFA') || g.includes('FRIENDLY')) { bg='rgba(255,215,0,0.15)'; color='#ffd700'; icon='ðŸŒ'; }
+  else { bg='rgba(255,255,255,0.08)'; color='rgba(255,255,255,0.5)'; icon='âš½'; }
   return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:7px;font-weight:900;text-transform:uppercase;letter-spacing:1px;padding:2px 7px;border-radius:20px;background:${bg};color:${color};border:1px solid ${color}33;">${icon} ${group}</span>`;
 }
 
@@ -1321,7 +1322,7 @@ function renderPlayFixtures(fixtures) {
   if (!container) return;
   container.innerHTML = "";
   
-  // Ordenar por fecha: los más próximos primero
+  // Ordenar por fecha: los mÃ¡s prÃ³ximos primero
   fixtures.sort((a, b) => {
     const tsA = new Date(a.date).getTime();
     const tsB = new Date(b.date).getTime();
@@ -1333,7 +1334,7 @@ function renderPlayFixtures(fixtures) {
 
   fixtures.forEach((f, idx) => {
     // Generate date group
-    let currentGroup = "PRÓXIMAMENTE";
+    let currentGroup = "PRÃ“XIMAMENTE";
     if (f.date) {
       try {
         const d = new Date(f.date);
@@ -1348,7 +1349,7 @@ function renderPlayFixtures(fixtures) {
           } else if (fDate.getTime() === today.getTime()) {
             currentGroup = "HOY";
           } else if (fDate.getTime() === tomorrow.getTime()) {
-            currentGroup = "MAÑANA";
+            currentGroup = "MAÃ‘ANA";
           } else {
             const tzOpts = { timeZone: typeof USER_TZ !== 'undefined' ? USER_TZ : 'America/Mexico_City' };
             const weekday = d.toLocaleDateString('es-MX', { ...tzOpts, weekday: 'long' });
@@ -1374,7 +1375,7 @@ function renderPlayFixtures(fixtures) {
     
     const sel = currentTicketSelections[f.id] || "";
 
-    // ── 1. Fecha, hora y estado del partido ─────────────────────────────
+    // â”€â”€ 1. Fecha, hora y estado del partido â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let dateLabel = '';
     let isLive = false;
     let relativeTag = '';
@@ -1386,7 +1387,7 @@ function renderPlayFixtures(fixtures) {
           const now = Date.now() + (typeof serverTimeOffset !== 'undefined' ? serverTimeOffset : 0);
           const diffMs = d.getTime() - now;
 
-          // ¿Ya inició? (menos de 0ms = en curso, asumimos 105 min de duración)
+          // Â¿Ya iniciÃ³? (menos de 0ms = en curso, asumimos 105 min de duraciÃ³n)
           isLive = diffMs < 0 && diffMs > -(105 * 60000);
 
           // Mejora 2: usar zona horaria real del usuario
@@ -1402,27 +1403,27 @@ function renderPlayFixtures(fixtures) {
               EN CURSO
             </span>`;
           } else {
-            // ── Tiempo relativo ─────────────────────────────────────────
+            // â”€â”€ Tiempo relativo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             const rel = getRelativeTime(d);
             // Mejora 1: atributos data para countdown en tiempo real
             const relHtml = rel
-              ? `<span data-countdown-ts="${d.getTime()}" data-match-id="${f.id}" style="display:inline-flex;align-items:center;font-size:7px;font-weight:900;padding:2px 8px;border-radius:20px;background:rgba(0,229,255,0.1);color:#00e5ff;border:1px solid rgba(0,229,255,0.2);margin-left:5px;">⚡ ${rel}</span>`
+              ? `<span data-countdown-ts="${d.getTime()}" data-match-id="${f.id}" style="display:inline-flex;align-items:center;font-size:7px;font-weight:900;padding:2px 8px;border-radius:20px;background:rgba(0,229,255,0.1);color:#00e5ff;border:1px solid rgba(0,229,255,0.2);margin-left:5px;">âš¡ ${rel}</span>`
               : '';
             relativeTag = relHtml;
-            dateLabel = `📅 ${weekdayCap} ${dayMonth} &nbsp;·&nbsp; ⏰ ${time}`;
+            dateLabel = `ðŸ“… ${weekdayCap} ${dayMonth} &nbsp;Â·&nbsp; â° ${time}`;
           }
         }
       } catch(e) {
-        dateLabel = `📅 ${f.date}`;
+        dateLabel = `ðŸ“… ${f.date}`;
       }
     } else {
-      dateLabel = '📅 Por Confirmar';
+      dateLabel = 'ðŸ“… Por Confirmar';
     }
 
-    // ── 2. Badge de liga/grupo ──────────────────────────────────────────
+    // â”€â”€ 2. Badge de liga/grupo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const leagueBadge = getLeagueBadge(f.group);
 
-    // ── 3. Deshabilitar botones si el partido ya inició ─────────────────
+    // â”€â”€ 3. Deshabilitar botones si el partido ya iniciÃ³ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const btnDisabled = isLive ? 'disabled style="opacity:0.35;cursor:not-allowed;"' : '';
     const btnClass = (op) => `bet-btn ${sel === op ? 'selected' : ''}`;
 
@@ -1488,11 +1489,11 @@ window.selectBet = function(matchId, selection) {
   
   window.updatePoolCost();
 
-  // Ofrecer compra automática e inmediata al completar las 10 predicciones (required_selections)
+  // Ofrecer compra automÃ¡tica e inmediata al completar las 10 predicciones (required_selections)
   const reqSel = Number(systemConfig.required_selections) || 10;
   if (currentCount === reqSel) {
     setTimeout(() => {
-      const confirmPurchase = confirm(`¡Acabas de elegir tus ${reqSel} resultados!\n\n¿Deseas comprar esta quiniela ahora mismo por $${(Number(systemConfig.pool_cost) || 50).toFixed(2)} MXN?`);
+      const confirmPurchase = confirm(`Â¡Acabas de elegir tus ${reqSel} resultados!\n\nÂ¿Deseas comprar esta quiniela ahora mismo por $${(Number(systemConfig.pool_cost) || 50).toFixed(2)} MXN?`);
       if (confirmPurchase) {
         window.purchaseTicket();
       }
@@ -1517,17 +1518,17 @@ window.updatePoolCost = function() {
 window.purchaseTicket = async function() {
   if (isPurchasing) return;
 
-  // 1. Validar límite de apuestas (Sugerencia 3)
+  // 1. Validar lÃ­mite de apuestas (Sugerencia 3)
   const isLocked = window.checkBettingDeadlineStatus();
   if (isLocked) {
     const isAdminBypass = systemConfig.bypass_deadline_testing && currentUser && currentUser.is_admin;
     if (!isAdminBypass) {
-      showToast("Las apuestas están cerradas hasta el lunes (límite de Viernes 6:00 PM superado).", "error");
+      showToast("Las apuestas estÃ¡n cerradas hasta el lunes (lÃ­mite de Viernes 6:00 PM superado).", "error");
       return;
     }
   }
 
-  // Asegurar que ha seleccionado exactamente el número configurado de partidos
+  // Asegurar que ha seleccionado exactamente el nÃºmero configurado de partidos
   const reqSel = Number(systemConfig.required_selections) || 10;
   const currentSelCount = Object.keys(currentTicketSelections).length;
   
@@ -1550,7 +1551,7 @@ window.purchaseTicket = async function() {
       const hasPendingSPEI = userTxs.some(tx => tx.gateway === "spei" && tx.status === "pending");
       
       if (hasPendingSPEI) {
-        showToast("⏳ No tienes saldo, pero tu quiniela se guardará como RESERVADA hasta que se apruebe tu recarga.", "info");
+        showToast("â³ No tienes saldo, pero tu quiniela se guardarÃ¡ como RESERVADA hasta que se apruebe tu recarga.", "info");
         ticketStatus = "reserved";
       } else {
         isPurchasing = false;
@@ -1589,9 +1590,9 @@ window.purchaseTicket = async function() {
           prediction: currentTicketSelections[matchId]
         })),
         sidebet_goals: sidebetGoals,
-        sidebet_goals_value: sidebetGoals ? 3 : null, // predicción de goles promedio por default
+        sidebet_goals_value: sidebetGoals ? 3 : null, // predicciÃ³n de goles promedio por default
         sidebet_striker: sidebetStriker,
-        sidebet_striker_value: sidebetStriker ? "Henry Martín" : null,
+        sidebet_striker_value: sidebetStriker ? "Henry MartÃ­n" : null,
         total_cost: cost,
         status: ticketStatus,
         hits: 0
@@ -1606,11 +1607,11 @@ window.purchaseTicket = async function() {
         document.getElementById("header-balance").textContent = `$${Number(currentUser.balance).toFixed(2)}`;
       }
       
-      showToast(ticketStatus === "reserved" ? "¡Quiniela Reservada con éxito!" : "¡Ticket emitido con éxito!", "success");
+      showToast(ticketStatus === "reserved" ? "Â¡Quiniela Reservada con Ã©xito!" : "Â¡Ticket emitido con Ã©xito!", "success");
       
       window.sendLocalNotification(
-        ticketStatus === "reserved" ? "⏳ QUINIELA RESERVADA" : "🎫 TICKET QUINIELA EMITIDO", 
-        ticketStatus === "reserved" ? `Tu quiniela ${lastCreatedTicket.id} está reservada y a la espera de pago.` : `Tu ticket ${lastCreatedTicket.id} por $${cost.toFixed(2)} MXN ha sido guardado.`
+        ticketStatus === "reserved" ? "â³ QUINIELA RESERVADA" : "ðŸŽ« TICKET QUINIELA EMITIDO", 
+        ticketStatus === "reserved" ? `Tu quiniela ${lastCreatedTicket.id} estÃ¡ reservada y a la espera de pago.` : `Tu ticket ${lastCreatedTicket.id} por $${cost.toFixed(2)} MXN ha sido guardado.`
       );
       
       currentTicketSelections = {};
@@ -1644,7 +1645,7 @@ function showTicketDetails(ticket) {
       <div>Ticket ID: <span class="text-accent">${ticket.id}</span></div>
       <div>Usuario: <span class="text-accent">@${ticket.user_alias}</span></div>
       <div style="display:flex; justify-content:space-between;">
-        <span>Fecha de Emisión: <span class="opacity-50">${new Date(ticket.created_at).toLocaleString()}</span></span>
+        <span>Fecha de EmisiÃ³n: <span class="opacity-50">${new Date(ticket.created_at).toLocaleString()}</span></span>
         <span class="text-[#00ff88]">Aciertos Totales: <span id="modal-total-hits" class="font-black text-sm">0</span></span>
       </div>
     </div>
@@ -1655,8 +1656,8 @@ function showTicketDetails(ticket) {
     </div>
     
     <div class="bg-white/5 p-12 rounded-2xl border border-black/5 space-y-6 text-xxs font-bold uppercase tracking-wider  mt-12">
-      <div>Side Bet Goles Totales: <span class="text-accent">${ticket.sidebet_goals ? 'SÍ (+3 goles)' : 'NO'}</span></div>
-      <div>Side Bet Primer Gol: <span class="text-accent">${ticket.sidebet_striker ? `SÍ (${ticket.sidebet_striker_value})` : 'NO'}</span></div>
+      <div>Side Bet Goles Totales: <span class="text-accent">${ticket.sidebet_goals ? 'SÃ (+3 goles)' : 'NO'}</span></div>
+      <div>Side Bet Primer Gol: <span class="text-accent">${ticket.sidebet_striker ? `SÃ (${ticket.sidebet_striker_value})` : 'NO'}</span></div>
       <div class="border-t border-black/10 pt-6 mt-6 flex justify-between">
         <span>Costo Total:</span>
         <span class="text-success text-sm font-black">$${ticket.total_cost.toFixed(2)} MXN</span>
@@ -1687,11 +1688,11 @@ function showTicketDetails(ticket) {
         if (realResult !== null) {
           if (realResult === m.prediction) {
             predClass = "bg-[#00ff88] text-black";
-            resultIcon = "✅";
+            resultIcon = "âœ…";
             totalHits++;
           } else {
             predClass = "bg-red-500 text-white";
-            resultIcon = "❌";
+            resultIcon = "âŒ";
           }
         }
 
@@ -1724,7 +1725,7 @@ window.closeTicketModal = function() {
 window.shareTicketOnWhatsApp = function() {
   if (!lastCreatedTicket) return;
   
-  let msg = `*🎫 QUINIELA MUNDIALISTA IA — Quiniela Mundialista *\n`;
+  let msg = `*ðŸŽ« QUINIELA MUNDIALISTA IA â€” Quiniela Mundialista *\n`;
   msg += `*Ticket ID:* ${lastCreatedTicket.id}\n`;
   msg += `*Usuario:* @${lastCreatedTicket.user_alias}\n`;
   msg += `*Costo:* $${lastCreatedTicket.total_cost.toFixed(2)} MXN\n\n`;
@@ -1734,14 +1735,14 @@ window.shareTicketOnWhatsApp = function() {
     lastCreatedTicket.matches.forEach((m, idx) => {
       const f = fixtures.find(match => match.id === m.match_id);
       if (f) {
-        msg += `${idx + 1}. ${f.team_local} vs ${f.team_visita} ➔ *${m.prediction}*\n`;
+        msg += `${idx + 1}. ${f.team_local} vs ${f.team_visita} âž” *${m.prediction}*\n`;
       }
     });
     
-    if (lastCreatedTicket.sidebet_goals) msg += `➔ *Side Bet Goles Totales:* Activado (+3 goles)\n`;
-    if (lastCreatedTicket.sidebet_striker) msg += `➔ *Side Bet Primer Gol:* Henry Martín\n`;
+    if (lastCreatedTicket.sidebet_goals) msg += `âž” *Side Bet Goles Totales:* Activado (+3 goles)\n`;
+    if (lastCreatedTicket.sidebet_striker) msg += `âž” *Side Bet Primer Gol:* Henry MartÃ­n\n`;
     
-    msg += `\n🤖 Quiniela con Inteligencia Artificial - Deporte Premium.`;
+    msg += `\nðŸ¤– Quiniela con Inteligencia Artificial - Deporte Premium.`;
     
     const uri = "https://wa.me/527712339238?text=" + encodeURIComponent(msg);
     window.open(uri, "_blank");
@@ -1783,11 +1784,11 @@ function renderTransactionHistory(txs) {
   });
 }
 
-// Simular Depósito de Stripe
+// Simular DepÃ³sito de Stripe
 window.simulateStripeDeposit = function() {
   const amount = Number(document.getElementById("stripe-amount").value);
   if (!amount || amount < 20) {
-    showToast("Monto mínimo de recarga con tarjeta: $20.00 MXN", "error");
+    showToast("Monto mÃ­nimo de recarga con tarjeta: $20.00 MXN", "error");
     return;
   }
   
@@ -1804,10 +1805,10 @@ window.simulateStripeDeposit = function() {
     };
     
     await registerTransaction(tx);
-    showToast("¡Recarga inmediata aprobada por Stripe!", "success");
+    showToast("Â¡Recarga inmediata aprobada por Stripe!", "success");
     
-    // Enviar notificación local
-    window.sendLocalNotification("💳 RECARGA CON TARJETA", `Tu saldo ha sido abonado con $${amount.toFixed(2)} MXN exitosamente.`);
+    // Enviar notificaciÃ³n local
+    window.sendLocalNotification("ðŸ’³ RECARGA CON TARJETA", `Tu saldo ha sido abonado con $${amount.toFixed(2)} MXN exitosamente.`);
     
     // Alerta al Admin
     localStorage.setItem("qia_admin_alert", JSON.stringify({ user: currentUser.alias || currentUser.name, amount: amount, ts: Date.now() }));
@@ -1816,7 +1817,7 @@ window.simulateStripeDeposit = function() {
   }, 1500);
 };
 
-// Simular Depósito de SPEI (Subida de Comprobante)
+// Simular DepÃ³sito de SPEI (Subida de Comprobante)
 window.simulateSPEIDeposit = async function() {
   const amount = Number(document.getElementById("spei-amount").value);
   const ref = document.getElementById("spei-ref").value;
@@ -1836,7 +1837,7 @@ window.simulateSPEIDeposit = async function() {
   const userTxs = await dbMod.getTransactions(userId);
   const hasPending = userTxs.some(tx => tx.gateway === "spei" && tx.status === "pending");
   if (hasPending) {
-    showToast("⏳ Ya tienes un reporte de transferencia en revisión. Por favor espera a que un administrador lo valide.", "error");
+    showToast("â³ Ya tienes un reporte de transferencia en revisiÃ³n. Por favor espera a que un administrador lo valide.", "error");
     return;
   }
   
@@ -1846,7 +1847,7 @@ window.simulateSPEIDeposit = async function() {
   if (fileInput && fileInput.files.length > 0) {
     const file = fileInput.files[0];
     if (file.size > 2 * 1024 * 1024) { // 2MB max
-      showToast("La imagen es muy pesada. Máximo 2MB.", "error");
+      showToast("La imagen es muy pesada. MÃ¡ximo 2MB.", "error");
       return;
     }
     
@@ -1902,7 +1903,7 @@ window.simulateSPEIDeposit = async function() {
   document.getElementById("spei-time").value = "";
   if (fileInput) fileInput.value = "";
   
-  showToast("✅ ¡Reporte enviado! Se validará en aprox. 1 a 3 horas. Ya puedes PRE-LLENAR y RESERVAR tu quiniela en el Estadio sin saldo.", "success");
+  showToast("âœ… Â¡Reporte enviado! Se validarÃ¡ en aprox. 1 a 3 horas. Ya puedes PRE-LLENAR y RESERVAR tu quiniela en el Estadio sin saldo.", "success");
   setTimeout(() => {
     window.appNavigate("dashboard");
   }, 3500);
@@ -1924,7 +1925,7 @@ function renderIASuggestions(suggestions) {
         <span class="text-xxxxs opacity-30 mt-2">${s.date}</span>
       </div>
       <div class="flex items-center gap-10">
-        <span class="text-purple-400 font-black">⚡ IA ${s.attraction_index}%</span>
+        <span class="text-purple-400 font-black">âš¡ IA ${s.attraction_index}%</span>
         <span class="text-[8px] bg-purple-500/20 text-purple-400 px-6 py-2 rounded-full border border-purple-500/25">LIGA MX</span>
       </div>
     `;
@@ -1933,12 +1934,12 @@ function renderIASuggestions(suggestions) {
 }
 
 window.acceptIASuggestion = async function() {
-  showToast("IA Computando fixtures de los próximos 8 días...", "info");
+  showToast("IA Computando fixtures de los prÃ³ximos 8 dÃ­as...", "info");
   
   setTimeout(async () => {
     const suggestions = await getIASuggestions();
     await acceptSuggestionsAsFixtures(suggestions);
-    showToast("¡Fixtures semanales populados con Liga MX por IA!", "success");
+    showToast("Â¡Fixtures semanales populados con Liga MX por IA!", "success");
     window.appNavigate("dashboard");
   }, 1200);
 };
@@ -1963,7 +1964,7 @@ function renderAdminSPEI(speis) {
         <span class="text-success">$${Number(tx.amount).toFixed(2)} MXN</span>
       </div>
       <div>Referencia/Concepto: <span class="text-accent">${tx.ref}</span></div>
-      ${tx.transfer_date ? `<div class="text-[9px] text-white/50 tracking-widest mt-2">Fecha/Hora de Envío: ${tx.transfer_date} ${tx.transfer_time || ''}</div>` : ''}
+      ${tx.transfer_date ? `<div class="text-[9px] text-white/50 tracking-widest mt-2">Fecha/Hora de EnvÃ­o: ${tx.transfer_date} ${tx.transfer_time || ''}</div>` : ''}
       ${tx.evidence_b64 ? `<div class="mt-8"><img src="${tx.evidence_b64}" alt="Evidencia SPEI" class="w-full h-auto max-h-32 object-contain rounded border border-white/10 cursor-pointer" onclick="window.open('${tx.evidence_b64}', '_blank')" /></div>` : ''}
       <div class="flex gap-4 pt-4 border-t border-black/5 mt-6">
         <button onclick="window.approveSPEI('${tx.id}')" class="flex-1 bg-[#00ff88] text-black font-black py-6 rounded-xl text-[8px]">APROBAR</button>
@@ -1978,20 +1979,20 @@ window.approveSPEI = async function(txId) {
   showToast("Validando SPEI con Banco Central (Simulado)...", "info");
   setTimeout(async () => {
     await approveSPEITransaction(txId);
-    showToast("¡Transferencia SPEI aprobada exitosamente!", "success");
+    showToast("Â¡Transferencia SPEI aprobada exitosamente!", "success");
     
-    // Guardar log de auditoría
+    // Guardar log de auditorÃ­a
     await createGovernanceLog(
-      "Aprobación de Recarga",
-      `Se aprobó manualmente la transferencia SPEI ID: ${txId}`,
+      "AprobaciÃ³n de Recarga",
+      `Se aprobÃ³ manualmente la transferencia SPEI ID: ${txId}`,
       currentUser
     );
 
-    // Notificación local de saldo cargado
+    // NotificaciÃ³n local de saldo cargado
     try {
       const refreshedUser = localStorage.getItem("qia_current_user");
       const decU = decryptData(JSON.parse(refreshedUser));
-      window.sendLocalNotification("💰 TRANSFERENCIA APROBADA", `Tu depósito SPEI ha sido verificado. Saldo actual: $${decU.balance.toFixed(2)} MXN.`);
+      window.sendLocalNotification("ðŸ’° TRANSFERENCIA APROBADA", `Tu depÃ³sito SPEI ha sido verificado. Saldo actual: $${decU.balance.toFixed(2)} MXN.`);
     } catch (e) {}
     
     window.appNavigate("admin");
@@ -2043,10 +2044,10 @@ window.saveAdminConfig = async function() {
   await saveSystemConfig(updatedCfg);
   systemConfig = updatedCfg;
   
-  // Guardar log de auditoría
+  // Guardar log de auditorÃ­a
   await createGovernanceLog(
     "Ajuste de Gobernanza",
-    `Costos actualizados: Costo=$${cost}, App=${fee}%, Bolsa=$${jackpot}, Ganadores=${places}, Cartelera=${poolMatches}, Requeridos=${reqSelections}, Límite=${deadlineDayStr} a las ${deadlineHour}:00h`,
+    `Costos actualizados: Costo=$${cost}, App=${fee}%, Bolsa=$${jackpot}, Ganadores=${places}, Cartelera=${poolMatches}, Requeridos=${reqSelections}, LÃ­mite=${deadlineDayStr} a las ${deadlineHour}:00h`,
     currentUser
   );
 
@@ -2054,7 +2055,7 @@ window.saveAdminConfig = async function() {
   window.appNavigate("dashboard");
 };
 
-// ── BOTÓN FÍSICO DE BLOQUEO MANUAL (BOTÓN CERRAR APUESTAS AHORA) ───────────
+// â”€â”€ BOTÃ“N FÃSICO DE BLOQUEO MANUAL (BOTÃ“N CERRAR APUESTAS AHORA) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window.toggleManualBettingLock = async function() {
   const currentLock = systemConfig.manual_locked || false;
   const newLock = !currentLock;
@@ -2062,22 +2063,22 @@ window.toggleManualBettingLock = async function() {
   systemConfig.manual_locked = newLock;
   await saveSystemConfig(systemConfig);
   
-  // Guardar log de auditoría
+  // Guardar log de auditorÃ­a
   await createGovernanceLog(
     "Bloqueo Manual",
-    `El administrador cambió el estado del bloqueo manual a: ${newLock ? 'BLOQUEADO' : 'ABIERTO'}`,
+    `El administrador cambiÃ³ el estado del bloqueo manual a: ${newLock ? 'BLOQUEADO' : 'ABIERTO'}`,
     currentUser
   );
 
   if (newLock) {
-    showToast("¡Apuestas CERRADAS manualmente para todos!", "error");
-    window.sendLocalNotification("🚨 APUESTAS CERRADAS", "El administrador ha cerrado las apuestas de forma manual. ¡Los partidos están por comenzar!");
+    showToast("Â¡Apuestas CERRADAS manualmente para todos!", "error");
+    window.sendLocalNotification("ðŸš¨ APUESTAS CERRADAS", "El administrador ha cerrado las apuestas de forma manual. Â¡Los partidos estÃ¡n por comenzar!");
   } else {
-    showToast("¡Apuestas ABIERTAS manualmente con éxito!", "success");
-    window.sendLocalNotification("🏟️ APUESTAS ABIERTAS", "El administrador ha reabierto el registro de quinielas. ¡Ingresa tus jugadas!");
+    showToast("Â¡Apuestas ABIERTAS manualmente con Ã©xito!", "success");
+    window.sendLocalNotification("ðŸŸï¸ APUESTAS ABIERTAS", "El administrador ha reabierto el registro de quinielas. Â¡Ingresa tus jugadas!");
   }
   
-  // Refrescar panel admin para actualizar interfaz del botón
+  // Refrescar panel admin para actualizar interfaz del botÃ³n
   refreshPanelData("admin");
 };
 
@@ -2090,15 +2091,15 @@ window.executeWeeklyClosure = async function() {
     if (res.success) {
       showToast(res.message, "success");
       
-      // Guardar log de auditoría
+      // Guardar log de auditorÃ­a
       await createGovernanceLog(
         "Cierre Semanal",
-        `Se ejecutó el cierre de jornada. Distribuidos $${systemConfig.pool_jackpot} MXN entre ${res.winners.length} ganadores.`,
+        `Se ejecutÃ³ el cierre de jornada. Distribuidos $${systemConfig.pool_jackpot} MXN entre ${res.winners.length} ganadores.`,
         currentUser
       );
 
-      // Notificación de cierre semanal
-      window.sendLocalNotification("🏆 CIERRE DE QUINIELA COMPLETADO", `La bolsa de esta semana se ha distribuido. ¡Consulta la clasificación para ver tus aciertos!`);
+      // NotificaciÃ³n de cierre semanal
+      window.sendLocalNotification("ðŸ† CIERRE DE QUINIELA COMPLETADO", `La bolsa de esta semana se ha distribuido. Â¡Consulta la clasificaciÃ³n para ver tus aciertos!`);
       
       window.appNavigate("dashboard");
     } else {
@@ -2107,7 +2108,7 @@ window.executeWeeklyClosure = async function() {
   }, 2000);
 };
 
-// ── RENDERIZADOR DE BITÁCORA DE GOBERNANZA (AUDITORÍA) ────────────────────
+// â”€â”€ RENDERIZADOR DE BITÃCORA DE GOBERNANZA (AUDITORÃA) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function renderGovernanceLogs() {
   const container = document.getElementById("admin-governance-logs-container");
   if (!container) return;
@@ -2126,7 +2127,7 @@ async function renderGovernanceLogs() {
     
     div.innerHTML = `
       <div class="flex justify-between items-center ">
-        <span>⚡ Acción: <span class="text-accent">${log.action}</span></span>
+        <span>âš¡ AcciÃ³n: <span class="text-accent">${log.action}</span></span>
         <span class="text-xxxxs opacity-30">${new Date(log.created_at).toLocaleString()}</span>
       </div>
       <div class="text-[9px] /50 lowercase italic" style="text-transform: none;">${log.details}</div>
@@ -2150,7 +2151,7 @@ window.adminSearchAPI = async function() {
     container.innerHTML = "";
     
     if (!suggestions || suggestions.length === 0) {
-      container.innerHTML = "<div class='text-center text-xs opacity-40 py-20 uppercase tracking-widest'>No se encontraron partidos próximos.</div>";
+      container.innerHTML = "<div class='text-center text-xs opacity-40 py-20 uppercase tracking-widest'>No se encontraron partidos prÃ³ximos.</div>";
       return;
     }
 
@@ -2177,11 +2178,11 @@ window.adminSearchAPI = async function() {
     });
     showToast(`Se encontraron ${suggestions.length} partidos.`, "success");
   } catch (err) {
-    container.innerHTML = "<div class='text-center text-red-500 py-20 uppercase tracking-widest'>Error de conexión con la API.</div>";
+    container.innerHTML = "<div class='text-center text-red-500 py-20 uppercase tracking-widest'>Error de conexiÃ³n con la API.</div>";
   }
 };
 
-// Buscar partidos más atractivos mediante el Buscador Google con Modo IA
+// Buscar partidos mÃ¡s atractivos mediante el Buscador Google con Modo IA
 
 function getSelectedScanLeagues() {
   const cbs = document.querySelectorAll(".scan-league-cb:checked");
@@ -2215,7 +2216,7 @@ window.adminSearchGoogleAI = async function(category = 'todos') {
   const queryInput = document.getElementById("google-ai-search-input");
   const rawQuery = queryInput ? queryInput.value.trim() : "";
   
-  // Sanitización de seguridad contra XSS e inyecciones (Recomendación 1)
+  // SanitizaciÃ³n de seguridad contra XSS e inyecciones (RecomendaciÃ³n 1)
   const query = rawQuery.replace(/[<>'"&]/g, (match) => {
     const map = {
       '<': '&lt;',
@@ -2239,7 +2240,7 @@ window.adminSearchGoogleAI = async function(category = 'todos') {
   const overviewContainer = document.getElementById("google-ai-overview-container");
   const overviewText = document.getElementById("google-ai-overview-text");
 
-  // Intentar servir desde la caché estructurada de 8 días (Recomendación 3)
+  // Intentar servir desde la cachÃ© estructurada de 8 dÃ­as (RecomendaciÃ³n 3)
   const cacheKey = `qia_ai_cache_${category}`;
   
   const cachedDataStr = isCustomScan ? null : localStorage.getItem(cacheKey);
@@ -2249,7 +2250,7 @@ window.adminSearchGoogleAI = async function(category = 'todos') {
       const cachedData = decryptAISearchData(cachedDataStr);
       const cacheAge = Date.now() - (cachedData.timestamp || 0);
       if (cacheAge < 5 * 60 * 1000) { // TTL de 5 minutos
-        console.log(`⚡ [Google AI Mode] Sirviendo caché para la categoría: ${category} (${Math.round(cacheAge/1000)}s de antigüedad)`);
+        console.log(`âš¡ [Google AI Mode] Sirviendo cachÃ© para la categorÃ­a: ${category} (${Math.round(cacheAge/1000)}s de antigÃ¼edad)`);
         
         if (overviewContainer && overviewText && cachedData.overview) {
           overviewText.innerHTML = cachedData.overview;
@@ -2258,7 +2259,7 @@ window.adminSearchGoogleAI = async function(category = 'todos') {
         
         container.innerHTML = "";
         if (!cachedData.matches || cachedData.matches.length === 0) {
-          container.innerHTML = "<div class='text-center text-xs opacity-40 py-20 uppercase tracking-widest'>No se encontraron partidos en los próximos 8 días.</div>";
+          container.innerHTML = "<div class='text-center text-xs opacity-40 py-20 uppercase tracking-widest'>No se encontraron partidos en los prÃ³ximos 8 dÃ­as.</div>";
           if (bulkBar) {
             bulkBar.style.display = "none";
             bulkBar.classList.add("hidden");
@@ -2288,11 +2289,11 @@ window.adminSearchGoogleAI = async function(category = 'todos') {
             let attractGlow = "";
             if (attractVal >= 95) {
               attractColor = "#ffd700"; // Dorado Premium
-              attractText = "Élite 🔥";
+              attractText = "Ã‰lite ðŸ”¥";
               attractGlow = "text-shadow: 0 0 10px rgba(255, 215, 0, 0.4);";
             } else if (attractVal >= 90) {
-              attractColor = "#a855f7"; // Púrpura Alta
-              attractText = "Destacado ⚡";
+              attractColor = "#a855f7"; // PÃºrpura Alta
+              attractText = "Destacado âš¡";
             }
 
             div.innerHTML = `
@@ -2314,11 +2315,11 @@ window.adminSearchGoogleAI = async function(category = 'todos') {
           });
         }
         
-        showToast(`Búsqueda (Caché rápida) completada para: ${category.toUpperCase()}`, "success");
+        showToast(`BÃºsqueda (CachÃ© rÃ¡pida) completada para: ${category.toUpperCase()}`, "success");
         return;
       }
     } catch(e) {
-      console.warn("Error cargando caché rápida", e);
+      console.warn("Error cargando cachÃ© rÃ¡pida", e);
     }
   }
 
@@ -2371,7 +2372,7 @@ window.adminSearchGoogleAI = async function(category = 'todos') {
       }
       
       if (!results.matches || results.matches.length === 0) {
-        container.innerHTML = "<div class='text-center text-xs opacity-40 py-20 uppercase tracking-widest'>No se encontraron partidos en los próximos 8 días.</div>";
+        container.innerHTML = "<div class='text-center text-xs opacity-40 py-20 uppercase tracking-widest'>No se encontraron partidos en los prÃ³ximos 8 dÃ­as.</div>";
         if (bulkBar) {
           bulkBar.style.display = "none";
           bulkBar.classList.add("hidden");
@@ -2404,11 +2405,11 @@ window.adminSearchGoogleAI = async function(category = 'todos') {
         let attractGlow = "";
         if (attractVal >= 95) {
           attractColor = "#ffd700"; // Dorado Premium
-          attractText = "Élite 🔥";
+          attractText = "Ã‰lite ðŸ”¥";
           attractGlow = "text-shadow: 0 0 10px rgba(255, 215, 0, 0.4);";
         } else if (attractVal >= 90) {
-          attractColor = "#a855f7"; // Púrpura Alta
-          attractText = "Destacado ⚡";
+          attractColor = "#a855f7"; // PÃºrpura Alta
+          attractText = "Destacado âš¡";
         }
 
         div.innerHTML = `
@@ -2429,22 +2430,22 @@ window.adminSearchGoogleAI = async function(category = 'todos') {
         container.appendChild(div);
       });
       
-      // Guardar en la caché por categorías estructurada con timestamp (Recomendación 3)
+      // Guardar en la cachÃ© por categorÃ­as estructurada con timestamp (RecomendaciÃ³n 3)
       results.timestamp = Date.now();
       results.category = category;
       localStorage.setItem(cacheKey, encryptAISearchData(results));
       
-      // Guardar también en la caché global del Buscador Google AI para la carga inicial
+      // Guardar tambiÃ©n en la cachÃ© global del Buscador Google AI para la carga inicial
       localStorage.setItem("qia_last_ai_search", encryptAISearchData(results));
-      showToast(`¡Búsqueda con Google AI completada! Se encontraron ${results.matches.length} partidos.`, "success");
+      showToast(`Â¡BÃºsqueda con Google AI completada! Se encontraron ${results.matches.length} partidos.`, "success");
     } catch (err) {
       console.error(err);
       container.innerHTML = "<div class='text-center text-red-500 py-20 uppercase tracking-widest'>Error al consultar Google AI.</div>";
     }
-  }, 2200); // Un pequeño retraso para darle realismo a la "búsqueda con IA"
+  }, 2200); // Un pequeÃ±o retraso para darle realismo a la "bÃºsqueda con IA"
 };
 
-// Controlador de clics en los chips de filtros rápidos de Google AI
+// Controlador de clics en los chips de filtros rÃ¡pidos de Google AI
 window.adminSelectAISearchChip = function(queryText, category) {
   const queryInput = document.getElementById("google-ai-search-input");
   if (queryInput) {
@@ -2458,20 +2459,20 @@ window.adminSelectAISearchChip = function(queryText, category) {
     if (el) el.classList.toggle("active", cat === category);
   });
   
-  // Lanzar la búsqueda de inmediato
+  // Lanzar la bÃºsqueda de inmediato
   window.adminSearchGoogleAI(category);
 };
 
-// Limpiar específicamente la caché de la barra de búsqueda IA al instante
+// Limpiar especÃ­ficamente la cachÃ© de la barra de bÃºsqueda IA al instante
 window.clearAISearchCacheOnly = function() {
   localStorage.removeItem("qia_last_ai_search");
   localStorage.removeItem("qia_ai_cache_todos");
   localStorage.removeItem("qia_ai_cache_euro");
   localStorage.removeItem("qia_ai_cache_copa");
   localStorage.removeItem("qia_ai_cache_local");
-  showToast("Caché del buscador IA vaciada. Recargando cartelera...", "success");
+  showToast("CachÃ© del buscador IA vaciada. Recargando cartelera...", "success");
   
-  // Detectar la categoría activa según la clase del chip
+  // Detectar la categorÃ­a activa segÃºn la clase del chip
   let activeCategory = 'todos';
   const categories = ["todos", "euro", "copa", "local"];
   categories.forEach(cat => {
@@ -2491,7 +2492,7 @@ window.clearAISearchCacheOnly = function() {
   window.adminSearchGoogleAI(activeCategory);
 };
 
-// Métodos de selección por lote (Bulk Actions)
+// MÃ©todos de selecciÃ³n por lote (Bulk Actions)
 window.updateBulkSelectedCount = function() {
   const checkboxes = document.querySelectorAll(".bulk-match-checkbox:checked");
   const countSpan = document.getElementById("bulk-selected-count");
@@ -2537,21 +2538,21 @@ window.adminAddSelectedBulk = async function() {
     await addFixture(f);
   }
   
-  showToast(`¡Se agregaron ${checkboxes.length} partidos con éxito!`, "success");
+  showToast(`Â¡Se agregaron ${checkboxes.length} partidos con Ã©xito!`, "success");
   
-  // Limpiar selección de Todos
+  // Limpiar selecciÃ³n de Todos
   const allSelectCb = document.getElementById("bulk-select-all");
   if (allSelectCb) allSelectCb.checked = false;
   
-  // Recargar vistas de administración y cliente
+  // Recargar vistas de administraciÃ³n y cliente
   loadAdminPanel();
   window.refreshPanelData('dashboard');
   window.refreshPanelData('play');
 };
 
-// Limpiar de forma manual y absoluta la caché del navegador/Service Worker
+// Limpiar de forma manual y absoluta la cachÃ© del navegador/Service Worker
 window.forceClearAppCache = async function() {
-  showToast("Limpiando caché del Service Worker...", "info");
+  showToast("Limpiando cachÃ© del Service Worker...", "info");
   if ('serviceWorker' in navigator) {
     try {
       const registrations = await navigator.serviceWorker.getRegistrations();
@@ -2571,15 +2572,15 @@ window.forceClearAppCache = async function() {
       localStorage.removeItem("qia_ai_cache_copa");
       localStorage.removeItem("qia_ai_cache_local");
       
-      showToast("Caché eliminada con éxito. Reiniciando aplicación...", "success");
+      showToast("CachÃ© eliminada con Ã©xito. Reiniciando aplicaciÃ³n...", "success");
       setTimeout(() => {
         window.location.reload(true);
       }, 1500);
     } catch (err) {
-      showToast("Error al limpiar caché: " + err.message, "error");
+      showToast("Error al limpiar cachÃ©: " + err.message, "error");
     }
   } else {
-    showToast("Caché no soportada en este navegador.", "info");
+    showToast("CachÃ© no soportada en este navegador.", "info");
   }
 };
 
@@ -2598,7 +2599,7 @@ window.adminAddFromAPI = async function(id, local, visita, date, group, attracti
   };
   
   await addFixture(f);
-  showToast(`¡${local} vs ${visita} agregado a la Quiniela!`, "success");
+  showToast(`Â¡${local} vs ${visita} agregado a la Quiniela!`, "success");
   loadAdminPanel();
   window.refreshPanelData('dashboard');
   window.refreshPanelData('play');
@@ -2607,23 +2608,23 @@ window.adminAddFromAPI = async function(id, local, visita, date, group, attracti
 // Enviar comprobante por WhatsApp (Wallet)
 window.sendVoucherWhatsApp = function() {
   if (!currentUser) return;
-  let msg = `*🎫 QUINIELA Quiniela Mundialista - SOLICITUD DE RECARGA *\n`;
+  let msg = `*ðŸŽ« QUINIELA Quiniela Mundialista - SOLICITUD DE RECARGA *\n`;
   msg += `*Usuario:* @${currentUser.alias}\n`;
   msg += `*Tel/Correo:* ${currentUser.phone || currentUser.email}\n`;
-  msg += `\nHe subido un comprobante de transferencia SPEI en la aplicación. Por favor, aprueba la recarga de mi saldo.\n`;
-  msg += `\n🤖 Quiniela con Inteligencia Artificial - Deporte Premium.`;
+  msg += `\nHe subido un comprobante de transferencia SPEI en la aplicaciÃ³n. Por favor, aprueba la recarga de mi saldo.\n`;
+  msg += `\nðŸ¤– Quiniela con Inteligencia Artificial - Deporte Premium.`;
   
   const uri = "https://wa.me/527712339238?text=" + encodeURIComponent(msg);
   window.open(uri, "_blank");
 };
 
-// ── MÉTODOS DE RECARGA OXXO PAY (Sugerencia 3) ──────────────────────────
+// â”€â”€ MÃ‰TODOS DE RECARGA OXXO PAY (Sugerencia 3) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window.currentOxxoTx = null;
 
 window.generateOxxoSlip = function() {
   const amount = Number(document.getElementById("oxxo-amount").value);
   if (!amount || amount < 50) {
-    showToast("Monto mínimo para OXXO Pay: $50.00 MXN", "error");
+    showToast("Monto mÃ­nimo para OXXO Pay: $50.00 MXN", "error");
     return;
   }
   
@@ -2636,13 +2637,13 @@ window.generateOxxoSlip = function() {
   container.innerHTML = `
     <div class="flex justify-between items-center border-b border-gray-200 pb-10 mb-10">
       <span class="text-xs font-black tracking-wider text-[#E21A22]">OXXO PAY</span>
-      <span class="text-[9px] font-bold text-gray-500">MÉXICO</span>
+      <span class="text-[9px] font-bold text-gray-500">MÃ‰XICO</span>
     </div>
     
     <div class="py-10 space-y-4">
       <span class="text-[8px] font-black text-gray-400 uppercase tracking-widest block" style="color: #999; text-transform: uppercase;">Monto a Pagar</span>
       <span class="text-3xl font-black italic tracking-tighter text-black block">$${amount.toFixed(2)} MXN</span>
-      <span class="text-[8px] text-gray-400 block" style="color: #999; text-transform: none;">* OXXO cobrará una comisión fija de $15 MXN en caja.</span>
+      <span class="text-[8px] text-gray-400 block" style="color: #999; text-transform: none;">* OXXO cobrarÃ¡ una comisiÃ³n fija de $15 MXN en caja.</span>
     </div>
     
     <div class="bg-gray-100 p-12 rounded-xl border border-gray-200 space-y-4">
@@ -2651,7 +2652,7 @@ window.generateOxxoSlip = function() {
     </div>
     
     <div class="pt-10 space-y-6">
-      <span class="text-[8px] font-black text-gray-400 uppercase tracking-widest block" style="color: #999; text-transform: uppercase;">Código de Barras</span>
+      <span class="text-[8px] font-black text-gray-400 uppercase tracking-widest block" style="color: #999; text-transform: uppercase;">CÃ³digo de Barras</span>
       <div class="flex justify-center">
         <canvas id="oxxo-barcode-canvas" width="250" height="60" class="border border-gray-200 rounded p-4 bg-white"></canvas>
       </div>
@@ -2659,14 +2660,14 @@ window.generateOxxoSlip = function() {
     
     <div class="text-[7px] text-gray-500 uppercase tracking-wider leading-relaxed pt-10 border-t border-gray-100" style="text-transform: none; text-align: left; color: #555;">
       1. Dile al cajero que vas a realizar un pago de OXXO PAY.<br>
-      2. Proporciona el número de referencia de 16 dígitos o escanea el código.<br>
+      2. Proporciona el nÃºmero de referencia de 16 dÃ­gitos o escanea el cÃ³digo.<br>
       3. Conserva tu ticket impreso como comprobante de pago.
     </div>
   `;
   
   modal.classList.remove("hidden");
   
-  // Dibujar código de barras Code 128 simulado en Canvas
+  // Dibujar cÃ³digo de barras Code 128 simulado en Canvas
   setTimeout(() => {
     const canvas = document.getElementById("oxxo-barcode-canvas");
     if (canvas) {
@@ -2707,18 +2708,18 @@ window.simulateOxxoPayment = async function() {
   };
   
   await registerTransaction(tx);
-  showToast("¡Depósito registrado en caja OXXO con éxito!", "success");
+  showToast("Â¡DepÃ³sito registrado en caja OXXO con Ã©xito!", "success");
   
-  // Enviar notificación local
-  window.sendLocalNotification("🏪 DEPÓSITO OXXO PAY", `Tu pago por $${tx.amount.toFixed(2)} MXN ha sido validado en sucursal con éxito.`);
+  // Enviar notificaciÃ³n local
+  window.sendLocalNotification("ðŸª DEPÃ“SITO OXXO PAY", `Tu pago por $${tx.amount.toFixed(2)} MXN ha sido validado en sucursal con Ã©xito.`);
   
   window.closeOxxoModal();
   window.appNavigate("wallet");
 };
 
-// ── RENDERIZADOR DE TICKETS DE USUARIO ───────────────────────────────────
+// â”€â”€ RENDERIZADOR DE TICKETS DE USUARIO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Estrategia dual: consulta Firestore Y localStorage, fusiona sin duplicados.
-// Garantiza que los tickets aparezcan sin importar en qué modo se crearon.
+// Garantiza que los tickets aparezcan sin importar en quÃ© modo se crearon.
 async function renderUserTickets() {
   const container = document.getElementById("user-tickets-container");
   if (!container || !currentUser) return;
@@ -2726,29 +2727,29 @@ async function renderUserTickets() {
   container.innerHTML = `<p class="text-xxs opacity-30 text-center uppercase tracking-widest py-10">Cargando jugadas...</p>`;
 
   const userId = currentUser.email || currentUser.phone;
-  console.log("🎫 [renderUserTickets] Buscando tickets para userId:", userId);
+  console.log("ðŸŽ« [renderUserTickets] Buscando tickets para userId:", userId);
 
   // --- ESTRATEGIA DUAL: Firestore + localStorage ---
   let firestoreTickets = [];
   let localTickets = [];
 
-  // 1. Buscar en Firestore (función getUserTickets ya tiene su propio fallback)
+  // 1. Buscar en Firestore (funciÃ³n getUserTickets ya tiene su propio fallback)
   try {
     firestoreTickets = await getUserTickets(userId);
-    console.log("🔥 [Firestore] Tickets encontrados:", firestoreTickets.length);
+    console.log("ðŸ”¥ [Firestore] Tickets encontrados:", firestoreTickets.length);
   } catch(e) {
-    console.warn("⚠️ [Firestore] Error al obtener tickets:", e);
+    console.warn("âš ï¸ [Firestore] Error al obtener tickets:", e);
   }
 
-  // 2. Buscar también en localStorage directamente (por si quedaron en modo simulación)
+  // 2. Buscar tambiÃ©n en localStorage directamente (por si quedaron en modo simulaciÃ³n)
   try {
     const localList = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
     localTickets = localList.filter(t =>
       t.user_id === currentUser.phone || t.user_id === currentUser.email
     );
-    console.log("💾 [localStorage] Tickets encontrados:", localTickets.length);
+    console.log("ðŸ’¾ [localStorage] Tickets encontrados:", localTickets.length);
   } catch(e) {
-    console.warn("⚠️ [localStorage] Error al leer tickets:", e);
+    console.warn("âš ï¸ [localStorage] Error al leer tickets:", e);
   }
 
   // 3. Fusionar ambas fuentes eliminando duplicados por ID
@@ -2759,7 +2760,7 @@ async function renderUserTickets() {
   const userTickets = Array.from(ticketMap.values())
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-  console.log("✅ [renderUserTickets] Total tickets únicos a mostrar:", userTickets.length);
+  console.log("âœ… [renderUserTickets] Total tickets Ãºnicos a mostrar:", userTickets.length);
 
   // Actualizar contador de jugadas activas
   const activeCount = userTickets.filter(t => t.status === "active").length;
@@ -2769,7 +2770,7 @@ async function renderUserTickets() {
   container.innerHTML = "";
 
   if (userTickets.length === 0) {
-    container.innerHTML = `<p class="text-xxs opacity-40 text-center uppercase tracking-widest py-10">Aún no tienes jugadas esta semana.</p>`;
+    container.innerHTML = `<p class="text-xxs opacity-40 text-center uppercase tracking-widest py-10">AÃºn no tienes jugadas esta semana.</p>`;
     return;
   }
 
@@ -2783,11 +2784,11 @@ async function renderUserTickets() {
 
     if (t.status === "reserved") {
       statusColor = "text-yellow-400 font-black";
-      statusText = "⏳ Reservada (pago pendiente)";
+      statusText = "â³ Reservada (pago pendiente)";
     } else if (t.status === "checked") {
       statusColor = "text-[#00ff88]";
       const prize = Number(t.prize) || 0;
-      statusText = `${t.hits || 0} Aciertos (${prize > 0 ? '🏆 Ganador $' + prize.toFixed(1) : 'Sin Premio'})`;
+      statusText = `${t.hits || 0} Aciertos (${prize > 0 ? 'ðŸ† Ganador $' + prize.toFixed(1) : 'Sin Premio'})`;
     } else if (t.status === "active") {
       const userBalance = Number(currentUser.balance);
       if (isNaN(userBalance) || userBalance < 0) {
@@ -2811,7 +2812,7 @@ async function renderUserTickets() {
 }
 
 
-// ── GRÁFICOS ESTADÍSTICOS INTERACTIVOS (Sugerencia 2) ─────────────────────
+// â”€â”€ GRÃFICOS ESTADÃSTICOS INTERACTIVOS (Sugerencia 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function drawAdminAnalyticsChart() {
   const canvas = document.getElementById("admin-analytics-chart");
   if (!canvas) return;
@@ -2820,9 +2821,9 @@ function drawAdminAnalyticsChart() {
   // Limpiar lienzo
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-  // Extraer datos de ventas agrupados por últimos 5 días
+  // Extraer datos de ventas agrupados por Ãºltimos 5 dÃ­as
   const tickets = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
-  const days = ["Lun", "Mar", "Mié", "Jue", "Vie"];
+  const days = ["Lun", "Mar", "MiÃ©", "Jue", "Vie"];
   const salesData = [150, 300, 200, 450, 0]; // Base mock
   
   tickets.forEach(t => {
@@ -2834,12 +2835,12 @@ function drawAdminAnalyticsChart() {
   
   const maxVal = Math.max(...salesData, 500);
   
-  // Configurar padding del gráfico
+  // Configurar padding del grÃ¡fico
   const padding = 20;
   const chartWidth = canvas.width - padding * 2;
   const chartHeight = canvas.height - padding * 2;
   
-  // Dibujar cuadrícula
+  // Dibujar cuadrÃ­cula
   ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
   ctx.lineWidth = 1;
   for (let i = 0; i <= 3; i++) {
@@ -2850,7 +2851,7 @@ function drawAdminAnalyticsChart() {
     ctx.stroke();
   }
   
-  // Dibujar línea con sombra y gradiente de neón bronce
+  // Dibujar lÃ­nea con sombra y gradiente de neÃ³n bronce
   ctx.strokeStyle = "#cd7f32";
   ctx.lineWidth = 3;
   ctx.shadowBlur = 10;
@@ -2871,7 +2872,7 @@ function drawAdminAnalyticsChart() {
   ctx.stroke();
   ctx.shadowBlur = 0; // reset
   
-  // Gradiente bronce transparente para relleno de área
+  // Gradiente bronce transparente para relleno de Ã¡rea
   const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
   gradient.addColorStop(0, "rgba(205, 127, 50, 0.25)");
   gradient.addColorStop(1, "rgba(205, 127, 50, 0)");
@@ -2891,7 +2892,7 @@ function drawAdminAnalyticsChart() {
     ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
     ctx.fill();
     
-    // Etiqueta del día
+    // Etiqueta del dÃ­a
     ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
     ctx.font = "8px Outfit";
     ctx.textAlign = "center";
@@ -2906,7 +2907,7 @@ function drawAdminAnalyticsChart() {
   });
 }
 
-// ── COMPLETAR ONBOARDING MINIMALISTA (Sugerencia) ────────────────────────
+// â”€â”€ COMPLETAR ONBOARDING MINIMALISTA (Sugerencia) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window.completeOnboarding = async function() {
   const nameInput = document.getElementById("onboard-name");
   const aliasInput = document.getElementById("onboard-alias");
@@ -2926,13 +2927,13 @@ window.completeOnboarding = async function() {
   // Validar formato del alias (Sugerencia 1)
   const aliasRegex = /^[a-zA-Z0-9_]{3,15}$/;
   if (!aliasRegex.test(alias.toLowerCase())) {
-    showToast("Alias no válido. Solo letras, números o guiones bajos (3-15 carac.).", "error");
+    showToast("Alias no vÃ¡lido. Solo letras, nÃºmeros o guiones bajos (3-15 carac.).", "error");
     return;
   }
   
-  // Validar PIN (4 dígitos numéricos) (Sugerencia 2)
+  // Validar PIN (4 dÃ­gitos numÃ©ricos) (Sugerencia 2)
   if (!/^\d{4}$/.test(pin)) {
-    showToast("Por favor ingresa un PIN de seguridad de exactamente 4 dígitos numéricos.", "error");
+    showToast("Por favor ingresa un PIN de seguridad de exactamente 4 dÃ­gitos numÃ©ricos.", "error");
     return;
   }
   
@@ -2950,17 +2951,17 @@ window.completeOnboarding = async function() {
       const existingUser = await dbMod.getUserData(email);
       
       if (existingUser) {
-        // 1. Verificar si está bloqueado temporalmente (Sugerencia 2)
+        // 1. Verificar si estÃ¡ bloqueado temporalmente (Sugerencia 2)
         const lockoutTime = localStorage.getItem("qia_lockout_until_" + email);
         if (lockoutTime && Date.now() < Number(lockoutTime)) {
           const minsLeft = Math.ceil((Number(lockoutTime) - Date.now()) / 60000);
-          showToast(`❌ Acceso bloqueado. Intenta de nuevo en ${minsLeft} min.`, "error");
+          showToast(`âŒ Acceso bloqueado. Intenta de nuevo en ${minsLeft} min.`, "error");
           if (loginLoading) loginLoading.classList.add("hidden");
           if (loginForm) loginForm.classList.remove("hidden");
           return;
         }
 
-        // Validación de PIN anti-suplantación ultra-segura
+        // ValidaciÃ³n de PIN anti-suplantaciÃ³n ultra-segura
         if (!existingUser.pin || existingUser.pin !== pin) {
           // Incrementar intentos fallidos
           let attempts = Number(localStorage.getItem("qia_failed_attempts_" + email) || 0) + 1;
@@ -2971,16 +2972,16 @@ window.completeOnboarding = async function() {
             const lockUntil = Date.now() + 15 * 60 * 1000;
             localStorage.setItem("qia_lockout_until_" + email, lockUntil);
             localStorage.removeItem("qia_failed_attempts_" + email);
-            showToast("❌ Demasiados intentos fallidos. Bloqueado por 15 minutos.", "error");
+            showToast("âŒ Demasiados intentos fallidos. Bloqueado por 15 minutos.", "error");
             
-            // Log de auditoría
+            // Log de auditorÃ­a
             await dbMod.createGovernanceLog(
               "Bloqueo de Cuenta",
-              `Se bloqueó temporalmente el acceso por 15 minutos al alias @${alias} tras 3 intentos fallidos de PIN.`,
+              `Se bloqueÃ³ temporalmente el acceso por 15 minutos al alias @${alias} tras 3 intentos fallidos de PIN.`,
               { phone: "sistema", email: email, alias: alias }
             );
           } else {
-            showToast(`❌ PIN incorrecto. Intentos restantes: ${3 - attempts}`, "error");
+            showToast(`âŒ PIN incorrecto. Intentos restantes: ${3 - attempts}`, "error");
           }
           
           if (loginLoading) loginLoading.classList.add("hidden");
@@ -2992,11 +2993,11 @@ window.completeOnboarding = async function() {
         localStorage.removeItem("qia_failed_attempts_" + email);
         localStorage.removeItem("qia_lockout_until_" + email);
         
-        // Loguear como usuario existente (conserva su saldo y estadísticas!)
+        // Loguear como usuario existente (conserva su saldo y estadÃ­sticas!)
         currentUser = existingUser;
-        // Asegurar que el current user local esté guardado (encriptado)
+        // Asegurar que el current user local estÃ© guardado (encriptado)
         localStorage.setItem("qia_current_user", JSON.stringify(dbMod.encryptData(existingUser)));
-        showToast(`🏟️ ¡Bienvenido de nuevo, @${alias}!`, "success");
+        showToast(`ðŸŸï¸ Â¡Bienvenido de nuevo, @${alias}!`, "success");
       } else {
         // Crear un usuario nuevo e irrepetible con su PIN seguro
         const newUser = {
@@ -3004,13 +3005,13 @@ window.completeOnboarding = async function() {
           email: email,
           name: name,
           alias: alias,
-          pin: pin, // Guardar el PIN (será encriptado en registerOrLoginUser)
+          pin: pin, // Guardar el PIN (serÃ¡ encriptado en registerOrLoginUser)
           balance: 0, // Saldo inicial 0
           is_admin: false, // Sin admin
           created_at: new Date().toISOString()
         };
         currentUser = await dbMod.registerOrLoginUser(newUser);
-        showToast(`🏟️ ¡Bienvenido al Estadio, @${alias}!`, "success");
+        showToast(`ðŸŸï¸ Â¡Bienvenido al Estadio, @${alias}!`, "success");
       }
       
       document.getElementById("onboarding-view").classList.add("hidden");
@@ -3023,7 +3024,7 @@ window.completeOnboarding = async function() {
     }
   }).catch(e => {
       console.error(e);
-      showToast("Error crítico al cargar entorno.", "error");
+      showToast("Error crÃ­tico al cargar entorno.", "error");
       if (loginLoading) loginLoading.classList.add("hidden");
       if (loginForm) loginForm.classList.remove("hidden");
   });
@@ -3039,20 +3040,20 @@ window.promptAdminAccess = async function() {
   const cleanAlias = (currentUser?.alias || "").trim().toLowerCase();
   
   if (cleanName !== "andres" || cleanAlias !== "yoy") {
-    showToast("🚫 Acceso Denegado: Solo el Administrador principal @YoY (Andres) tiene permisos.", "error");
+    showToast("ðŸš« Acceso Denegado: Solo el Administrador principal @YoY (Andres) tiene permisos.", "error");
     return;
   }
 
   const cfg = await getSystemConfig();
   const adminPin = cfg?.admin_pin || "569323";
   
-  const input = prompt("🔐 INGRESA PIN MAESTRO:");
+  const input = prompt("ðŸ” INGRESA PIN MAESTRO:");
   if (input === adminPin) {
     if (currentUser) currentUser.is_admin = true;
     document.getElementById("dock-admin").classList.remove("hidden");
     window.appNavigate("admin");
   } else if (input !== null) {
-    showToast("❌ PIN Incorrecto", "error");
+    showToast("âŒ PIN Incorrecto", "error");
   }
 };
 
@@ -3074,7 +3075,7 @@ async function loadAdminPanel() {
   if (fbody) {
     fbody.innerHTML = "";
     
-    // 1. Obtener partidos que están en las quinielas activas
+    // 1. Obtener partidos que estÃ¡n en las quinielas activas
     const activeTickets = await getActiveTickets();
     const activeMatchIds = new Set();
     activeTickets.forEach(t => {
@@ -3089,7 +3090,7 @@ async function loadAdminPanel() {
     const activeFixtures = fixtures.filter(f => activeMatchIds.has(f.id));
 
     if (activeFixtures.length === 0) {
-      fbody.innerHTML = `<div class="text-center text-xs opacity-40 py-20 uppercase tracking-widest" style="font-size: 10px; color: var(--text-primary); text-transform: uppercase;">No hay quinielas activas registradas en este momento. Los partidos aparecerán aquí cuando los usuarios compren sus boletos.</div>`;
+      fbody.innerHTML = `<div class="text-center text-xs opacity-40 py-20 uppercase tracking-widest" style="font-size: 10px; color: var(--text-primary); text-transform: uppercase;">No hay quinielas activas registradas en este momento. Los partidos aparecerÃ¡n aquÃ­ cuando los usuarios compren sus boletos.</div>`;
     } else {
       // Poblar selecciones actuales
       activeFixtures.forEach(f => {
@@ -3143,7 +3144,7 @@ async function loadAdminPanel() {
             
             <button id="btn-master-${f.id}-C" class="bet-btn text-[8px]" onclick="window.selectMasterResult('${f.id}', 'C')" style="font-size: 8px; padding: 4px 6px; border-radius: 6px; background: ${sel === 'C' ? '#e3a869' : 'rgba(227,168,105,0.1)'}; border: 1px solid rgba(227,168,105,0.25); color: ${sel === 'C' ? '#000' : '#e3a869'}; width: 28px;" title="Cancelar partido">C</button>
             
-            <button onclick="window.adminDeleteFixture('${f.id}')" class="btn text-xs p-6" style="background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25); color: #ef4444; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 8px; cursor: pointer; border: none;" title="Eliminar partido">🗑</button>
+            <button onclick="window.adminDeleteFixture('${f.id}')" class="btn text-xs p-6" style="background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25); color: #ef4444; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 8px; cursor: pointer; border: none;" title="Eliminar partido">ðŸ—‘</button>
           </div>
         `;
         fbody.appendChild(row);
@@ -3219,13 +3220,13 @@ window.adminSaveMasterQuiniela = async function() {
   
   await createGovernanceLog(
     "Guardado Quiniela Maestra",
-    `Se definieron resultados para ${successCount} partidos de la cartelera de forma simultánea.`,
+    `Se definieron resultados para ${successCount} partidos de la cartelera de forma simultÃ¡nea.`,
     currentUser
   );
   
-  localStorage.setItem("qia_live_event", JSON.stringify({ type: 'score', text: `🏆 ¡El Administrador ha publicado los resultados oficiales de la Quiniela Maestra! Revisa tus aciertos en Estadio.`, ts: Date.now() }));
+  localStorage.setItem("qia_live_event", JSON.stringify({ type: 'score', text: `ðŸ† Â¡El Administrador ha publicado los resultados oficiales de la Quiniela Maestra! Revisa tus aciertos en Estadio.`, ts: Date.now() }));
   
-  showToast(`✅ Se guardaron ${successCount} resultados correctamente.`, "success");
+  showToast(`âœ… Se guardaron ${successCount} resultados correctamente.`, "success");
   
   loadAdminPanel();
   window.refreshPanelData('dashboard');
@@ -3240,21 +3241,21 @@ window.adminConsultMatchResults = async function() {
     btn.innerHTML = `<i class="ri-loader-4-line animate-spin mr-2"></i>Consultando...`;
     btn.disabled = true;
   }
-  showToast("Consultando a través del buscador de Google (Modo IA) los resultados...", "info");
+  showToast("Consultando a travÃ©s del buscador de Google (Modo IA) los resultados...", "info");
   
   try {
     const updatedCount = await autoUpdateMatchResults(false);
     if (updatedCount > 0) {
-      showToast(`✅ Se actualizaron automáticamente ${updatedCount} partidos.`, "success");
-      localStorage.setItem("qia_live_event", JSON.stringify({ type: 'score', text: `🏆 ¡El Buscador IA ha actualizado los resultados oficiales de la Quiniela! Revisa tus aciertos.`, ts: Date.now() }));
+      showToast(`âœ… Se actualizaron automÃ¡ticamente ${updatedCount} partidos.`, "success");
+      localStorage.setItem("qia_live_event", JSON.stringify({ type: 'score', text: `ðŸ† Â¡El Buscador IA ha actualizado los resultados oficiales de la Quiniela! Revisa tus aciertos.`, ts: Date.now() }));
       loadAdminPanel();
       window.refreshPanelData('dashboard');
       window.refreshPanelData('play');
     } else {
-      showToast("No se encontraron resultados nuevos o finalizados en la búsqueda.", "info");
+      showToast("No se encontraron resultados nuevos o finalizados en la bÃºsqueda.", "info");
     }
   } catch(e) {
-    showToast("Error al consultar resultados vía IA.", "error");
+    showToast("Error al consultar resultados vÃ­a IA.", "error");
     console.error(e);
   } finally {
     if (btn) {
@@ -3279,7 +3280,7 @@ function renderAdminUsersTable(usersToRender) {
       </td>
       <td class="py-10 text-right font-black text-accent">$${(u.balance || 0).toLocaleString()}</td>
       <td class="py-10 text-center">
-        <button onclick="window.adminAdjustBalance('${u.id}', '${u.name}')" class="btn text-xs px-10 py-5" style="background: rgba(16,185,129,0.2); border: 1px solid var(--color-primary);">+/–</button>
+        <button onclick="window.adminAdjustBalance('${u.id}', '${u.name}')" class="btn text-xs px-10 py-5" style="background: rgba(16,185,129,0.2); border: 1px solid var(--color-primary);">+/â€“</button>
       </td>
     `;
     tbody.appendChild(tr);
@@ -3304,15 +3305,15 @@ window.adminAdjustBalance = async function(uid, userName) {
   const input = prompt(`Ajustar saldo de ${userName}\nIngresa el monto a sumar (o valor negativo para restar):`, "0");
   if (input === null || input.trim() === "") return;
   const amount = Number(input);
-  if (isNaN(amount)) return showToast("Monto inválido", "error");
+  if (isNaN(amount)) return showToast("Monto invÃ¡lido", "error");
 
   const success = await updateUserBalance(uid, amount);
   if (success) {
     await createGovernanceLog("ADMIN_ADJUST_BALANCE", `Ajuste de $${amount} a ${userName}`, currentUser);
-    showToast(`✅ Saldo ajustado en $${amount}`, "success");
+    showToast(`âœ… Saldo ajustado en $${amount}`, "success");
     loadAdminPanel();
   } else {
-    showToast("❌ Error al ajustar saldo", "error");
+    showToast("âŒ Error al ajustar saldo", "error");
   }
 };
 
@@ -3324,10 +3325,10 @@ window.adminAddFixture = async function() {
   const dateStr = prompt("Fecha y Hora (YYYY-MM-DD HH:MM):", "2026-06-11 15:00");
   if (!dateStr) return;
   
-  // Validación de Rango Dinámico (Recomendación 2)
+  // ValidaciÃ³n de Rango DinÃ¡mico (RecomendaciÃ³n 2)
   const fixtureDate = new Date(dateStr);
   if (isNaN(fixtureDate.getTime())) {
-    showToast("❌ Fecha y hora inválida. Debe ser YYYY-MM-DD HH:MM", "error");
+    showToast("âŒ Fecha y hora invÃ¡lida. Debe ser YYYY-MM-DD HH:MM", "error");
     return;
   }
 
@@ -3335,9 +3336,9 @@ window.adminAddFixture = async function() {
   const limitDate = new Date(today.getTime() + 8 * 24 * 60 * 60 * 1000);
   
   if (fixtureDate < today || fixtureDate > limitDate) {
-    const confirmMsg = `⚠️ ATENCIÓN: La fecha seleccionada (${fixtureDate.toLocaleString('es-MX')}) está fuera del rango ideal de los siguientes 8 días (del ${today.toLocaleDateString('es-MX')} al ${limitDate.toLocaleDateString('es-MX')}).\n\n¿Seguro que deseas agregar este partido de todas formas?`;
+    const confirmMsg = `âš ï¸ ATENCIÃ“N: La fecha seleccionada (${fixtureDate.toLocaleString('es-MX')}) estÃ¡ fuera del rango ideal de los siguientes 8 dÃ­as (del ${today.toLocaleDateString('es-MX')} al ${limitDate.toLocaleDateString('es-MX')}).\n\nÂ¿Seguro que deseas agregar este partido de todas formas?`;
     if (!confirm(confirmMsg)) {
-      showToast("❌ Operación cancelada. Fecha fuera de rango.", "info");
+      showToast("âŒ OperaciÃ³n cancelada. Fecha fuera de rango.", "info");
       return;
     }
   }
@@ -3358,10 +3359,10 @@ window.adminAddFixture = async function() {
 
   const success = await addFixture(newFixture);
   if (success) {
-    showToast("✅ Partido agregado", "success");
+    showToast("âœ… Partido agregado", "success");
     loadAdminPanel();
   } else {
-    showToast("❌ Error al agregar", "error");
+    showToast("âŒ Error al agregar", "error");
   }
 };
 
@@ -3376,11 +3377,11 @@ window.adminDeleteFixture = async function(id) {
     });
     
     if (isUsed) {
-      showToast("⚠️ Bloqueo de Gobernanza: No puedes eliminar un partido que ya cuenta con apuestas activas en juego.", "error");
+      showToast("âš ï¸ Bloqueo de Gobernanza: No puedes eliminar un partido que ya cuenta con apuestas activas en juego.", "error");
       return;
     }
     
-    if (confirm("¿Seguro que deseas eliminar este partido?")) {
+    if (confirm("Â¿Seguro que deseas eliminar este partido?")) {
       const success = await dbMod.deleteFixture(id);
       if (success) {
         showToast("Partido eliminado", "success");
@@ -3392,25 +3393,25 @@ window.adminDeleteFixture = async function(id) {
 
 
 window.adminSetScore = async function(id, home, away) {
-  const resultHome = prompt(`🏆 Goles de ${home}:`, "0");
+  const resultHome = prompt(`ðŸ† Goles de ${home}:`, "0");
   if (resultHome === null) return;
-  const resultAway = prompt(`🏆 Goles de ${away}:`, "0");
+  const resultAway = prompt(`ðŸ† Goles de ${away}:`, "0");
   if (resultAway === null) return;
   
   if (isNaN(resultHome) || isNaN(resultAway) || resultHome.trim() === "" || resultAway.trim() === "") {
-    return showToast("❌ Los goles deben ser números válidos", "error");
+    return showToast("âŒ Los goles deben ser nÃºmeros vÃ¡lidos", "error");
   }
   
   const success = await updateFixtureScore(id, resultHome, resultAway);
   if (success) {
     await createGovernanceLog("ADMIN_SET_SCORE", `Marcador guardado: ${home} ${resultHome} - ${resultAway} ${away}`, currentUser);
-    localStorage.setItem("qia_live_event", JSON.stringify({ type: 'score', text: `🏆 ¡El partido ${home} vs ${away} ha terminado! Revisa tus aciertos.`, ts: Date.now() }));
-    showToast("✅ Resultado guardado correctamente", "success");
+    localStorage.setItem("qia_live_event", JSON.stringify({ type: 'score', text: `ðŸ† Â¡El partido ${home} vs ${away} ha terminado! Revisa tus aciertos.`, ts: Date.now() }));
+    showToast("âœ… Resultado guardado correctamente", "success");
     loadAdminPanel();
     window.refreshPanelData('dashboard');
     window.refreshPanelData('play');
   } else {
-    showToast("❌ Error al guardar marcador", "error");
+    showToast("âŒ Error al guardar marcador", "error");
   }
 };
 
@@ -3419,11 +3420,11 @@ window.adminClearFixtures = async function() {
   import('./app_db.js').then(async dbMod => {
     const activeTickets = await dbMod.getActiveTickets();
     if (activeTickets.length > 0) {
-      showToast("⚠️ Bloqueo de Gobernanza: No puedes vaciar la cartelera si existen quinielas activas registradas en juego.", "error");
+      showToast("âš ï¸ Bloqueo de Gobernanza: No puedes vaciar la cartelera si existen quinielas activas registradas en juego.", "error");
       return;
     }
     
-    if (confirm("🚨 ¿ESTÁS SEGURO? Esto eliminará TODOS los partidos actuales.")) {
+    if (confirm("ðŸš¨ Â¿ESTÃS SEGURO? Esto eliminarÃ¡ TODOS los partidos actuales.")) {
       const success = await dbMod.clearAllFixtures();
       if (success) {
         showToast("Partidos limpiados", "success");
@@ -3437,10 +3438,10 @@ window.adminClearFixtures = async function() {
 
 
 window.adminHardResetDatabase = async function() {
-  if (confirm("🚨 ¡ADVERTENCIA DE GOBERNANZA MÁXIMA!\n\nEsto restablecerá toda la base de datos local de la aplicación al estado original de fábrica:\n- Eliminará todos los usuarios registrados.\n- Limpiará todas las jugadas y transacciones.\n- Vaciará toda la cartelera de partidos.\n\n¿Estás absolutamente seguro de realizar esta acción irreversible?")) {
+  if (confirm("ðŸš¨ Â¡ADVERTENCIA DE GOBERNANZA MÃXIMA!\n\nEsto restablecerÃ¡ toda la base de datos local de la aplicaciÃ³n al estado original de fÃ¡brica:\n- EliminarÃ¡ todos los usuarios registrados.\n- LimpiarÃ¡ todas las jugadas y transacciones.\n- VaciarÃ¡ toda la cartelera de partidos.\n\nÂ¿EstÃ¡s absolutamente seguro de realizar esta acciÃ³n irreversible?")) {
     const pin = prompt("Por favor ingresa el PIN de seguridad administrativa para confirmar:");
     if (pin !== "1234" && pin !== "569323") {
-      showToast("❌ PIN incorrecto. Operación cancelada por gobernanza.", "error");
+      showToast("âŒ PIN incorrecto. OperaciÃ³n cancelada por gobernanza.", "error");
       return;
     }
     
@@ -3448,7 +3449,7 @@ window.adminHardResetDatabase = async function() {
     
     setTimeout(() => {
       localStorage.clear();
-      showToast("✅ Base de datos restablecida a valores de fábrica con éxito.", "success");
+      showToast("âœ… Base de datos restablecida a valores de fÃ¡brica con Ã©xito.", "success");
       setTimeout(() => {
         window.location.reload();
       }, 1000);
@@ -3463,7 +3464,7 @@ window.adminExportGovernanceLogs = async function() {
   import('./app_db.js').then(async dbMod => {
     const logs = await dbMod.getGovernanceLogs();
     if (!logs || logs.length === 0) {
-      showToast("No hay registros en la bitácora para exportar.", "info");
+      showToast("No hay registros en la bitÃ¡cora para exportar.", "info");
       return;
     }
     
@@ -3487,12 +3488,12 @@ window.adminExportGovernanceLogs = async function() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast("¡Bitácora exportada exitosamente a CSV!", "success");
+    showToast("Â¡BitÃ¡cora exportada exitosamente a CSV!", "success");
   });
 };
 
 window.adminSimulateAPI = async function() {
-  if (!confirm("Esto descargará e insertará los partidos de la Jornada 1 del Mundial (Mock). ¿Continuar?")) return;
+  if (!confirm("Esto descargarÃ¡ e insertarÃ¡ los partidos de la Jornada 1 del Mundial (Mock). Â¿Continuar?")) return;
   
   const mockFixtures = [
     { id: "fix_api_1", team_home: "USA", team_away: "Mexico", date: new Date(Date.now() + 86400000).toISOString(), group: "Group A", status: "pending", result_home: null, result_away: null, attraction_index: 95 },
@@ -3501,17 +3502,17 @@ window.adminSimulateAPI = async function() {
     { id: "fix_api_4", team_home: "Spain", team_away: "Germany", date: new Date(Date.now() + 86400000*4).toISOString(), group: "Group D", status: "pending", result_home: null, result_away: null, attraction_index: 90 }
   ];
 
-  showToast("⏳ Conectando con API-Football...", "info");
+  showToast("â³ Conectando con API-Football...", "info");
   setTimeout(async () => {
     const success = await batchAddFixtures(mockFixtures);
     if (success) {
-      await createGovernanceLog("ADMIN_API_SYNC", "Sincronización masiva de Partidos vía API", currentUser);
-      showToast("✅ API Sincronizada", "success");
+      await createGovernanceLog("ADMIN_API_SYNC", "SincronizaciÃ³n masiva de Partidos vÃ­a API", currentUser);
+      showToast("âœ… API Sincronizada", "success");
       loadAdminPanel();
       window.refreshPanelData('dashboard');
       window.refreshPanelData('play');
     } else {
-      showToast("❌ Error al guardar datos de API", "error");
+      showToast("âŒ Error al guardar datos de API", "error");
     }
   }, 1500);
 };
@@ -3526,7 +3527,7 @@ window.handleCSVUpload = function(event) {
     const lines = text.split("\n");
     const fixturesToAdd = [];
     
-    // Saltamos la línea de encabezado y parseamos
+    // Saltamos la lÃ­nea de encabezado y parseamos
     for (let i = 1; i < lines.length; i++) {
       if (!lines[i].trim()) continue;
       const cols = lines[i].split(",");
@@ -3551,7 +3552,7 @@ window.handleCSVUpload = function(event) {
             attraction_index: 80
           });
         } catch (err) {
-          console.warn("Fila con fecha inválida:", lines[i]);
+          console.warn("Fila con fecha invÃ¡lida:", lines[i]);
         }
       }
     }
@@ -3560,15 +3561,15 @@ window.handleCSVUpload = function(event) {
       const success = await batchAddFixtures(fixturesToAdd);
       if (success) {
         await createGovernanceLog("ADMIN_CSV_IMPORT", `Importados ${fixturesToAdd.length} partidos por CSV`, currentUser);
-        showToast(`✅ ${fixturesToAdd.length} Partidos importados`, "success");
+        showToast(`âœ… ${fixturesToAdd.length} Partidos importados`, "success");
         loadAdminPanel();
         window.refreshPanelData('dashboard');
         window.refreshPanelData('play');
       } else {
-        showToast("❌ Error subiendo CSV a la nube", "error");
+        showToast("âŒ Error subiendo CSV a la nube", "error");
       }
     } else {
-      showToast("⚠️ Archivo vacío o formato incorrecto", "info");
+      showToast("âš ï¸ Archivo vacÃ­o o formato incorrecto", "info");
     }
     event.target.value = ""; // Limpiar input
   };
@@ -3577,17 +3578,17 @@ window.handleCSVUpload = function(event) {
 };
 
 window.adminCancelFixture = async function(id) {
-  if (!confirm("🚨 ¿Seguro que deseas CANCELAR este partido? Se dará por acertado a todos los que lo pronosticaron.")) return;
+  if (!confirm("ðŸš¨ Â¿Seguro que deseas CANCELAR este partido? Se darÃ¡ por acertado a todos los que lo pronosticaron.")) return;
   const success = await cancelFixture(id);
   if (success) {
     await createGovernanceLog("ADMIN_CANCEL_MATCH", `Partido ${id} cancelado`, currentUser);
-    localStorage.setItem("qia_live_event", JSON.stringify({ type: 'cancel', text: `⛔ Un partido ha sido cancelado. Se considerará acierto para todos los participantes.`, ts: Date.now() }));
-    showToast("✅ Partido cancelado", "success");
+    localStorage.setItem("qia_live_event", JSON.stringify({ type: 'cancel', text: `â›” Un partido ha sido cancelado. Se considerarÃ¡ acierto para todos los participantes.`, ts: Date.now() }));
+    showToast("âœ… Partido cancelado", "success");
     loadAdminPanel();
     window.refreshPanelData('dashboard');
     window.refreshPanelData('play');
   } else {
-    showToast("❌ Error al cancelar", "error");
+    showToast("âŒ Error al cancelar", "error");
   }
 };
 
@@ -3641,7 +3642,7 @@ async function renderPerformanceChart() {
   });
 }
 
-// 🌐 Receptor de Notificaciones Globales en Tiempo Real (Cross-Tab)
+// ðŸŒ Receptor de Notificaciones Globales en Tiempo Real (Cross-Tab)
 window.addEventListener('storage', function(e) {
   if (e.key === 'qia_live_event') {
     if (e.newValue) {
@@ -3656,7 +3657,7 @@ window.addEventListener('storage', function(e) {
   }
 });
 
-// 🚨 Receptor de Alertas para Administrador (Recargas)
+// ðŸš¨ Receptor de Alertas para Administrador (Recargas)
 window.addEventListener('storage', function(e) {
   if (e.key === 'qia_admin_alert' && e.newValue) {
     if (currentUser && currentUser.is_admin) {
@@ -3680,7 +3681,7 @@ window.addEventListener('storage', function(e) {
             osc.stop(ctx.currentTime + 1);
           } catch(err) { console.warn("No se pudo reproducir el sonido de recarga", err); }
 
-          showToast(`🚨 RECARGA SOLICITADA: ${alertData.user} ha depositado $${alertData.amount.toFixed(2)}`, "success");
+          showToast(`ðŸš¨ RECARGA SOLICITADA: ${alertData.user} ha depositado $${alertData.amount.toFixed(2)}`, "success");
           if (currentPanel === "admin") {
             loadAdminPanel();
           }
@@ -3688,4 +3689,36 @@ window.addEventListener('storage', function(e) {
       } catch (err) {}
     }
   }
+});
+
+// API Sports sync event listener
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    const btn = document.getElementById('btn-api-sync');
+    if (btn) {
+      btn.addEventListener('click', async () => {
+        const icon = btn.querySelector('i');
+        icon.classList.add('animate-spin');
+        btn.disabled = true;
+        try {
+          const res = await syncWithApiFootball('34c8e5e450da905d34480516f6876eaa');
+          if (res.success) {
+            if (res.updated > 0) {
+              showToast(res.msg, 'success');
+              window.refreshPanelData('play');
+            } else {
+              showToast('No hay resultados nuevos.', 'info');
+            }
+          } else {
+            showToast(res.msg, 'error');
+          }
+        } catch (e) {
+          showToast('Error de conexiÃ³n', 'error');
+        } finally {
+          icon.classList.remove('animate-spin');
+          btn.disabled = false;
+        }
+      });
+    }
+  }, 2000);
 });
