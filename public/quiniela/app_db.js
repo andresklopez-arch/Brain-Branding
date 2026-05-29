@@ -1359,6 +1359,42 @@ export async function syncWithApiFootball(apiKey) {
     });
 
     let totalUpdated = 0;
+
+    // Cargar diccionario de alias
+    let teamAliases = [];
+    try {
+      if (!useSimulation) {
+        const aliasSnap = await db.collection("settings").doc("team_aliases").get();
+        if (aliasSnap.exists) {
+          teamAliases = aliasSnap.data().list || [];
+        }
+      } else {
+        teamAliases = JSON.parse(localStorage.getItem("qia_team_aliases") || "[]");
+      }
+    } catch(err) { console.warn("Error cargando alias:", err); }
+
+    function stringSimilarity(s1, s2) {
+      if (s1 === s2) return 1.0;
+      const longer = s1.length > s2.length ? s1 : s2;
+      const shorter = s1.length > s2.length ? s2 : s1;
+      if (longer.length === 0) return 1.0;
+      const costs = [];
+      for (let i = 0; i <= longer.length; i++) {
+        let lastValue = i;
+        for (let j = 0; j <= shorter.length; j++) {
+          if (i === 0) costs[j] = j;
+          else if (j > 0) {
+            let newValue = costs[j - 1];
+            if (longer.charAt(i - 1) !== shorter.charAt(j - 1)) newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+            costs[j - 1] = lastValue;
+            lastValue = newValue;
+          }
+        }
+        if (i > 0) costs[shorter.length] = lastValue;
+      }
+      return (longer.length - costs[shorter.length]) / parseFloat(longer.length);
+    }
+
     
     // Antispam local (30 segundos max entre consultas globales por seguridad de créditos)
     const lastSync = localStorage.getItem("last_api_sync_time");
@@ -1399,12 +1435,31 @@ export async function syncWithApiFootball(apiKey) {
         for (const f of activeFixtures) {
           if (f.updated_from_api_this_run) continue;
           
-          const dbLocal = normalize(f.team_local);
-          const dbVisita = normalize(f.team_visita);
 
-          // Fuzzy match cruzado
-          const isMatch = (hName.includes(dbLocal) || dbLocal.includes(hName)) && 
-                          (aName.includes(dbVisita) || dbVisita.includes(aName));
+          let dbLocal = normalize(f.team_local);
+          let dbVisita = normalize(f.team_visita);
+
+          // 1. Reemplazo por alias de Diccionario (Si existe "USA" -> "United States")
+          for (const alias of teamAliases) {
+            const aliasLoc = normalize(alias.local);
+            const aliasApi = normalize(alias.api);
+            if (dbLocal === aliasLoc) dbLocal = aliasApi;
+            if (dbVisita === aliasLoc) dbVisita = aliasApi;
+          }
+
+          // 2. Fuzzy match cruzado (includes)
+          let isMatch = (hName.includes(dbLocal) || dbLocal.includes(hName)) && 
+                        (aName.includes(dbVisita) || dbVisita.includes(aName));
+
+          // 3. Similitud Matemǭtica si falla el includes (Tolerancia 30% a errores)
+          if (!isMatch) {
+            const sim1 = stringSimilarity(hName, dbLocal);
+            const sim2 = stringSimilarity(aName, dbVisita);
+            if (sim1 >= 0.70 && sim2 >= 0.70) {
+              isMatch = true;
+            }
+          }
+
 
           if (isMatch) {
              const homeGoals = apiMatch.goals.home;
