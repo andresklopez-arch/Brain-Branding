@@ -1,7 +1,5 @@
 <!DOCTYPE html>
 <html lang="es">
-<!DOCTYPE html>
-<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -9,7 +7,7 @@
   <link rel="apple-touch-icon" href="logo-quiniela.png">
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;900&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
-  <link rel="stylesheet" href="index.css?v=15">
+  <link rel="stylesheet" href="index.css?v=20">
   <link rel="manifest" href="manifest.json">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -25,8 +23,6 @@
       <p class="splash-subtitle">Quiniela Mundialista EDITION</p>
       <div class="loader-crystal mt-20"></div>
     </div>
-  </div>
-
   </div>
 
   <!-- 🛡️ ONBOARDING VIEW -->
@@ -61,19 +57,49 @@
   <div id="app-container" class="app-container hidden">
     
     <!-- HEADER SUPERIOR -->
-    <header class="app-header glass-morph">
+    <header class="app-header glass-morph" style="position: relative;">
       <div class="flex items-center gap-12">
         <img src="logo-quiniela.png" class="w-10 h-10 filter-neon animate-pulse-logo" alt="Logo" ondblclick="window.promptAdminAccess()" style="cursor: pointer;">
         <div>
           <span class="text-xs opacity-40 font-black tracking-widest uppercase block mb-1">Mundialista</span>
-          <h1 class="text-md font-black italic tracking-tighter  leading-none">QUINIELA <span class="text-accent">IA</span></h1>
+          <h1 class="text-md font-black italic tracking-tighter leading-none">QUINIELA <span class="text-accent">IA</span></h1>
         </div>
       </div>
       <div class="flex items-center gap-10">
+        <div class="user-profile-badge flex items-center gap-10" onclick="window.toggleHeaderProfileMenu()" style="cursor: pointer; display: flex; align-items: center; gap: 10px; margin-right: 8px;">
+          <div id="header-avatar" class="w-28 h-28 rounded-full flex items-center justify-center font-black text-xxxxs text-black tracking-normal shadow-[0_0_15px_rgba(205,127,50,0.35)]" style="width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; background: linear-gradient(135deg, #ffd700, #cd7f32); font-size: 11px;">A</div>
+          <div class="flex flex-col items-end text-right">
+            <span id="header-fullname" class="text-[8px] opacity-50 font-black uppercase tracking-wider block" style="font-size: 8px; font-weight: 900; opacity: 0.6; text-transform: uppercase;">Andrés</span>
+            <div class="flex items-center gap-4" style="display: flex; align-items: center; gap: 4px; margin-top: 2px;">
+              <span id="header-admin-crown" class="hidden text-accent" style="color: #ffd700; display: none;"><i class="ri-vip-crown-fill text-[10px]"></i></span>
+              <span id="header-username" class="text-[12px] font-black text-accent block tracking-wider leading-none" style="font-size: 12px; font-weight: 900; color: var(--accent);">@YoY</span>
+            </div>
+          </div>
+        </div>
         <div class="wallet-badge" onclick="window.appNavigate('wallet')">
           <span class="text-[8px] opacity-40 font-black uppercase">Saldo:</span>
           <span class="text-xs font-black text-[#00ff88]" id="header-balance">$0.00</span>
         </div>
+      </div>
+
+      <!-- MENÚ FLOTANTE DE PERFIL (Glassmorphism Dropdown) -->
+      <div id="header-profile-menu" class="hidden absolute right-16 top-56 w-160 glass-morph p-12 rounded-2xl border border-black/10 z-50 animate-scale-in text-xxs font-bold uppercase tracking-wider space-y-8" style="position: absolute; right: 16px; top: 56px; width: 160px; z-index: 9999; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); background: rgba(18,18,18,0.92); backdrop-filter: blur(20px); box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: none; flex-direction: column; gap: 8px; padding: 12px;">
+        <div class="flex flex-col border-b border-white/5 pb-8 mb-4" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; margin-bottom: 4px; display: flex; flex-direction: column;">
+          <span id="menu-user-role" class="text-[7px] text-accent tracking-widest block font-black" style="color: #ffd700; font-size: 7px;">MIEMBRO JUGADOR</span>
+          <span id="menu-user-name" class="text-[10px] text-primary block mt-2" style="font-weight: 900; font-size: 10px; color: var(--text-primary); margin-top: 4px;">Andrés</span>
+        </div>
+        <button onclick="window.copyUserAliasToClipboard()" class="w-full flex items-center justify-between py-6 px-8 hover:bg-white/5 rounded-lg transition-all" style="border: none; background: transparent; cursor: pointer; text-align: left; font-size: 8px; color: #fff; font-weight: 900; display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; border-radius: 8px;">
+          <span>Copiar Apodo</span> <i class="ri-file-copy-line text-accent text-sm" style="font-size: 14px;"></i>
+        </button>
+        <button onclick="window.appNavigate('wallet')" class="w-full flex items-center justify-between py-6 px-8 hover:bg-white/5 rounded-lg transition-all" style="border: none; background: transparent; cursor: pointer; text-align: left; font-size: 8px; color: #fff; font-weight: 900; display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; border-radius: 8px;">
+          <span>Billetera</span> <i class="ri-wallet-3-line text-accent text-sm" style="font-size: 14px;"></i>
+        </button>
+        <button id="menu-btn-admin" onclick="window.promptAdminAccess()" class="w-full flex items-center justify-between py-6 px-8 hover:bg-white/5 rounded-lg transition-all" style="border: none; background: transparent; cursor: pointer; text-align: left; font-size: 8px; color: #ffd700; font-weight: 900; display: none; justify-content: space-between; align-items: center; padding: 6px 8px; border-radius: 8px;">
+          <span>Modo Admin</span> <i class="ri-shield-user-line text-accent text-sm" style="font-size: 14px;"></i>
+        </button>
+        <button onclick="window.handleLogout()" class="w-full flex items-center justify-between py-6 px-8 hover:bg-red-500/10 rounded-lg text-red-500 transition-all border-t border-white/5 mt-4 pt-8" style="border: none; background: transparent; cursor: pointer; text-align: left; font-size: 8px; font-weight: 900; display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; border-radius: 8px; border-top: 1px solid rgba(255,255,255,0.05); margin-top: 4px; padding-top: 8px; color: #ef4444;">
+          <span>Salir del Estadio</span> <i class="ri-shut-down-line text-sm" style="font-size: 14px;"></i>
+        </button>
       </div>
     </header>
 
@@ -86,7 +112,7 @@
         <div class="gold-jackpot-card animate-float mb-24">
           <div class="gold-stars"></div>
           <div class="relative z-10">
-            <span class="text-xxxxs font-black tracking-[4px] opacity-50 uppercase block mb-6">Bolsa Garantizada Semanal</span>
+            <span class="text-xxxxs font-black tracking-[4px] opacity-50 uppercase block mb-6">Bolsa Acumulada Semanal</span>
             <div class="text-4xl font-black italic tracking-tighter text-[#ffd700] text-glow mb-15" id="jackpot-amount">$5,000.00</div>
             <div class="grid grid-cols-3 gap-8 border-t border-black/10 pt-12" id="jackpot-prizes-container">
               <!-- Dinámico: Lugares premiados configurables -->
@@ -152,9 +178,9 @@
         <div class="glass-card p-20 mb-20">
           <div class="flex justify-between items-center mb-10 border-b border-black/10 pb-10">
             <h2 class="text-md font-black italic tracking-tighter uppercase m-0">Cartelera Global</h2>
-            <div class="text-xs font-black uppercase text-accent tracking-widest bg-black/5 px-10 py-5 rounded-xl"><span id="play-selections-count">0</span> / 10 PARTIDOS</div>
+            <div class="text-xs font-black uppercase text-accent tracking-widest bg-black/5 px-10 py-5 rounded-xl"><span id="play-selections-count">0</span> / <span id="play-required-count">10</span> PARTIDOS</div>
           </div>
-          <p class="text-xxs opacity-40 uppercase tracking-widest mb-15">Elige tus 10 partidos estratégicos y selecciona Local (L), Empate (E) o Visita (V).</p>
+          <p id="play-instruction-text" class="text-xxs opacity-40 uppercase tracking-widest mb-15">Elige tus 10 partidos estratégicos y selecciona Local (L), Empate (E) o Visita (V).</p>
           <div class="space-y-12" id="play-matches-container">
             <!-- Dinámico -->
           </div>
@@ -189,37 +215,50 @@
           </div>
         </div>
 
-        <!-- MÓDULO DE RECARGA STRIPE / MERCADOPAGO (TARJETA) -->
-        <div class="glass-card p-20 mb-20" style="border-color: rgba(205, 127, 50, 0.2);">
-          <h2 class="text-xs font-black uppercase tracking-widest  mb-15"><i class="ri-bank-card-fill text-accent mr-4"></i> Pasarela de Pago (Stripe/MercadoPago)</h2>
-          <div class="form-group mb-12">
-            <label class="form-label">Monto a Recargar ($MXN)</label>
-            <input type="number" id="stripe-amount" class="form-input text-lg font-black text-accent" value="100" min="20">
-          </div>
-          <button onclick="window.simulateStripeDeposit()" class="btn btn-primary w-full py-14 font-black uppercase text-xs shadow-[0_0_20px_rgba(205,127,50,0.3)]">PAGAR CON TARJETA DE CRÉDITO</button>
-        </div>
-
-        <!-- MÓDULO DE RECARGA SPEI (TRANSFERENCIA / WHATSAPP) -->
+        <!-- MÓDULO DE RECARGA (TRANSFERENCIA BANCARIA) -->
         <div class="glass-card p-20 mb-24" style="border-color: rgba(227, 168, 105, 0.2);">
-          <h2 class="text-xs font-black uppercase tracking-widest  mb-15"><i class="ri-exchange-dollar-fill text-gold mr-4"></i> Carga SPEI (Transferencia)</h2>
+          <h2 class="text-xs font-black uppercase tracking-widest  mb-15"><i class="ri-exchange-dollar-fill text-gold mr-4"></i> Recarga por Transferencia</h2>
           <div class="p-12 bg-white/5 rounded-2xl border border-black/5 text-xxs uppercase tracking-wider space-y-6 mb-16">
-            <div>Banco: <span class="font-black ">STP (Sistema de Transferencias)</span></div>
-            <div>CLABE: <span class="font-black  text-gold tracking-widest">646180123456789012</span></div>
-            <div>Beneficiario: <span class="font-black ">Quiniela Futbolera</span></div>
-            <div style="color:var(--gold);">* Haz clic abajo para enviarnos tu captura por WhatsApp.</div>
+            <div>Beneficiario: <span class="font-black text-white">Andrés L Rebollo</span></div>
+            <div>CLABE Interbancaria: <span class="font-black text-gold tracking-widest">1272 9001 3646 1904 07</span></div>
+            <div>Número de Cuenta: <span class="font-black text-white">2312 1364 6190 40</span></div>
+            <div>Número de Tarjeta: <span class="font-black text-white">4027 6658 2183 3978</span></div>
+            <div style="color:var(--gold); margin-top:10px;">* Muy Importante: Ingresa tu nombre y/o alias en el CONCEPTO O REFERENCIA de la transferencia.</div>
           </div>
           
-          <button onclick="window.sendVoucherWhatsApp()" class="btn w-full py-14 font-black uppercase text-xs" style="background:rgba(37,211,102,0.1); border:1px solid rgba(37,211,102,0.3); color:#25D366;"><i class="ri-whatsapp-fill mr-4"></i> NOTIFICAR PAGO POR WHATSAPP</button>
-        </div>
+          <!-- Formulario Interno de Reporte -->
+          <div class="mt-20 border-t border-white/10 pt-16">
+            <h3 class="text-[10px] font-black uppercase tracking-widest mb-10 text-white/50">Reportar Transferencia Realizada</h3>
+            
+            <div class="form-group mb-12">
+              <label class="form-label">Monto Transferido ($MXN)</label>
+              <input type="number" id="spei-amount" class="form-input text-lg font-black text-accent" placeholder="Ej. 200" min="50">
+            </div>
+            
+            <div class="grid grid-cols-2 gap-10 mb-12">
+              <div class="form-group">
+                <label class="form-label">Fecha</label>
+                <input type="date" id="spei-date" class="form-input text-xs">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Hora</label>
+                <input type="time" id="spei-time" class="form-input text-xs">
+              </div>
+            </div>
+            
+            <div class="form-group mb-16">
+              <label class="form-label">Concepto / Referencia</label>
+              <input type="text" id="spei-ref" class="form-input" placeholder="Tu alias o nombre exacto">
+            </div>
 
-        <!-- MÓDULO DE RECARGA OXXO PAY (Efectivo) -->
-        <div class="glass-card p-20 mb-24" style="border-color: rgba(227, 168, 105, 0.2);">
-          <h2 class="text-xs font-black uppercase tracking-widest  mb-15"><i class="ri-store-2-fill text-gold mr-4"></i> Depósito OXXO Pay (Efectivo)</h2>
-          <div class="form-group mb-12">
-            <label class="form-label">Monto a Depositar ($MXN)</label>
-            <input type="number" id="oxxo-amount" class="form-input text-lg font-black text-accent" value="100" min="50">
+            <div class="form-group mb-16">
+              <label class="form-label">Comprobante (Opcional)</label>
+              <input type="file" id="spei-file" accept="image/*" class="form-input text-xs" style="padding: 10px;">
+              <p class="text-[8px] text-white/40 mt-4">Sube la captura de tu transferencia.</p>
+            </div>
+
+            <button onclick="window.simulateSPEIDeposit()" class="btn btn-primary w-full py-14 font-black uppercase text-xs shadow-[0_0_20px_rgba(205,127,50,0.3)]"><i class="ri-send-plane-fill mr-4"></i> ENVIAR REPORTE AL ADMINISTRADOR</button>
           </div>
-          <button onclick="window.generateOxxoSlip()" class="btn w-full py-14 font-black uppercase text-xs" style="background:#E21A22; color:#fff; border:none; box-shadow: 0 0 20px rgba(226,26,34,0.3);"><i class="ri-article-fill mr-4"></i> GENERAR FICHA OXXO PAY</button>
         </div>
 
         <!-- HISTORIAL FINANCIERO -->
@@ -273,32 +312,25 @@
 
         <!-- 1. PARTIDOS (API / MANUAL) -->
         <div id="adm-view-matches" class="admin-view animate-fade-in">
-          <div class="glass-card p-20 mb-20" style="border-color: rgba(205, 127, 50, 0.2);">
-            <div class="flex justify-between items-center mb-12">
+          <div class="glass-card p-20 mb-20" style="border-color: rgba(205, 127, 50, 0.25);">
+            <div class="flex justify-between items-center mb-15 border-b border-black/10 pb-8">
               <div>
-                <h3 class="text-xs font-black uppercase text-accent tracking-widest"><i class="ri-global-fill mr-4"></i> Partidos (Fixtures)</h3>
-                <p class="text-[8px] opacity-40 font-black uppercase mt-2">Agrega, limpia o carga partidos vía API y CSV.</p>
+                <h3 class="text-xs font-black uppercase text-accent tracking-widest"><i class="ri-survey-line mr-4"></i> Quiniela Maestra</h3>
+                <p class="text-[8px] opacity-40 font-black uppercase mt-2">Define los resultados oficiales de la semana en lote.</p>
               </div>
               <div class="flex gap-10 items-center">
-                <label for="csv-upload" class="cursor-pointer text-xs font-bold uppercase tracking-widest hover:text-accent"><i class="ri-file-excel-2-line"></i> CSV</label>
+                <label for="csv-upload" class="cursor-pointer text-[9px] font-black uppercase tracking-widest hover:text-accent" style="cursor: pointer;"><i class="ri-file-excel-2-line"></i> CSV</label>
                 <input type="file" id="csv-upload" accept=".csv" class="hidden" onchange="window.handleCSVUpload(event)">
-                <button onclick="window.adminAddFixture()" class="bg-accent text-black px-10 py-4 rounded text-[9px] font-black uppercase hover:opacity-90">Nuevo Partido</button>
-                <button onclick="window.adminClearFixtures()" class="bg-red-500 px-10 py-4 rounded text-[9px] font-black uppercase hover:opacity-90">Limpiar</button>
+                <button onclick="window.adminAddFixture()" class="bg-accent text-black px-10 py-5 rounded-xl text-[9px] font-black uppercase hover:opacity-90" style="border-radius: 12px; cursor: pointer; border: none;">Nuevo Partido</button>
+                <button onclick="window.adminConsultMatchResults()" class="bg-[#4285F4] text-white px-10 py-5 rounded-xl text-[9px] font-black uppercase hover:opacity-90 shadow-[0_0_15px_rgba(66,133,244,0.25)]" style="border-radius: 12px; cursor: pointer; border: none; font-weight: 900;"><i class="ri-google-fill mr-2"></i>Consultar Resultados</button>
+                <button onclick="window.adminSaveMasterQuiniela()" class="bg-green-500 text-black px-12 py-5 rounded-xl text-[9px] font-black uppercase hover:opacity-90 shadow-[0_0_15px_rgba(34,197,94,0.25)]" style="border-radius: 12px; cursor: pointer; border: none;">Guardar</button>
               </div>
             </div>
-            <div class="w-full overflow-x-auto overflow-y-auto" style="max-height: 300px;">
-              <table class="w-full text-left border-collapse" style="table-layout: fixed;">
-                <thead>
-                  <tr class="border-b border-black border-opacity-10 text-[9px] uppercase tracking-widest opacity-50">
-                    <th class="py-10 w-1/4">Fecha</th>
-                    <th class="py-10 w-1/2">Partido</th>
-                    <th class="py-10 w-1/4 text-center">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="admin-fixtures-list">
-                  <!-- JS -->
-                </tbody>
-              </table>
+            
+            <p class="text-xxxxs opacity-45 uppercase tracking-wider mb-15" style="font-size: 8px; text-transform: uppercase;">Selecciona el resultado oficial (L: Local, E: Empate, V: Visita, C: Cancelado) para cada partido. Al dar clic en "Guardar", se recalcularán los aciertos de todos los participantes al instante.</p>
+            
+            <div class="space-y-12 max-h-[300px] overflow-y-auto no-scrollbar" id="admin-master-quiniela-container" style="max-height: 250px; overflow-y: auto;">
+              <!-- JS Dinámico -->
             </div>
           </div>
 
@@ -313,14 +345,46 @@
               </div>
             </div>
             
-            <!-- Barra de búsqueda interactiva de Google AI -->
-            <div class="form-group mb-15">
-              <div class="relative flex items-center" style="position: relative; width: 100%;">
+            
+            <!-- Barra de búsqueda interactiva de Google AI con Rango de Días -->
+            <div class="flex gap-10 items-end mb-12" style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px;">
+              <div class="relative flex items-center flex-grow" style="position: relative; flex-grow: 1; display: flex; align-items: center;">
                 <i class="ri-search-line absolute left-14 text-sm opacity-40" style="position: absolute; left: 14px; z-index: 10;"></i>
-                <input type="text" id="google-ai-search-input" class="form-input" style="padding-left: 40px; padding-right: 48px; border-radius: 50px; font-weight: 600;" value="¿cuáles son los partidos más atractivos de futbol soccer de los próximos 8 días?" spellcheck="false">
-                <button onclick="window.adminSearchGoogleAI()" class="absolute right-6 bg-[#4285F4] text-white w-32 h-32 rounded-full flex items-center justify-center hover:opacity-90 transition-all" style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: none; cursor: pointer; height: 32px; width: 32px;">
+                <input type="text" id="google-ai-search-input" class="form-input" style="padding-left: 40px; padding-right: 80px; border-radius: 50px; font-weight: 600; width: 100%;" value="¿cuáles son los partidos más atractivos de futbol soccer?" spellcheck="false">
+                <button onclick="window.clearAISearchCacheOnly()" class="absolute right-40 bg-white/5 border border-black/10 text-primary w-32 h-32 rounded-full flex items-center justify-center hover:bg-white/10 transition-all" style="position: absolute; right: 42px; top: 50%; transform: translateY(-50%); border: none; cursor: pointer; height: 32px; width: 32px;" title="Limpiar caché de IA">
+                  <i class="ri-refresh-line text-sm"></i>
+                </button>
+                <button onclick="window.adminSearchGoogleAI()" class="absolute right-6 bg-[#4285F4] text-white w-32 h-32 rounded-full flex items-center justify-center hover:opacity-90 transition-all" style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: none; cursor: pointer; height: 32px; width: 32px;" title="Buscar con IA">
                   <i class="ri-magic-line text-sm" style="color: #ffffff;"></i>
                 </button>
+              </div>
+              <div class="flex flex-col text-left" style="width: 90px; flex-shrink: 0; display: flex; flex-direction: column;">
+                <label class="form-label text-[7px] opacity-40 font-black uppercase tracking-wider mb-4" style="font-size: 7px; margin-bottom: 4px;">Rango Días</label>
+                <select id="google-ai-search-days" class="form-input text-xxs font-black text-accent" style="border-radius: 50px; height: 36px; padding: 6px 12px; font-size: 10px; cursor: pointer;">
+                  <option value="3">3 Días</option>
+                  <option value="5">5 Días</option>
+                  <option value="8" selected>8 Días</option>
+                  <option value="10">10 Días</option>
+                  <option value="12">12 Días</option>
+                  <option value="15">15 Días</option>
+                </select>
+              </div>
+            </div>
+
+
+            <!-- Selección de Ligas a Escanear (Filtro Dinámico Productivo) -->
+            <div class="mb-15 p-12 bg-white/5 rounded-2xl border border-black/5" style="text-align: left; margin-bottom: 15px;">
+              <span class="text-[8px] opacity-40 font-black uppercase tracking-wider block mb-8"><i class="ri-filter-3-line text-[#4285F4]"></i> Ligas e Incentivos a Escanear por la IA:</span>
+              <div class="grid grid-cols-3 gap-6 text-[8px] font-black uppercase" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; font-size: 8px;">
+                <label class="flex items-center gap-4 cursor-pointer hover:text-[#4285F4]" style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="checkbox" class="scan-league-cb w-14 h-14 accent-accent" value="mex.1" checked style="width:14px; height:14px; appearance:checkbox; -webkit-appearance:checkbox;"> Liga MX</label>
+                <label class="flex items-center gap-4 cursor-pointer hover:text-[#4285F4]" style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="checkbox" class="scan-league-cb w-14 h-14 accent-accent" value="mex.w.1" checked style="width:14px; height:14px; appearance:checkbox; -webkit-appearance:checkbox;"> Liga MX Fem</label>
+                <label class="flex items-center gap-4 cursor-pointer hover:text-[#4285F4]" style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="checkbox" class="scan-league-cb w-14 h-14 accent-accent" value="mex.2" checked style="width:14px; height:14px; appearance:checkbox; -webkit-appearance:checkbox;"> Expansión MX</label>
+                <label class="flex items-center gap-4 cursor-pointer hover:text-[#4285F4]" style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="checkbox" class="scan-league-cb w-14 h-14 accent-accent" value="uefa.champions" checked style="width:14px; height:14px; appearance:checkbox; -webkit-appearance:checkbox;"> UCL / Europa</label>
+                <label class="flex items-center gap-4 cursor-pointer hover:text-[#4285F4]" style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="checkbox" class="scan-league-cb w-14 h-14 accent-accent" value="esp.1" checked style="width:14px; height:14px; appearance:checkbox; -webkit-appearance:checkbox;"> LaLiga / Prem</label>
+                <label class="flex items-center gap-4 cursor-pointer hover:text-[#4285F4]" style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="checkbox" class="scan-league-cb w-14 h-14 accent-accent" value="ita.1" checked style="width:14px; height:14px; appearance:checkbox; -webkit-appearance:checkbox;"> Serie A / Bund</label>
+                <label class="flex items-center gap-4 cursor-pointer hover:text-[#4285F4]" style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="checkbox" class="scan-league-cb w-14 h-14 accent-accent" value="usa.1" checked style="width:14px; height:14px; appearance:checkbox; -webkit-appearance:checkbox;"> MLS</label>
+                <label class="flex items-center gap-4 cursor-pointer hover:text-[#4285F4]" style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="checkbox" class="scan-league-cb w-14 h-14 accent-accent" value="arg.1" checked style="width:14px; height:14px; appearance:checkbox; -webkit-appearance:checkbox;"> Arg / Bra</label>
+                <label class="flex items-center gap-4 cursor-pointer hover:text-[#4285F4]" style="display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="checkbox" class="scan-league-cb w-14 h-14 accent-accent" value="fifa.friendly" checked style="width:14px; height:14px; appearance:checkbox; -webkit-appearance:checkbox;"> Amistosos FIFA</label>
               </div>
             </div>
 
@@ -342,6 +406,15 @@
                   <!-- Dinámico -->
                 </div>
               </div>
+            </div>
+            
+            <!-- Barra de Acciones por Lote (Bulk Select) -->
+            <div id="admin-bulk-actions-bar" class="hidden flex justify-between items-center mb-12 p-10 bg-white/5 rounded-xl border border-black/5" style="margin-bottom: 12px; display: none;">
+              <div class="flex items-center gap-6">
+                <input type="checkbox" id="bulk-select-all" class="w-18 h-18 cursor-pointer rounded accent-accent" onchange="window.toggleSelectAllMatches(this.checked)" style="width: 18px; height: 18px; opacity: 1; -webkit-appearance: checkbox; appearance: checkbox; position: relative; cursor: pointer;">
+                <label for="bulk-select-all" class="text-[9px] font-black uppercase tracking-wider opacity-60 cursor-pointer">Seleccionar Todos</label>
+              </div>
+              <button onclick="window.adminAddSelectedBulk()" class="bg-[#22c55e] text-black px-12 py-6 rounded-xl text-[9px] font-black uppercase hover:opacity-90 shadow-[0_0_15px_rgba(34,197,94,0.2)]" style="border: none; cursor: pointer; border-radius: 12px;">Agregar Selección por Lote (<span id="bulk-selected-count">0</span>)</button>
             </div>
             
             <!-- Contenedor de Resultados para Agregar -->
@@ -380,6 +453,19 @@
               </div>
             </div>
 
+            <!-- Dimensiones de la Quiniela (Personalización) -->
+            <h4 class="text-[9px] font-black uppercase tracking-widest text-accent mb-12 mt-15 border-t border-black/5 pt-15">📐 Dimensiones de la Quiniela</h4>
+            <div class="grid grid-cols-2 gap-12 mb-16">
+              <div class="form-group">
+                <label class="form-label">Partidos en Cartelera</label>
+                <input type="number" id="cfg-pool-matches" class="form-input text-lg font-black text-accent" value="10" min="5" max="30">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Predicciones Requeridas</label>
+                <input type="number" id="cfg-required-selections" class="form-input text-lg font-black text-accent" value="10" min="3" max="30">
+              </div>
+            </div>
+
             <!-- Restricción de Horario (Sugerencia 3) -->
             <h4 class="text-[9px] font-black uppercase tracking-widest text-accent mb-12 mt-15 border-t border-black/5 pt-15">📅 Restricción de Horario</h4>
             <div class="grid grid-cols-2 gap-12 mb-12">
@@ -414,10 +500,20 @@
           </div>
 
           <!-- MÓDULO DE CIERRE SEMANAL -->
-          <div class="glass-card p-20 mb-80" style="border-color: rgba(239, 68, 68, 0.2); background: rgba(239,68,68,0.01);">
+          <div class="glass-card p-20 mb-20" style="border-color: rgba(239, 68, 68, 0.2); background: rgba(239,68,68,0.01);">
             <h3 class="text-xs font-black uppercase text-red-500 tracking-widest mb-12"><i class="ri-alert-fill mr-4"></i> Cierre Semanal & Reparto</h3>
             <p class="text-xxs opacity-40 uppercase tracking-widest mb-15">Evalúa aciertos (1pt/acierto), reparte premio equitativamente en empates.</p>
             <button onclick="window.executeWeeklyClosure()" class="btn w-full py-16 font-black uppercase text-xs" style="background:#ef4444; color:#fff; border:none; box-shadow: 0 0 30px rgba(239,68,68,0.3);">⚙️ EJECUTAR CIERRE Y REPARTO</button>
+          </div>
+
+          <!-- ACCIONES DE GOBERNANZA DE BASE DE DATOS (HARD RESET Y LIMPIEZA) -->
+          <div class="glass-card p-20 mb-80" style="border-color: rgba(239, 68, 68, 0.3); background: rgba(239,68,68,0.02);">
+            <h3 class="text-xs font-black uppercase text-red-500 tracking-widest mb-12"><i class="ri-shield-keyhole-line mr-4"></i> Acciones de Gobernanza de Datos</h3>
+            <p class="text-xxs opacity-40 uppercase tracking-widest mb-15">Restablece de forma absoluta toda la simulación local o limpia los partidos inactivos.</p>
+            <div class="grid grid-cols-2 gap-10">
+              <button onclick="window.adminClearFixtures()" class="bg-red-500/10 text-red-500 border border-red-500/20 px-12 py-10 rounded-xl text-[9px] font-black uppercase hover:bg-red-500/20 transition-all" style="border-radius: 12px; cursor: pointer;">Limpiar Partidos</button>
+              <button onclick="window.adminHardResetDatabase()" class="bg-red-600 text-white px-12 py-10 rounded-xl text-[9px] font-black uppercase hover:opacity-90 transition-all shadow-[0_0_15px_rgba(220,38,38,0.2)]" style="border-radius: 12px; cursor: pointer; border: none;">Hard Reset Total</button>
+            </div>
           </div>
         </div>
 
@@ -512,6 +608,9 @@
       <button onclick="window.appNavigate('admin')" id="dock-admin" class="dock-item hidden">
         <i class="ri-shield-user-fill"></i><span class="dock-label">Admin</span>
       </button>
+      <button onclick="window.handleLogout()" id="dock-logout" class="dock-item" style="color: #ef4444;">
+        <i class="ri-logout-box-r-line"></i><span class="dock-label">Salir</span>
+      </button>
     </nav>
 
   </div>
@@ -561,14 +660,20 @@
 
 
 
+  <!-- Safe Storage Initializer -->
+  <script>
+    if (!localStorage.getItem("qia_tickets")) localStorage.setItem("qia_tickets", "[]");
+    if (!localStorage.getItem("qia_transactions")) localStorage.setItem("qia_transactions", "[]");
+    if (!localStorage.getItem("qia_users_list")) localStorage.setItem("qia_users_list", "[]");
+  </script>
   <!-- Core Javascript Engines -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-  <script type="module" src="app_db.js?v=15"></script>
-  <script type="module" src="app.js?v=15"></script>
+  <script type="module" src="app_db.js"></script>
+  <script type="module" src="app.js?v=25"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=15').then(registration => {
+        navigator.serviceWorker.register('sw.js?v=20').then(registration => {
           console.log('⚙️ [PWA] Service Worker registrado con éxito:', registration.scope);
           
           // Detectar e instalar actualizaciones automáticamente al instante

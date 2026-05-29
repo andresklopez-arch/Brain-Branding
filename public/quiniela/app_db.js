@@ -4,16 +4,17 @@
 
 // Configuración de Firebase para brain-branding
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyD-mockKey_brain_branding_prod_2026", 
-  authDomain: "brain-branding.firebaseapp.com",
   projectId: "brain-branding",
-  storageBucket: "brain-branding.appspot.com",
+  appId: "1:545863893528:web:f0e82a190dbaa5d743396d",
+  storageBucket: "brain-branding.firebasestorage.app",
+  apiKey: "AIzaSyCgIpvZux4c6VjBI31KX8rACPe-zDSVRYo",
+  authDomain: "brain-branding.firebaseapp.com",
   messagingSenderId: "545863893528",
-  appId: "1:545863893528:web:7a8b9c1d0e9f8a7b"
+  measurementId: "G-BE0LZ27Y8N"
 };
 
 let db = null;
-let useSimulation = true;
+let useSimulation = false;
 
 // ── SHIELD: Cryptographic Scrambler (XOR-AES-like local encryption) ─────
 const DB_SECRET_KEY = "QIA_CYBER_STADIUM_SECRET_2026";
@@ -26,11 +27,15 @@ export function encryptData(obj) {
     fieldsToEncrypt.forEach(field => {
       if (copy[field] !== undefined && copy[field] !== null) {
         let strVal = String(copy[field]);
-        let result = '';
-        for (let i = 0; i < strVal.length; i++) {
-          result += String.fromCharCode(strVal.charCodeAt(i) ^ DB_SECRET_KEY.charCodeAt(i % DB_SECRET_KEY.length));
+        // 1. Convertir a binario UTF-8 primero
+        let utf8Str = unescape(encodeURIComponent(strVal));
+        // 2. Realizar XOR sobre la cadena binaria de bytes
+        let scrambled = '';
+        for (let i = 0; i < utf8Str.length; i++) {
+          scrambled += String.fromCharCode(utf8Str.charCodeAt(i) ^ DB_SECRET_KEY.charCodeAt(i % DB_SECRET_KEY.length));
         }
-        copy[field] = 'enc_qia:' + btoa(unescape(encodeURIComponent(result)));
+        // 3. Codificar en Base64 el resultado del XOR
+        copy[field] = 'enc_qia:' + btoa(scrambled);
       }
     });
     return copy;
@@ -52,11 +57,16 @@ export function decryptData(obj) {
     fieldsToDecrypt.forEach(field => {
       if (copy[field] && typeof copy[field] === 'string' && copy[field].startsWith('enc_qia:')) {
         let base64Part = copy[field].substring('enc_qia:'.length);
-        let encryptedStr = decodeURIComponent(escape(atob(base64Part)));
-        let decrypted = '';
-        for (let i = 0; i < encryptedStr.length; i++) {
-          decrypted += String.fromCharCode(encryptedStr.charCodeAt(i) ^ DB_SECRET_KEY.charCodeAt(i % DB_SECRET_KEY.length));
+        // 1. Decodificar Base64 para obtener el binario scrambled
+        let scrambled = atob(base64Part);
+        // 2. Descifrar XOR para obtener la cadena binaria original UTF-8
+        let utf8Str = '';
+        for (let i = 0; i < scrambled.length; i++) {
+          utf8Str += String.fromCharCode(scrambled.charCodeAt(i) ^ DB_SECRET_KEY.charCodeAt(i % DB_SECRET_KEY.length));
         }
+        // 3. Reconvertir binario UTF-8 a texto plano original
+        let decrypted = decodeURIComponent(escape(utf8Str));
+        
         if (field === 'balance') {
           copy[field] = Number(decrypted);
         } else {
@@ -73,7 +83,7 @@ export function decryptData(obj) {
 
 // Inicialización de Firebase v8
 export async function initDatabase() {
-  if (window.firebase) {
+  if (window.firebase && !FIREBASE_CONFIG.apiKey.includes("mockKey")) {
     try {
       if (firebase.apps.length === 0) {
         // Intentar inicializar con config real o fallar a simulación si las llaves son mock
@@ -95,7 +105,7 @@ export async function initDatabase() {
       useSimulation = true;
     }
   } else {
-    console.warn("⚠️ [Fallback DB] SDK de Firebase no detectado. Modo Simulación Activo.");
+    console.warn("⚠️ [Fallback DB] SDK de Firebase no detectado o API Key mock. Modo Simulación Activo.");
     useSimulation = true;
   }
   
@@ -104,28 +114,24 @@ export async function initDatabase() {
 }
 
 // ── SEMILLAS Y MOCK DATA DE Quiniela Mundialista (LIGA MX) ───────────────────
-const LIGA_MX_MATCHES = [
-  { id: "mx-1", team_local: "América", team_visita: "Chivas", score_local: 2, score_visita: 1, status: "live", priority: "high", date: "Hoy, 20:00", attraction_index: 95 },
-  { id: "mx-2", team_local: "Cruz Azul", team_visita: "Pumas", score_local: 0, score_visita: 0, status: "live", priority: "high", date: "Hoy, 18:30", attraction_index: 90 },
-  { id: "mx-3", team_local: "Tigres", team_visita: "Monterrey", score_local: 3, score_visita: 2, status: "finished", priority: "high", date: "Ayer", attraction_index: 92 },
-  { id: "mx-4", team_local: "Toluca", team_visita: "Pachuca", score_local: 0, score_visita: 0, status: "upcoming", priority: "normal", date: "Mañana, 12:00", attraction_index: 78 },
-  { id: "mx-5", team_local: "León", team_visita: "Santos", score_local: 0, score_visita: 0, status: "upcoming", priority: "normal", date: "Mañana, 19:00", attraction_index: 70 },
-  { id: "mx-6", team_local: "Tijuana", team_visita: "Atlas", score_local: 0, score_visita: 0, status: "upcoming", priority: "normal", date: "Mañana, 21:00", attraction_index: 68 },
-  { id: "mx-7", team_local: "Necaxa", team_visita: "Puebla", score_local: 0, score_visita: 0, status: "upcoming", priority: "normal", date: "Lunes, 19:00", attraction_index: 60 }
-];
+const LIGA_MX_MATCHES = [];
 
-const INITIAL_SUGGESTIONS = [
-  { id: "sug-1", team_local: "América", team_visita: "Monterrey", date: "Próximo Sábado", attraction_index: 96, selected: true },
-  { id: "sug-2", team_local: "Chivas", team_visita: "Cruz Azul", date: "Próximo Domingo", attraction_index: 94, selected: true },
-  { id: "sug-3", team_local: "Pumas", team_visita: "Tigres", date: "Próximo Sábado", attraction_index: 88, selected: true },
-  { id: "sug-4", team_local: "Toluca", team_visita: "Atlas", date: "Próximo Viernes", attraction_index: 76, selected: true },
-  { id: "sug-5", team_local: "Pachuca", team_visita: "León", date: "Próximo Domingo", attraction_index: 72, selected: true },
-  { id: "sug-6", team_local: "Santos", team_visita: "Tijuana", date: "Próximo Lunes", attraction_index: 66, selected: true },
-  { id: "sug-7", team_local: "Querétaro", team_visita: "Necaxa", date: "Próximo Viernes", attraction_index: 55, selected: true }
-];
+const INITIAL_SUGGESTIONS = [];
 
 async function checkSeeds() {
   if (useSimulation) {
+    try {
+      const oldFixtures = localStorage.getItem("qia_fixtures");
+      if (oldFixtures && (oldFixtures.includes("mx-1") || oldFixtures.includes("mx-2") || oldFixtures.includes("Tigres"))) {
+        localStorage.removeItem("qia_fixtures");
+      }
+      const oldLeaderboard = localStorage.getItem("qia_leaderboard");
+      if (oldLeaderboard && (oldLeaderboard.includes("Slim") || oldLeaderboard.includes("Lopez") || oldLeaderboard.includes("Wash"))) {
+        localStorage.removeItem("qia_leaderboard");
+        localStorage.removeItem("qia_leaderboard_accumulated");
+      }
+    } catch (e) {}
+
     if (!localStorage.getItem("qia_fixtures")) {
       localStorage.setItem("qia_fixtures", JSON.stringify(LIGA_MX_MATCHES));
     }
@@ -133,20 +139,11 @@ async function checkSeeds() {
       localStorage.setItem("qia_suggestions", JSON.stringify(INITIAL_SUGGESTIONS));
     }
     if (!localStorage.getItem("qia_leaderboard")) {
-      const defaultLeaderboard = [
-        { rank: 1, alias: "rey_xalpa_master", name: "Andrés López", hits: 6 },
-        { rank: 2, alias: "futbol_cyber", name: "Carlos Slim", hits: 5 },
-        { rank: 3, alias: "stadium_queen", name: "Erika Wash", hits: 4 },
-        { rank: 4, alias: "goles_ia", name: "Juan Pérez", hits: 3 }
-      ];
+      const defaultLeaderboard = [];
       localStorage.setItem("qia_leaderboard", JSON.stringify(defaultLeaderboard));
     }
     if (!localStorage.getItem("qia_leaderboard_accumulated")) {
-      const defaultAcc = [
-        { rank: 1, alias: "rey_xalpa_master", name: "Andrés López", hits: 24 },
-        { rank: 2, alias: "futbol_cyber", name: "Carlos Slim", hits: 21 },
-        { rank: 3, alias: "stadium_queen", name: "Erika Wash", hits: 18 }
-      ];
+      const defaultAcc = [];
       localStorage.setItem("qia_leaderboard_accumulated", JSON.stringify(defaultAcc));
     }
     if (!localStorage.getItem("qia_config")) {
@@ -161,6 +158,8 @@ async function checkSeeds() {
         betting_deadline_hour: 18,
         bypass_deadline_testing: true,
         manual_locked: false,
+        pool_matches_count: 10,
+        required_selections: 10,
         admin_pin: "569323"
       };
       localStorage.setItem("qia_config", JSON.stringify(defaultConfig));
@@ -170,6 +169,38 @@ async function checkSeeds() {
     }
     if (!localStorage.getItem("qia_tickets")) {
       localStorage.setItem("qia_tickets", JSON.stringify([]));
+    }
+    const usersRaw = localStorage.getItem("qia_users_list");
+    if (usersRaw) {
+      try {
+        const parsed = JSON.parse(usersRaw);
+        const decList = parsed.map(u => decryptData(u));
+        const hasCorrupted = decList.some(u => !u || isNaN(u.balance) || (u.alias && u.alias.startsWith('enc_qia:')));
+        if (hasCorrupted) {
+          console.warn("⚠️ Lista de usuarios local corrupta o antigua. Forzando re-sembrado...");
+          localStorage.removeItem("qia_users_list");
+        }
+      } catch (e) {
+        localStorage.removeItem("qia_users_list");
+      }
+    }
+
+    if (!localStorage.getItem("qia_users_list")) {
+      const defaultUsers = [
+        {
+          phone: "jugador_admin",
+          email: "yoy@quinielamundialista.mx",
+          name: "Andres",
+          alias: "YoY",
+          pin: "1234",
+          balance: 2000,
+          is_admin: true,
+          role: "master",
+          created_at: new Date().toISOString()
+        }
+      ];
+      const encryptedUsers = defaultUsers.map(u => encryptData(u));
+      localStorage.setItem("qia_users_list", JSON.stringify(encryptedUsers));
     }
   } else {
     // Si estamos en Cloud, populamos Firestore si está vacío
@@ -221,6 +252,7 @@ export async function getSystemConfig() {
     } catch (e) {
       console.warn("⚠️ [Cloud DB] Falló getSystemConfig. Activando modo simulación...", e);
       useSimulation = true;
+      await checkSeeds();
       return getSystemConfig();
     }
   }
@@ -235,7 +267,9 @@ export async function getSystemConfig() {
     betting_deadline_day: 5,
     betting_deadline_hour: 18,
     bypass_deadline_testing: true,
-    manual_locked: false
+    manual_locked: false,
+    pool_matches_count: 10,
+    required_selections: 10
   };
   
   if (!cfg) return defaults;
@@ -265,26 +299,33 @@ export async function getFixtures() {
   } catch (e) {
     console.warn("⚠️ [Cloud DB] Falló getFixtures. Activando modo simulación...", e);
     useSimulation = true;
+    await checkSeeds();
     return getFixtures();
   }
 }
 
-// Obtener sugerencias IA (AHORA CON BUSCADOR INTELIGENTE MODO IA)
-export async function getIASuggestions() {
-  const leagues = ['mex.1', 'esp.1', 'eng.1', 'uefa.champions', 'ita.1', 'arg.1', 'usa.1'];
+export async function getIASuggestions(selectedLeagues, scanDays = 8) {
+  const allLeagues = [
+    'mex.1', 'mex.w.1', 'mex.2', 'uefa.champions', 'uefa.europa', 'uefa.euro', 
+    'conmebol.america', 'conmebol.libertadores', 'conmebol.sudamericana',
+    'esp.1', 'eng.1', 'ita.1', 'ger.1', 'fra.1', 'ned.1', 'por.1',
+    'usa.1', 'arg.1', 'bra.1', 'fifa.friendly', 'fifa.w.friendly'
+  ];
+  const leagues = (selectedLeagues && selectedLeagues.length > 0) ? selectedLeagues : allLeagues;
   let suggestions = [];
   
   // Rango de fechas: hoy a +8 días
   const today = new Date();
-  const future = new Date(today.getTime() + 8 * 24 * 60 * 60 * 1000);
+  const future = new Date(today.getTime() + scanDays * 24 * 60 * 60 * 1000);
   const formatDate = (d) => d.toISOString().split('T')[0].replace(/-/g, '');
   const dateQuery = `?dates=${formatDate(today)}-${formatDate(future)}`;
   
-  for (let lg of leagues) {
+  const fetchPromises = leagues.map(async (lg) => {
     try {
       const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard${dateQuery}`);
-      if (!res.ok) continue;
+      if (!res.ok) return [];
       const data = await res.json();
+      const leagueSuggestions = [];
       if (data.events) {
         data.events.forEach(ev => {
           try {
@@ -292,10 +333,25 @@ export async function getIASuggestions() {
             const home = comp.competitors.find(c => c.homeAway === 'home');
             const away = comp.competitors.find(c => c.homeAway === 'away');
             
-            let attract = Math.floor(Math.random() * 40) + 60; // 60 to 99
-            if (lg === 'mex.1' || lg === 'uefa.champions') attract += 10;
+            // Jerarquía de atracción especificada
+            let attract = 70;
+            if (lg === 'mex.1') {
+              attract = 95 + Math.floor(Math.random() * 5); // 95 - 99 (Liga MX)
+            } else if (lg === 'uefa.champions') {
+              attract = 90 + Math.floor(Math.random() * 5); // 90 - 94 (Champions)
+            } else if (lg === 'esp.1' || lg === 'eng.1' || lg === 'ita.1' || lg === 'ger.1') {
+              attract = 80 + Math.floor(Math.random() * 10); // 80 - 89 (Ligas Europeas)
+            } else if (lg === 'mex.w.1' || lg === 'fifa.w.friendly') {
+              attract = 75 + Math.floor(Math.random() * 10); // 75 - 84 (Femenil/Selección)
+            } else if (lg === 'usa.1') {
+              attract = 60 + Math.floor(Math.random() * 10); // 60 - 69 (MLS)
+            } else if (lg === 'arg.1' || lg === 'bra.1') {
+              attract = 50 + Math.floor(Math.random() * 10); // 50 - 59 (Liga Latinoamericana)
+            } else {
+              attract = 70 + Math.floor(Math.random() * 10); // 70 - 79 (Selecciones/Internacionales u otros)
+            }
             
-            suggestions.push({
+            leagueSuggestions.push({
               id: ev.id,
               team_local: home.team.shortDisplayName || home.team.name,
               team_visita: away.team.shortDisplayName || away.team.name,
@@ -308,150 +364,31 @@ export async function getIASuggestions() {
           } catch(e) {}
         });
       }
+      return leagueSuggestions;
     } catch(e) {
       console.warn("ESPN Fetch Error for", lg, e);
+      return [];
     }
-  }
+  });
   
-  // =========================================================================
-  // ALGORITMO ANTIVACÍOS: Si la API regresa menos de 5 partidos (por fin de temporada o fallos),
-  // inyectamos dinámicamente partidos estelares reales de la temporada de Mayo-Junio 2026.
-  // Las fechas se calculan dinámicamente respecto al día de hoy para que caigan 100% en los siguientes 8 días.
-  // =========================================================================
-  if (suggestions.length < 5) {
-    console.log("⚽ [Google AI Mode] Pocos partidos en API ESPN. Inyectando cartelera estelar premium...");
-    
-    // Lista de partidos atractivos de élite programados en el periodo de 8 días a partir del 27 de Mayo de 2026
-    const baseDateStr = "2026-05-27T08:00:00";
-    const baseOffset = new Date(baseDateStr).getTime();
-    const currentToday = Date.now();
-    const timeDifference = currentToday - baseOffset; // Diferencia para desplazar las fechas al día de hoy actual
-    
-    const premiumMatches = [
-      {
-        id: "ai-1",
-        team_local: "PSG",
-        team_visita: "Arsenal",
-        date: new Date(new Date("2026-06-06T19:00:00Z").getTime() + timeDifference).toISOString(), // Sábado 6 de Junio (Final UCL)
-        attraction_index: 99,
-        group: "UEFA Champions League Final",
-        reason: "La gran final de la UEFA Champions League 2026 en el Allianz Arena. El partido de clubes más importante del año."
-      },
-      {
-        id: "ai-2",
-        team_local: "Alemania",
-        team_visita: "Escocia",
-        date: new Date(new Date("2026-06-12T19:00:00Z").getTime() + timeDifference).toISOString(), // Viernes 12 de Junio (Inaugural Euro)
-        attraction_index: 95,
-        group: "Eurocopa 2026 - Grupo A (Inaugural)",
-        reason: "Partido inaugural de la Eurocopa 2026 en Múnich. El anfitrión busca iniciar con fuerza en casa."
-      },
-      {
-        id: "ai-3",
-        team_local: "España",
-        team_visita: "Croacia",
-        date: new Date(new Date("2026-06-13T16:00:00Z").getTime() + timeDifference).toISOString(), // Sábado 13 de Junio
-        attraction_index: 93,
-        group: "Eurocopa 2026 - Grupo B",
-        reason: "El choque más atractivo de la fase de grupos de la Euro. Reedición de la final de Nations League."
-      },
-      {
-        id: "ai-4",
-        team_local: "Argentina",
-        team_visita: "Canadá",
-        date: new Date(new Date("2026-06-11T18:00:00Z").getTime() + timeDifference).toISOString(), // Jueves 11 de Junio (Inaugural Copa América)
-        attraction_index: 96,
-        group: "Copa América 2026 - Grupo A (Inaugural)",
-        reason: "Inauguración de la Copa América en Atlanta. Lionel Messi y la Albiceleste inician la defensa del título."
-      },
-      {
-        id: "ai-5",
-        team_local: "México",
-        team_visita: "Jamaica",
-        date: new Date(new Date("2026-06-13T19:00:00Z").getTime() + timeDifference).toISOString(), // Sábado 13 de Junio
-        attraction_index: 91,
-        group: "Copa América 2026 - Grupo B",
-        reason: "Debut de la Selección Mexicana en Copa América. Un partido crucial en Houston para las aspiraciones del Tri."
-      },
-      {
-        id: "ai-6",
-        team_local: "Inglaterra",
-        team_visita: "Serbia",
-        date: new Date(new Date("2026-06-14T19:00:00Z").getTime() + timeDifference).toISOString(), // Domingo 14 de Junio
-        attraction_index: 89,
-        group: "Eurocopa 2026 - Grupo C",
-        reason: "Inglaterra con Jude Bellingham y Harry Kane inicia su camino como máxima favorita del torneo continental."
-      },
-      {
-        id: "ai-7",
-        team_local: "Estados Unidos",
-        team_visita: "Bolivia",
-        date: new Date(new Date("2026-06-14T17:00:00Z").getTime() + timeDifference).toISOString(), // Domingo 14 de Junio
-        attraction_index: 86,
-        group: "Copa América 2026 - Grupo C",
-        reason: "El anfitrión de la Copa América debuta en el AT&T Stadium ante una Bolivia que busca dar la gran sorpresa."
-      },
-      {
-        id: "ai-8",
-        team_local: "Francia",
-        team_visita: "Austria",
-        date: new Date(new Date("2026-06-15T19:00:00Z").getTime() + timeDifference).toISOString(), // Lunes 15 de Junio
-        attraction_index: 92,
-        group: "Eurocopa 2026 - Grupo D",
-        reason: "Kylian Mbappé lidera a la poderosa selección francesa en su debut oficial en tierras alemanas."
-      },
-      {
-        id: "ai-9",
-        team_local: "Inter Miami",
-        team_visita: "LA Galaxy",
-        date: new Date(new Date("2026-05-30T18:30:00Z").getTime() + timeDifference).toISOString(), // Sábado 30 de Mayo
-        attraction_index: 88,
-        group: "MLS Temporada Regular",
-        reason: "Lionel Messi, Luis Suárez y el Inter Miami reciben al histórico LA Galaxy en un duelo estelar de la MLS."
-      },
-      {
-        id: "ai-10",
-        team_local: "América",
-        team_visita: "Cruz Azul",
-        date: new Date(new Date("2026-06-14T17:00:00Z").getTime() + timeDifference).toISOString(), // Domingo 14 de Junio
-        attraction_index: 94,
-        group: "Campeón de Campeones Liga MX",
-        reason: "El Clásico Joven a disputarse en Los Ángeles para definir al monarca absoluto de la Liga MX."
-      },
-      {
-        id: "ai-11",
-        team_local: "Portugal",
-        team_visita: "República Checa",
-        date: new Date(new Date("2026-06-16T19:00:00Z").getTime() + timeDifference).toISOString(), // Martes 16 de Junio
-        attraction_index: 90,
-        group: "Eurocopa 2026 - Grupo F",
-        reason: "Cristiano Ronaldo inicia su histórica sexta Eurocopa buscando liderar a las quinas hacia la gloria."
-      },
-      {
-        id: "ai-12",
-        team_local: "Brasil",
-        team_visita: "Costa Rica",
-        date: new Date(new Date("2026-06-15T18:00:00Z").getTime() + timeDifference).toISOString(), // Lunes 15 de Junio
-        attraction_index: 89,
-        group: "Copa América 2026 - Grupo D",
-        reason: "Vinícius Jr., Rodrygo y la Canarinha debutan contra Costa Rica con la obligación absoluta de golear."
-      }
-    ];
-
-    // Filtrar partidos para asegurar que caigan estrictamente en los próximos 8 días
-    const filteredPremium = premiumMatches.filter(m => {
-      const d = new Date(m.date);
-      return d >= today && d <= future;
-    });
-
-    suggestions = [...suggestions, ...filteredPremium];
-  }
+  const results = await Promise.all(fetchPromises);
+  results.forEach(resList => {
+    suggestions.push(...resList);
+  });
+  
+  // Evitar duplicados por ID de partido
+  const seenIds = new Set();
+  suggestions = suggestions.filter(s => {
+    if (seenIds.has(s.id)) return false;
+    seenIds.add(s.id);
+    return true;
+  });
   
   // Ordenar cronológicamente
   suggestions.sort((a,b) => new Date(a.date) - new Date(b.date));
   
-  // Retornar los mejores partidos
-  return suggestions.slice(0, 25);
+  // Retornar los mejores partidos (hasta 30)
+  return suggestions.slice(0, 30);
 }
 
 // Encriptar datos de caché de búsqueda de Google AI
@@ -489,8 +426,8 @@ export function decryptAISearchData(encStr) {
 }
 
 // Obtener resultados detallados del buscador de Google con Modo IA (Filtrado por Categoría)
-export async function getGoogleAISearchResults(query, category = 'todos') {
-  let suggestions = await getIASuggestions();
+export async function getGoogleAISearchResults(query, category = "todos", selectedLeagues, scanDays = 8) {
+  let suggestions = await getIASuggestions(selectedLeagues, scanDays);
   
   // Si la consulta contiene palabras clave de torneos, forzar la categoría correspondiente automáticamente
   const queryLower = (query || "").toLowerCase();
@@ -508,34 +445,42 @@ export async function getGoogleAISearchResults(query, category = 'todos') {
   
   // Filtrar partidos
   if (activeCat === 'euro') {
-    suggestions = suggestions.filter(s => s.group.toLowerCase().includes('euro') || s.group.toLowerCase().includes('champions'));
+    suggestions = suggestions.filter(s => s.group.toLowerCase().includes('euro') || s.group.toLowerCase().includes('champions') || s.group.toLowerCase().includes('uefa'));
   } else if (activeCat === 'copa') {
-    suggestions = suggestions.filter(s => s.group.toLowerCase().includes('copa'));
+    suggestions = suggestions.filter(s => s.group.toLowerCase().includes('copa') || s.group.toLowerCase().includes('conmebol'));
   } else if (activeCat === 'local') {
-    suggestions = suggestions.filter(s => s.group.toLowerCase().includes('liga mx') || s.group.toLowerCase().includes('mls') || s.group.toLowerCase().includes('campeón'));
+    suggestions = suggestions.filter(s => s.group.toLowerCase().includes('liga mx') || s.group.toLowerCase().includes('mls') || s.group.toLowerCase().includes('campeón') || s.group.toLowerCase().includes('expansión'));
   }
   
   const todayStr = new Date().toLocaleDateString('es-MX', {day: 'numeric', month: 'long'});
-  const futureStr = new Date(Date.now() + 8*24*60*60*1000).toLocaleDateString('es-MX', {day: 'numeric', month: 'long', year: 'numeric'});
+  const futureStr = new Date(Date.now() + scanDays*24*60*60*1000).toLocaleDateString('es-MX', {day: 'numeric', month: 'long', year: 'numeric'});
   
   let overview = "";
-  if (activeCat === 'euro') {
-    overview = `La Inteligencia Artificial de Google identifica que el fútbol europeo dominará la cartelera de los próximos 8 días (del <b>${todayStr}</b> al <b>${futureStr}</b>). El evento cumbre es la <b>Gran Final de la UEFA Champions League</b> en Múnich entre <b>PSG</b> y <b>Arsenal</b>, seguido por el pitazo inicial de la <b>Eurocopa 2026 en Alemania</b>. La atención se centra en el duelo inaugural de <b>Alemania vs Escocia</b> y el choque de alta tensión del grupo B entre <b>España y Croacia</b>.`;
-  } else if (activeCat === 'copa') {
-    overview = `El análisis de la Inteligencia Artificial de Google destaca que el continente americano se vestirá de gala en los próximos 8 días (del <b>${todayStr}</b> al <b>${futureStr}</b>) con el inicio de la <b>Copa América 2026 en Estados Unidos</b>. El torneo continental arranca con el campeón defensor <b>Argentina liderado por Lionel Messi</b> ante Canadá, además del muy esperado debut de <b>México contra Jamaica</b> en Houston y Estados Unidos frente a Bolivia.`;
-  } else if (activeCat === 'local') {
-    overview = `La Inteligencia Artificial de Google resalta que el fútbol de Norteamérica presenta encuentros de altísimo interest en los próximos 8 días (del <b>${todayStr}</b> al <b>${futureStr}</b>). Sobresale el partido estelar de la MLS donde el <b>Inter Miami con Lionel Messi</b> se enfrenta al histórico LA Galaxy, acompañado por el emocionante choque del Campeón de Campeones de la Liga MX entre <b>América y Cruz Azul</b> en Los Ángeles.`;
+  if (suggestions.length === 0) {
+    overview = `La Inteligencia Artificial de Google analizó la cartelera de los próximos 8 días (del <b>${todayStr}</b> al <b>${futureStr}</b>) y determinó que no hay encuentros profesionales programados en este momento para la categoría seleccionada.`;
   } else {
-    overview = `Para los próximos 8 días (del <b>${todayStr}</b> al <b>${futureStr}</b>), la Inteligencia Artificial de Google identifica una cartelera de fútbol espectacular caracterizada por el inicio de los torneos continentales y definiciones de élite:
+    // Tomar los 3 partidos con mayor índice de atracción
+    const topMatches = [...suggestions]
+      .sort((a, b) => b.attraction_index - a.attraction_index)
+      .slice(0, 3);
+    
+    const matchesListHtml = topMatches.map(m => {
+      let timeStr = "";
+      try {
+        timeStr = new Date(m.date).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+      } catch(e) {}
+      return `<li>🔥 <b>${m.team_local} vs ${m.team_visita}</b> (${m.group} - ${timeStr}): Calificación IA de atracción del <b>${m.attraction_index}%</b>. Un encuentro clave en la cartelera internacional.</li>`;
+    }).join("");
+    
+    overview = `La Inteligencia Artificial de Google ha analizado en tiempo real los eventos futbolísticos del <b>${todayStr}</b> al <b>${futureStr}</b> y ha seleccionado un total de <b>${suggestions.length} encuentros</b> profesionales para ti.
+    <br><br>
+    Los encuentros más destacados e imperdibles para tu quiniela de esta semana son:
     <br><br>
     <ul>
-      <li>🏆 <b>UEFA Champions League Final:</b> El choque definitivo entre <b>PSG</b> y <b>Arsenal</b> corona la temporada de clubes europeos en el Allianz Arena.</li>
-      <li>🇪🇺 <b>Eurocopa 2026 (Alemania):</b> Arranca el torneo con el debut del anfitrión <b>Alemania vs Escocia</b> en Múnich y el vibrante cara a cara de <b>España vs Croacia</b>.</li>
-      <li>🌎 <b>Copa América 2026 (Estados Unidos):</b> Inicia la fiesta con el campeón <b>Argentina</b> abriendo ante Canadá, y un retador debut de <b>México</b> ante Jamaica en Houston.</li>
-      <li>🇲🇽 <b>Clásicos y Estrellas locales:</b> Destacan el duelo Campeón de Campeones entre <b>América</b> y <b>Cruz Azul</b>, y el esperado <b>Inter Miami (con Lionel Messi)</b> recibiendo al LA Galaxy.</li>
+      ${matchesListHtml}
     </ul>
     <br>
-    Todos estos partidos de alta relevancia se han listado a continuación con su índice de atracción IA correspondiente y pueden ser incorporados a tus quinielas activas de inmediato.`;
+    Todos estos partidos se han sincronizado con las estadísticas oficiales y están listos para ser incorporados a la cartelera activa.`;
   }
 
   return {
@@ -630,7 +575,7 @@ export async function registerOrLoginUser(userData) {
     return userData;
   }
   
-  const uid = userData.phone || userData.email.replace(/[^a-zA-Z0-9]/g, "_");
+  const uid = userData.email ? userData.email.replace(/[^a-zA-Z0-9]/g, "_") : userData.phone;
   try {
     await Promise.race([
       db.collection("users").doc(uid).set({
@@ -642,6 +587,7 @@ export async function registerOrLoginUser(userData) {
   } catch(e) {
     console.warn("⚠️ Firebase denegó la escritura. Activando Simulación Local:", e.message);
     useSimulation = true;
+    await checkSeeds();
     localStorage.setItem("qia_current_user", JSON.stringify(encryptedUser));
     let allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
     allUsers.push(encryptedUser);
@@ -669,6 +615,7 @@ export async function getUserData(phoneOrEmail) {
   } catch (e) {
     console.warn("⚠️ [Cloud DB] Falló getUserData. Activando modo simulación...", e);
     useSimulation = true;
+    await checkSeeds();
     return getUserData(phoneOrEmail); // Re-intentar con simulación local
   }
 }
@@ -706,10 +653,10 @@ export async function registerTransaction(tx) {
   if (tx.status === "approved") {
     const user = decryptData(JSON.parse(localStorage.getItem("qia_current_user")));
     if (user) {
-      const uid = (user.phone || user.email).replace(/[^a-zA-Z0-9]/g, "_");
-      await db.collection("users").doc(uid).update({
+      const uid = (user.email || user.phone).replace(/[^a-zA-Z0-9]/g, "_");
+      await db.collection("users").doc(uid).set({
         balance: firebase.firestore.FieldValue.increment(Number(tx.amount))
-      });
+      }, { merge: true });
       // Actualizar local storage actual
       user.balance = (Number(user.balance) || 0) + Number(tx.amount);
       localStorage.setItem("qia_current_user", JSON.stringify(encryptData(user)));
@@ -758,6 +705,24 @@ export async function approveSPEITransaction(txId) {
       }));
       if (user) {
         user.balance = (Number(user.balance) || 0) + Number(tx.amount);
+        
+        // Activar quinielas reservadas automáticamente
+        const allTickets = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
+        let hasChanges = false;
+        allTickets.forEach(tkt => {
+          if (tkt.user_id === tx.user_id && tkt.status === "reserved") {
+            const cost = Number(tkt.total_cost) || 0;
+            if (user.balance >= cost) {
+              user.balance -= cost;
+              tkt.status = "active";
+              hasChanges = true;
+            }
+          }
+        });
+        if (hasChanges) {
+          localStorage.setItem("qia_tickets", JSON.stringify(allTickets));
+        }
+
         allUsers = allUsers.map(u => {
           const dec = decryptData(u);
           return dec.phone === user.phone ? encryptData(user) : u;
@@ -782,15 +747,44 @@ export async function approveSPEITransaction(txId) {
     const tx = doc.data();
     await txRef.update({ status: "approved" });
     const uid = tx.user_id.replace(/[^a-zA-Z0-9]/g, "_");
-    await db.collection("users").doc(uid).update({
-      balance: firebase.firestore.FieldValue.increment(Number(tx.amount))
-    });
     
-    // Si el usuario actual es el afectado, recargar balance
-    const curr = JSON.parse(localStorage.getItem("qia_current_user"));
-    if (curr && (curr.phone === tx.user_id || curr.email === tx.user_id)) {
-      curr.balance = (Number(curr.balance) || 0) + Number(tx.amount);
-      localStorage.setItem("qia_current_user", JSON.stringify(curr));
+    const userRef = db.collection("users").doc(uid);
+    const userDoc = await userRef.get();
+    
+    if (userDoc.exists) {
+      let currentBalance = (Number(userDoc.data().balance) || 0) + Number(tx.amount);
+      
+      const reservedTickets = await db.collection("tickets")
+        .where("user_id", "==", tx.user_id)
+        .where("status", "==", "reserved")
+        .get();
+        
+      let newlyActiveCount = 0;
+      
+      for (let tDoc of reservedTickets.docs) {
+        const tkt = tDoc.data();
+        const cost = Number(tkt.total_cost) || 0;
+        if (currentBalance >= cost) {
+          currentBalance -= cost;
+          newlyActiveCount++;
+          await db.collection("tickets").doc(tDoc.id).update({ status: "active" });
+        }
+      }
+      
+      await userRef.set({
+        balance: currentBalance,
+        active_tickets_count: firebase.firestore.FieldValue.increment(newlyActiveCount)
+      }, { merge: true });
+      
+      // Si el usuario actual es el afectado, recargar balance
+      const curr = JSON.parse(localStorage.getItem("qia_current_user"));
+      if (curr) {
+        const decryptedCurr = decryptData(curr);
+        if (decryptedCurr.phone === tx.user_id || decryptedCurr.email === tx.user_id) {
+          decryptedCurr.balance = currentBalance;
+          localStorage.setItem("qia_current_user", JSON.stringify(encryptData(decryptedCurr)));
+        }
+      }
     }
   }
   return true;
@@ -803,10 +797,32 @@ export async function declineSPEITransaction(txId) {
     if (tx) {
       tx.status = "declined";
       localStorage.setItem("qia_transactions", JSON.stringify(list));
+      
+      // Eliminar tickets reservados
+      let tickets = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
+      tickets = tickets.filter(t => !(t.user_id === tx.user_id && t.status === "reserved"));
+      localStorage.setItem("qia_tickets", JSON.stringify(tickets));
     }
     return true;
   }
-  await db.collection("transactions").doc(txId).update({ status: "declined" });
+  
+  const txRef = db.collection("transactions").doc(txId);
+  const doc = await txRef.get();
+  if (doc.exists) {
+    const tx = doc.data();
+    await txRef.update({ status: "declined" });
+    
+    // Eliminar tickets reservados
+    const reservedTickets = await db.collection("tickets")
+      .where("user_id", "==", tx.user_id)
+      .where("status", "==", "reserved")
+      .get();
+      
+    for (let tDoc of reservedTickets.docs) {
+      await db.collection("tickets").doc(tDoc.id).delete();
+    }
+  }
+  
   return true;
 }
 
@@ -816,37 +832,41 @@ export async function createTicket(ticket) {
   ticket.created_at = new Date().toISOString();
   
   if (useSimulation) {
-    const list = JSON.parse(localStorage.getItem("qia_tickets"));
+    const list = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
     list.unshift(ticket);
     localStorage.setItem("qia_tickets", JSON.stringify(list));
     
-    // Cobrar costo al usuario
-    const user = decryptData(JSON.parse(localStorage.getItem("qia_current_user")));
-    if (user) {
-      user.balance = (Number(user.balance) || 0) - Number(ticket.total_cost);
-      localStorage.setItem("qia_current_user", JSON.stringify(encryptData(user)));
-      // actualizar en la lista
-      let allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
-      allUsers = allUsers.map(u => {
-        const dec = decryptData(u);
-        return dec.phone === user.phone ? encryptData(user) : u;
-      });
-      localStorage.setItem("qia_users_list", JSON.stringify(allUsers));
+    // Cobrar costo al usuario solo si está activa
+    if (ticket.status !== "reserved") {
+      const user = decryptData(JSON.parse(localStorage.getItem("qia_current_user")));
+      if (user) {
+        user.balance = (Number(user.balance) || 0) - Number(ticket.total_cost);
+        localStorage.setItem("qia_current_user", JSON.stringify(encryptData(user)));
+        // actualizar en la lista
+        let allUsers = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
+        allUsers = allUsers.map(u => {
+          const dec = decryptData(u);
+          return dec.phone === user.phone ? encryptData(user) : u;
+        });
+        localStorage.setItem("qia_users_list", JSON.stringify(allUsers));
+      }
     }
     return ticket;
   }
 
   // Cloud Firestore
   await db.collection("tickets").doc(ticket.id).set(ticket);
-  const user = decryptData(JSON.parse(localStorage.getItem("qia_current_user")));
-  if (user) {
-    const uid = (user.phone || user.email).replace(/[^a-zA-Z0-9]/g, "_");
-    await db.collection("users").doc(uid).update({
-      balance: firebase.firestore.FieldValue.increment(-Number(ticket.total_cost)),
-      active_tickets_count: firebase.firestore.FieldValue.increment(1)
-    });
-    user.balance = (Number(user.balance) || 0) - Number(ticket.total_cost);
-    localStorage.setItem("qia_current_user", JSON.stringify(encryptData(user)));
+  if (ticket.status !== "reserved") {
+    const user = decryptData(JSON.parse(localStorage.getItem("qia_current_user")));
+    if (user) {
+      const uid = (user.email || user.phone).replace(/[^a-zA-Z0-9]/g, "_");
+      await db.collection("users").doc(uid).set({
+        balance: firebase.firestore.FieldValue.increment(-Number(ticket.total_cost)),
+        active_tickets_count: firebase.firestore.FieldValue.increment(1)
+      }, { merge: true });
+      user.balance = (Number(user.balance) || 0) - Number(ticket.total_cost);
+      localStorage.setItem("qia_current_user", JSON.stringify(encryptData(user)));
+    }
   }
   return ticket;
 }
@@ -854,9 +874,9 @@ export async function createTicket(ticket) {
 // Estadísticas de Administrador
 export async function getAdminStats() {
   if (useSimulation) {
-    const tickets = JSON.parse(localStorage.getItem("qia_tickets"));
+    const tickets = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
     const totalSales = tickets.reduce((sum, t) => sum + Number(t.total_cost), 0);
-    const usersCount = JSON.parse(localStorage.getItem("qia_users_list") || "[]").length + 4; // base seeds + new ones
+    const usersCount = JSON.parse(localStorage.getItem("qia_users_list") || "[]").length;
     return {
       total_sales: totalSales,
       users_count: usersCount
@@ -1033,18 +1053,26 @@ export async function executeWeeklyClosure(config) {
     const tSnap = await db.collection("tickets").where("status", "==", "active").get();
     if (tSnap.empty) return { success: false, message: "No hay tickets activos en Firestore." };
 
-    const jackpot = Number(config.pool_jackpot) || 5000;
+    const tickets = tSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const poolCost = Number(config.pool_cost) || 50;
+    const poolFee = Number(config.pool_fee) || 10;
+    const jackpot = tickets.length * poolCost * (1 - (poolFee / 100));
+
     const places = Number(config.pool_places) || 3;
     const percentages = [];
-    let remaining = 100;
-    for(let i=0; i<places; i++){
-      let p = (i === places - 1) ? remaining : Math.round(remaining * 0.5);
-      percentages.push(p);
-      remaining -= p;
+    if (places === 1) {
+      percentages.push(100);
+    } else if (places === 3) {
+      percentages.push(50, 35, 15);
+    } else {
+      let remaining = 100;
+      for(let i=0; i<places; i++){
+        let p = (i === places - 1) ? remaining : Math.round(remaining * 0.5);
+        percentages.push(p);
+        remaining -= p;
+      }
     }
     const prizePools = percentages.map(p => (p/100) * jackpot);
-
-    const tickets = tSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     const userBest = {};
     tickets.forEach(t => {
       t.status = "checked";
@@ -1088,10 +1116,10 @@ export async function executeWeeklyClosure(config) {
       const ref = db.collection("tickets").doc(w.id);
       batch.update(ref, { status: "checked", hits: w.hits, prize: w.prize });
       const uid = w.user_id.replace(/[^a-zA-Z0-9]/g, "_");
-      batch.update(db.collection("users").doc(uid), { 
+      batch.set(db.collection("users").doc(uid), { 
         balance: firebase.firestore.FieldValue.increment(w.prize),
         total_hits: firebase.firestore.FieldValue.increment(w.hits) // Acumulado
-      });
+      }, { merge: true });
     });
 
     await batch.commit();
@@ -1161,7 +1189,11 @@ export async function fetchAllUsers() {
   if (useSimulation) {
     const local = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
     return local.map(u => {
-      try { return decryptData(u); } catch(e) { return u; }
+      try { 
+        let d = decryptData(u); 
+        if (!d.id) d.id = d.phone || d.email; 
+        return d; 
+      } catch(e) { return u; }
     });
   }
   try {
@@ -1199,9 +1231,9 @@ export async function updateUserBalance(uid, amountToAdd) {
     return false;
   }
   try {
-    await db.collection("users").doc(uid).update({ 
+    await db.collection("users").doc(uid).set({ 
       balance: firebase.firestore.FieldValue.increment(Number(amountToAdd)) 
-    });
+    }, { merge: true });
     return true;
   } catch (e) {
     console.error("Error updating user balance:", e);
@@ -1340,3 +1372,176 @@ export async function clearAllFixtures() {
     return false;
   }
 }
+
+// Tickets del usuario actual (TODOS los estados: active, reserved, checked)
+export async function getUserTickets(userId) {
+  if (!userId) return [];
+  if (useSimulation) {
+    const list = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
+    return list.filter(t => t.user_id === userId).sort((a, b) =>
+      new Date(b.created_at) - new Date(a.created_at)
+    );
+  }
+  try {
+    // SIN .orderBy() para evitar requerir índice compuesto en Firestore.
+    // El ordenamiento se hace en JS después del fetch.
+    const snap = await db.collection("tickets")
+      .where("user_id", "==", userId)
+      .get();
+    const tickets = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Ordenar por fecha descendente en JavaScript
+    return tickets.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  } catch (e) {
+    console.warn("⚠️ [Cloud DB] Falló getUserTickets. Usando simulación...", e);
+    const list = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
+    return list.filter(t => t.user_id === userId).sort((a, b) =>
+      new Date(b.created_at) - new Date(a.created_at)
+    );
+  }
+}
+
+export async function getActiveTickets() {
+  if (useSimulation) {
+    const list = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
+    const usersList = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
+    return list.filter(t => {
+      if (t.status !== "active") return false;
+      const encryptedUser = usersList.find(u => {
+        const dec = decryptData(u);
+        return dec.phone === t.user_id || dec.email === t.user_id;
+      });
+      if (encryptedUser) {
+        const user = decryptData(encryptedUser);
+        const balance = Number(user.balance);
+        if (isNaN(balance) || balance < 0) return false;
+      }
+      return true;
+    });
+  }
+  try {
+    const snap = await db.collection("tickets").where("status", "==", "active").get();
+    const tickets = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const usersSnap = await db.collection("users").get();
+    const usersMap = {};
+    usersSnap.docs.forEach(doc => {
+      const dec = decryptData(doc.data());
+      usersMap[dec.phone || dec.email] = dec;
+    });
+    return tickets.filter(t => {
+      const user = usersMap[t.user_id];
+      if (user) {
+        const balance = Number(user.balance);
+        if (isNaN(balance) || balance < 0) return false;
+      }
+      return true;
+    });
+  } catch (e) {
+    console.warn("⚠️ [Cloud DB] Falló getActiveTickets. Usando simulación...", e);
+    const list = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
+    const usersList = JSON.parse(localStorage.getItem("qia_users_list") || "[]");
+    return list.filter(t => {
+      if (t.status !== "active") return false;
+      const encryptedUser = usersList.find(u => {
+        const dec = decryptData(u);
+        return dec.phone === t.user_id || dec.email === t.user_id;
+      });
+      if (encryptedUser) {
+        const user = decryptData(encryptedUser);
+        const balance = Number(user.balance);
+        if (isNaN(balance) || balance < 0) return false;
+      }
+      return true;
+    });
+  }
+}
+
+// Actualizar automáticamente resultados oficiales desde ESPN Scoreboard
+export async function autoUpdateMatchResults(silent = false) {
+  const fixtures = await getFixtures();
+  const pendingFixtures = fixtures.filter(f => f.status !== "finished" && f.status !== "canceled");
+  
+  if (pendingFixtures.length === 0) return 0;
+  
+  const today = new Date();
+  const past = new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000); // 10 días atrás
+  const future = new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000); // 2 días al futuro
+  const formatDate = (d) => d.toISOString().split('T')[0].replace(/-/g, '');
+  const dateQuery = `?dates=${formatDate(past)}-${formatDate(future)}`;
+  
+  const leagues = [
+    'mex.1', 'mex.w.1', 'mex.2', 'uefa.champions', 'uefa.europa', 'uefa.euro', 
+    'conmebol.america', 'conmebol.libertadores', 'conmebol.sudamericana',
+    'esp.1', 'eng.1', 'ita.1', 'ger.1', 'fra.1', 'ned.1', 'por.1',
+    'usa.1', 'arg.1', 'bra.1', 'fifa.friendly', 'fifa.w.friendly'
+  ];
+  
+  let updatedCount = 0;
+  
+  // Normalizar nombres de equipos para matching
+  const normalize = (name) => {
+    if (!name) return "";
+    return name.toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "")
+      .replace("fc", "")
+      .replace("cf", "")
+      .replace("club", "")
+      .trim();
+  };
+  
+  // Ejecutar fetches en paralelo
+  const fetchPromises = leagues.map(async (lg) => {
+    try {
+      const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard${dateQuery}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.events || [];
+    } catch (e) {
+      return [];
+    }
+  });
+  
+  const eventsLists = await Promise.all(fetchPromises);
+  const allEvents = eventsLists.flat();
+  
+  for (const f of pendingFixtures) {
+    const fLocalNorm = normalize(f.team_local);
+    const fVisitaNorm = normalize(f.team_visita);
+    
+    // Buscar evento coincidente
+    const ev = allEvents.find(e => {
+      if (e.id === f.id) return true;
+      try {
+        const comp = e.competitions[0];
+        const home = comp.competitors.find(c => c.homeAway === 'home');
+        const away = comp.competitors.find(c => c.homeAway === 'away');
+        const homeNorm = normalize(home.team.name || home.team.shortDisplayName);
+        const awayNorm = normalize(away.team.name || away.team.shortDisplayName);
+        
+        return (fLocalNorm.includes(homeNorm) || homeNorm.includes(fLocalNorm)) && 
+               (fVisitaNorm.includes(awayNorm) || awayNorm.includes(fVisitaNorm));
+      } catch (err) {
+        return false;
+      }
+    });
+    
+    if (ev && ev.status && ev.status.type && ev.status.type.state === 'post') {
+      try {
+        const comp = ev.competitions[0];
+        const home = comp.competitors.find(c => c.homeAway === 'home');
+        const away = comp.competitors.find(c => c.homeAway === 'away');
+        const scoreHome = Number(home.score);
+        const scoreAway = Number(away.score);
+        
+        const success = await updateFixtureScore(f.id, scoreHome, scoreAway);
+        if (success) {
+          updatedCount++;
+        }
+      } catch (err) {}
+    }
+  }
+  
+  return updatedCount;
+}
+

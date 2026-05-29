@@ -33,16 +33,20 @@ import {
   batchAddFixtures,
   clearAllFixtures,
   updateFixtureScore,
-  cancelFixture
-} from './app_db.js?v=15';
-
+  cancelFixture,
+  getActiveTickets,
+  getUserTickets
+} from './app_db.js';
 // ── VARIABLES DE CONTROL GLOBAL ──────────────────────────────────────────
 let currentUser = null;
 let systemConfig = null;
 let currentTicketSelections = {}; // match_id -> 'L'|'E'|'V'
 let lastCreatedTicket = null;
 let serverTimeOffset = 0; // offset antifraude del reloj
-
+let cachedFixturesList = [];
+let cachedUsersList = [];
+let adminMasterSelections = {}; // match_id -> 'L'|'E'|'V'|'C'
+let isPurchasing = false;
 async function syncServerTime() {
   console.log("⏱️ [Reloj Antifraude] Usando validación nativa de Firebase en lugar de API externa.");
   serverTimeOffset = 0;
@@ -101,6 +105,12 @@ function showToast(message, type = "info") {
 // ── INICIALIZACIÓN DE LA APLICACIÓN ──────────────────────────────────────
 async function initApp() {
   console.log("⚽ Quiniela Mundialista IA inicializando...");
+  
+  // Registro de actividad global para seguridad (Auto-logout)
+  document.addEventListener('click', () => {
+    localStorage.setItem("qia_last_activity", Date.now().toString());
+  });
+  
   initStarsBackground();
   
   // Sincronizar reloj antifraude en segundo plano
@@ -122,6 +132,18 @@ async function initApp() {
       showToast("⚠️ MODO SIN CONEXIÓN: Mostrando datos guardados", "error");
     }, 2000);
   }
+  
+  // Actualizar resultados de partidos en segundo plano mediante Buscador de Google / IA
+  setTimeout(async () => {
+    try {
+      const updated = await autoUpdateMatchResults(true);
+      if (updated > 0) {
+        console.log(`✅ [Google Search AI] Se han auto-actualizado ${updated} partidos.`);
+      }
+    } catch(e) {
+      console.warn("Error auto-actualizando marcadores:", e);
+    }
+  }, 3500);
   
   // Cargar configuración de costos con timeout
   try {
@@ -148,10 +170,26 @@ async function initApp() {
     if (savedUser) {
       try {
         currentUser = decryptData(JSON.parse(savedUser));
+        
+        // Auto-logout (24 horas de inactividad)
+        const lastActivity = parseInt(localStorage.getItem("qia_last_activity")) || Date.now();
+        if (Date.now() - lastActivity > 24 * 60 * 60 * 1000) {
+          showToast("🔒 Sesión expirada por inactividad de 24 horas. Por favor reingresa.", "error");
+          localStorage.removeItem("qia_current_user");
+          throw new Error("Session expired due to inactivity");
+        }
+        
+        if (!currentUser || typeof currentUser.balance !== 'number' || isNaN(currentUser.balance) || (currentUser.alias && currentUser.alias.startsWith('enc_qia:'))) {
+          throw new Error("Corrupted user session");
+        }
+        loadAppView();
       } catch (err) {
-        currentUser = JSON.parse(savedUser);
+        console.warn("⚠️ Sesión de usuario corrupta o antigua detectada. Cerrando sesión...", err);
+        localStorage.removeItem("qia_current_user");
+        currentUser = null;
+        const onboard = document.getElementById("onboarding-view");
+        if (onboard) onboard.classList.remove("hidden");
       }
-      loadAppView();
     } else {
       // Mostrar Onboarding en primer ingreso para definir Nombre y Apodo
       const onboard = document.getElementById("onboarding-view");
@@ -265,15 +303,19 @@ window.validateAliasAvailability = async function(alias) {
   const aliasRegex = /^[a-zA-Z0-9_]{3,15}$/;
   const cleanAlias = alias.trim().toLowerCase();
   
+  const submitBtn = document.querySelector("#onboarding-view button");
+
   if (!aliasRegex.test(cleanAlias)) {
     feedback.textContent = "Alias no válido. Solo letras, números o guiones bajos (3-15 carac.).";
     feedback.style.color = "var(--danger)";
+    if (submitBtn) submitBtn.disabled = true;
     return;
   }
   
   if (cleanAlias.includes("admin") || cleanAlias.includes("antigravity")) {
     feedback.textContent = "Alias no disponible / Reservado";
     feedback.style.color = "var(--danger)";
+    if (submitBtn) submitBtn.disabled = true;
     return;
   }
   
@@ -285,6 +327,7 @@ window.validateAliasAvailability = async function(alias) {
     if (existingUser) {
       feedback.textContent = "¡Perfil encontrado! Al ingresar, iniciarás sesión en tu cuenta.";
       feedback.style.color = "#ffd700"; // Oro para indicar perfil existente
+      if (submitBtn) submitBtn.disabled = false;
       
       // Autocompletar y deshabilitar Nombre Completo (Sugerencia 3)
       if (nameInput) {
@@ -306,6 +349,7 @@ window.validateAliasAvailability = async function(alias) {
     } else {
       feedback.textContent = "¡Alias disponible en el Quiniela Mundialista!";
       feedback.style.color = "var(--success)"; // Verde de éxito
+      if (submitBtn) submitBtn.disabled = false;
       
       // Habilitar Nombre Completo para Registro
       if (nameInput) {
@@ -317,8 +361,10 @@ window.validateAliasAvailability = async function(alias) {
       }
     }
   } catch(e) {
-    feedback.textContent = "¡Alias disponible en el Quiniela Mundialista!";
-    feedback.style.color = "var(--success)";
+    console.error("Error verificando alias:", e);
+    feedback.textContent = "⚠️ Error al conectar con la base de datos. Intenta de nuevo.";
+    feedback.style.color = "var(--danger)";
+    if (submitBtn) submitBtn.disabled = true;
   }
 };
 
@@ -333,8 +379,8 @@ window.simulateGoogleAuth = async function() {
       email: "rey.stadium.guest@gmail.com",
       name: "Invitado Arena",
       alias: "arena_champion_" + Math.floor(Math.random()*900 + 100),
-      balance: 150, // saldo inicial de prueba
-      is_admin: true, // Habilitar Admin por defecto para probar todo
+      balance: 0, // Inicia con 0 obligatoriamente
+      is_admin: false, // Quitar admin por defecto a invitados
       created_at: new Date().toISOString()
     };
     
@@ -383,8 +429,8 @@ window.simulateOtpVerify = async function() {
     email: alias + "@quinielamundialista.mx",
     name: name,
     alias: alias,
-    balance: 200, // saldo de cortesía
-    is_admin: true, // admin habilitado para prueba
+    balance: 0, // saldo inicial 0
+    is_admin: false, // admin deshabilitado para usuarios normales
     created_at: new Date().toISOString()
   };
   
@@ -434,7 +480,7 @@ async function refreshPanelData(panel) {
   
   // Cargar saldo de cabecera siempre
   const refreshedUser = localStorage.getItem("qia_current_user") 
-    ? JSON.parse(localStorage.getItem("qia_current_user")) 
+    ? decryptData(JSON.parse(localStorage.getItem("qia_current_user"))) 
     : currentUser;
   currentUser = refreshedUser;
   
@@ -442,18 +488,33 @@ async function refreshPanelData(panel) {
   
   if (panel === "dashboard") {
     // 1. Bolsa y Premios (Dinámico)
-    document.getElementById("jackpot-amount").textContent = `$${Number(systemConfig.pool_jackpot).toFixed(2)}`;
-    const jackpotVal = Number(systemConfig.pool_jackpot);
+    const dbMod = await import('./app_db.js');
+    const activeTickets = await dbMod.getActiveTickets();
+    const poolCost = Number(systemConfig.pool_cost) || 50;
+    const poolFee = Number(systemConfig.pool_fee) || 10;
+    const jackpotVal = activeTickets.length * poolCost * (1 - (poolFee / 100));
+
+    document.getElementById("jackpot-amount").textContent = `$${jackpotVal.toFixed(2)}`;
     const places = Number(systemConfig.pool_places) || 3;
     const prizesContainer = document.getElementById("jackpot-prizes-container");
     if (prizesContainer) {
       prizesContainer.innerHTML = "";
-      let remaining = 100;
-      for (let i = 0; i < places; i++) {
-        let p = (i === places - 1) ? remaining : Math.round(remaining * 0.5);
-        remaining -= p;
+      const percentages = [];
+      if (places === 1) {
+        percentages.push(100);
+      } else if (places === 3) {
+        percentages.push(50, 35, 15);
+      } else {
+        let remaining = 100;
+        for (let i = 0; i < places; i++) {
+          let p = (i === places - 1) ? remaining : Math.round(remaining * 0.5);
+          percentages.push(p);
+          remaining -= p;
+        }
+      }
+      
+      percentages.forEach((p, i) => {
         const amount = (p / 100) * jackpotVal;
-        
         let label = (i+1) + "er Lugar";
         if (i+1 === 2) label = "2do Lugar";
         if (i+1 === 3) label = "3er Lugar";
@@ -465,11 +526,37 @@ async function refreshPanelData(panel) {
             <span class="text-accent text-lg font-black italic">$${amount.toFixed(2)}</span>
           </div>
         `;
-      }
+      });
     }
     
-    // 2. Cargar Estadísticas del Jugador
-    const tickets = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
+    // 2. Cargar Estadísticas del Jugador y Limpiar Expirados
+    let tickets = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
+    
+    // 2.1 Limpieza de Tickets Expirados (6 Horas para RESERVED)
+    const sixHoursMs = 6 * 60 * 60 * 1000;
+    const now = Date.now();
+    let ticketsChanged = false;
+    
+    tickets = tickets.filter(t => {
+      if (t.status === "reserved" && t.created_at) {
+        const createdTime = new Date(t.created_at).getTime();
+        if (now - createdTime > sixHoursMs) {
+          ticketsChanged = true;
+          import('./app_db.js').then(dbMod => {
+            if (dbMod.db) {
+              dbMod.db.collection("tickets").doc(t.id).delete().catch(console.error);
+            }
+          });
+          return false;
+        }
+      }
+      return true;
+    });
+    
+    if (ticketsChanged) {
+      localStorage.setItem("qia_tickets", JSON.stringify(tickets));
+    }
+    
     const userTickets = tickets.filter(t => t.user_id === currentUser.phone || t.user_id === currentUser.email);
     document.getElementById("stat-active-tickets").textContent = userTickets.filter(t => t.status === "active").length;
     
@@ -483,6 +570,7 @@ async function refreshPanelData(panel) {
     
     // 3. Marcadores en Vivo
     const fixtures = await getFixtures();
+    cachedFixturesList = fixtures;
     renderLiveScores(fixtures);
     
     // 4. Leaderboard Semanal y Acumulado
@@ -497,9 +585,27 @@ async function refreshPanelData(panel) {
   
   if (panel === "play") {
     // 1. Cargar partidos para jugar
-    const fixtures = await getFixtures();
+    let fixtures = await getFixtures();
+    cachedFixturesList = fixtures;
+    const poolMatchesCount = Number(systemConfig.pool_matches_count) || 10;
+    const reqSelections = Number(systemConfig.required_selections) || 10;
+    
+    // Mostrar todos los partidos activos asignados por el administrador (soporta 11, 15 o mas partidos en cartelera)
+    fixtures = fixtures;
+    
+    // Poblar de forma dinámica las etiquetas de requeridos y contadores
+    const reqEl = document.getElementById("play-required-count");
+    if (reqEl) reqEl.textContent = reqSelections;
+    
+    const instrEl = document.getElementById("play-instruction-text");
+    if (instrEl) {
+      instrEl.textContent = `Elige tus ${reqSelections} partidos estratégicos y selecciona Local (L), Empate (E) o Visita (V).`;
+    }
+    
     renderPlayFixtures(fixtures);
     window.updatePoolCost();
+    startMatchCountdownTimer();      // Mejora 1: countdown en tiempo real
+    scheduleMatchReminder30min(fixtures); // Mejora 3: notif 30 min antes
 
     // 2. Verificar límite de apuestas (Sugerencia 3)
     const isLocked = window.checkBettingDeadlineStatus();
@@ -512,8 +618,41 @@ async function refreshPanelData(panel) {
         const isAdminBypass = systemConfig.bypass_deadline_testing && currentUser && currentUser.is_admin;
         const isManual = systemConfig.manual_locked;
         
-        let titleMsg = isManual ? "APUESTAS CERRADAS POR EL ADMIN" : "APUESTAS CERRADAS (LÍMITE VIERNES 6:00 PM)";
-        let subMsg = isManual ? "El registro ha sido clausurado manualmente." : "El registro de quinielas se reabrirá el lunes.";
+        // Determinar si es bloqueo por primer partido iniciado
+        let isFirstMatchStarted = false;
+        try {
+          let fixturesList = [...cachedFixturesList];
+          if (fixturesList.length === 0) {
+            const rawFixtures = localStorage.getItem("qia_fixtures");
+            if (rawFixtures) fixturesList = JSON.parse(rawFixtures);
+          }
+          if (fixturesList && fixturesList.length > 0) {
+            const poolMatchesCount = Number(systemConfig.pool_matches_count) || 10;
+            const sortedFixtures = fixturesList
+              .sort((a, b) => {
+                const attractionA = Number(a.attraction_index || a.attraction) || 0;
+                const attractionB = Number(b.attraction_index || b.attraction) || 0;
+                return attractionB - attractionA;
+              })
+              .slice(0, poolMatchesCount);
+            
+            let earliestTimestamp = Infinity;
+            sortedFixtures.forEach(f => {
+              const ts = new Date(f.date).getTime();
+              if (!isNaN(ts) && ts < earliestTimestamp) earliestTimestamp = ts;
+            });
+            if (earliestTimestamp !== Infinity && (Date.now() + serverTimeOffset) >= earliestTimestamp) {
+              isFirstMatchStarted = true;
+            }
+          }
+        } catch(e) {}
+        
+        let titleMsg = isManual 
+          ? "APUESTAS CERRADAS POR EL ADMIN" 
+          : (isFirstMatchStarted ? "APUESTAS CERRADAS (JORNADA EN CURSO)" : "APUESTAS CERRADAS (LÍMITE ALCANZADO)");
+        let subMsg = isManual 
+          ? "El registro ha sido clausurado manualmente." 
+          : (isFirstMatchStarted ? "El primer partido de la quiniela ya ha comenzado." : "El registro de quinielas se reabrirá el lunes.");
         
         if (isAdminBypass) {
           alertEl.className = "p-12 rounded-2xl border mb-15 text-xxs uppercase tracking-wider font-bold bg-amber-500/10 border-amber-500/20 text-amber-500 animate-pulse";
@@ -622,6 +761,12 @@ async function refreshPanelData(panel) {
     const extraGoalsInput = document.getElementById("cfg-pool-extra-goals");
     if (extraGoalsInput) extraGoalsInput.value = systemConfig.extra_goals_cost;
 
+    const poolMatchesInput = document.getElementById("cfg-pool-matches");
+    if (poolMatchesInput) poolMatchesInput.value = systemConfig.pool_matches_count !== undefined ? systemConfig.pool_matches_count : 10;
+    
+    const reqSelInput = document.getElementById("cfg-required-selections");
+    if (reqSelInput) reqSelInput.value = systemConfig.required_selections !== undefined ? systemConfig.required_selections : 10;
+
     // 5. Poblar restricción de horario (Sugerencia 3)
     document.getElementById("cfg-deadline-day").value = systemConfig.betting_deadline_day !== undefined ? systemConfig.betting_deadline_day : 5;
     document.getElementById("cfg-deadline-hour").value = systemConfig.betting_deadline_hour !== undefined ? systemConfig.betting_deadline_hour : 18;
@@ -658,10 +803,76 @@ async function refreshPanelData(panel) {
 function loadAppView() {
   document.getElementById("app-container").classList.remove("hidden");
   
-  // Mostrar apodo en la cabecera para personalización de marca
+  // Mostrar apodo y nombre completo en la cabecera para personalización de marca
   const headerUser = document.getElementById("header-username");
-  if (headerUser && currentUser && currentUser.alias) {
-    headerUser.textContent = "@" + currentUser.alias;
+  const headerFull = document.getElementById("header-fullname");
+  const headerAvatar = document.getElementById("header-avatar");
+  const headerCrown = document.getElementById("header-admin-crown");
+  const menuRole = document.getElementById("menu-user-role");
+  const menuName = document.getElementById("menu-user-name");
+  const menuBtnAdmin = document.getElementById("menu-btn-admin");
+  
+  if (currentUser) {
+    const isMaster = currentUser.role === 'master' || (currentUser.name || "").trim().toLowerCase() === 'andres';
+    
+    if (headerUser && currentUser.alias) {
+      headerUser.textContent = "@" + currentUser.alias;
+    }
+    if (headerFull && currentUser.name) {
+      headerFull.textContent = currentUser.name;
+    }
+    
+    // 1. Avatar dinámico con inicial y gradiente premium
+    if (headerAvatar) {
+      const firstLetter = (currentUser.name || currentUser.alias || "U").substring(0, 1).toUpperCase();
+      headerAvatar.textContent = firstLetter;
+      
+      if (isMaster) {
+        headerAvatar.style.background = "linear-gradient(135deg, #ffd700, #ff8c00)"; // Oro / Naranja premium
+        headerAvatar.style.color = "#000";
+        headerAvatar.style.boxShadow = "0 0 15px rgba(255, 215, 0, 0.45)";
+      } else {
+        headerAvatar.style.background = "linear-gradient(135deg, #00e5ff, #00ff88)"; // Verde / Azul neón
+        headerAvatar.style.color = "#000";
+        headerAvatar.style.boxShadow = "0 0 15px rgba(0, 229, 255, 0.25)";
+      }
+    }
+    
+    // 2. Icono de Corona para Administrador Maestro
+    if (headerCrown) {
+      if (isMaster) {
+        headerCrown.style.display = "inline-block";
+        headerCrown.classList.remove("hidden");
+      } else {
+        headerCrown.style.display = "none";
+        headerCrown.classList.add("hidden");
+      }
+    }
+    
+    // 3. Menú flotante: Nombre y Rol
+    if (menuName && currentUser.name) {
+      menuName.textContent = currentUser.name;
+    }
+    if (menuRole) {
+      if (isMaster) {
+        menuRole.textContent = "ADMINISTRADOR MAESTRO";
+        menuRole.style.color = "#ffd700";
+      } else {
+        menuRole.textContent = "MIEMBRO JUGADOR";
+        menuRole.style.color = "var(--accent)";
+      }
+    }
+    
+    // 4. Mostrar botón de Modo Admin en menú flotante
+    if (menuBtnAdmin) {
+      if (isMaster) {
+        menuBtnAdmin.style.display = "flex";
+        menuBtnAdmin.classList.remove("hidden");
+      } else {
+        menuBtnAdmin.style.display = "none";
+        menuBtnAdmin.classList.add("hidden");
+      }
+    }
   }
   
   // Mostrar dock de admin SIEMPRE OCULTO hasta ingresar PIN
@@ -669,6 +880,42 @@ function loadAppView() {
   
   window.appNavigate("dashboard");
 }
+
+// Controladores para menú flotante de perfil en cabecera
+window.toggleHeaderProfileMenu = function() {
+  const menu = document.getElementById("header-profile-menu");
+  if (!menu) return;
+  const isHidden = menu.style.display === "none" || menu.classList.contains("hidden");
+  
+  if (isHidden) {
+    menu.style.display = "flex";
+    menu.classList.remove("hidden");
+  } else {
+    menu.style.display = "none";
+    menu.classList.add("hidden");
+  }
+};
+
+window.copyUserAliasToClipboard = function() {
+  if (currentUser && currentUser.alias) {
+    navigator.clipboard.writeText("@" + currentUser.alias).then(() => {
+      showToast("¡Apodo copiado al portapapeles!", "success");
+    }).catch(() => {
+      showToast("Error al copiar apodo", "error");
+    });
+  }
+};
+
+// Cerrar menú flotante si el usuario hace clic en el estadio fuera del perfil
+document.addEventListener("click", function(event) {
+  const badge = document.querySelector(".user-profile-badge");
+  const menu = document.getElementById("header-profile-menu");
+  if (!badge || !menu) return;
+  if (!badge.contains(event.target) && !menu.contains(event.target)) {
+    menu.style.display = "none";
+    menu.classList.add("hidden");
+  }
+});
 
 // ── ADMIN TABS CONTROLLER ────────────────────────────────────────────────
 window.switchAdminTab = function(tabName) {
@@ -690,7 +937,15 @@ window.switchAdminTab = function(tabName) {
   }
 };
 
-// ── VERIFICACIÓN DE LÍMITE DE APUESTAS (Sugerencia 3) ──────────────────────
+/**
+ * @function checkBettingDeadlineStatus
+ * @description Evalúa si el registro de quinielas se encuentra bloqueado.
+ * El bloqueo ocurre por tres factores:
+ *   1. Bloqueo manual explícito por parte del administrador.
+ *   2. Cierre automático si ya inició el primer partido de la cartelera activa.
+ *   3. Límite de tiempo programado tradicional (Gobernanza de Día y Hora).
+ * @returns {boolean} True si las apuestas están cerradas, False si continúan abiertas.
+ */
 window.checkBettingDeadlineStatus = function() {
   if (!systemConfig) return false;
   
@@ -699,6 +954,50 @@ window.checkBettingDeadlineStatus = function() {
     return true;
   }
   
+  // 1. CIERRE AUTOMÁTICO: Bloqueo inmediato al iniciar el primer partido de la quiniela
+  try {
+    let fixturesList = [...cachedFixturesList];
+    if (fixturesList.length === 0) {
+      const rawFixtures = localStorage.getItem("qia_fixtures");
+      if (rawFixtures) {
+        fixturesList = JSON.parse(rawFixtures);
+      }
+    }
+    
+    if (fixturesList && fixturesList.length > 0) {
+      const poolMatchesCount = Number(systemConfig.pool_matches_count) || 10;
+      
+      // Ordenar fixtures por atracción idéntico al Estadio para mapear la cartelera activa
+      const sortedFixtures = fixturesList
+        .sort((a, b) => {
+          const attractionA = Number(a.attraction_index || a.attraction) || 0;
+          const attractionB = Number(b.attraction_index || b.attraction) || 0;
+          return attractionB - attractionA;
+        })
+        .slice(0, poolMatchesCount);
+      
+      let earliestTimestamp = Infinity;
+      sortedFixtures.forEach(f => {
+        try {
+          const d = new Date(f.date);
+          const ts = d.getTime();
+          if (!isNaN(ts) && ts < earliestTimestamp) {
+            earliestTimestamp = ts;
+          }
+        } catch(e) {}
+      });
+      
+      const nowTs = Date.now() + serverTimeOffset;
+      if (earliestTimestamp !== Infinity && nowTs >= earliestTimestamp) {
+        console.log("🔒 [Cierre Automático] Bloqueo activo: Ya inició el partido de apertura:", new Date(earliestTimestamp));
+        return true;
+      }
+    }
+  } catch(e) {
+    console.warn("⚠️ [Seguridad Horario] Error evaluando el inicio del partido de apertura:", e);
+  }
+  
+  // 2. Límite tradicional por día/hora de gobernanza
   const deadlineDay = systemConfig.betting_deadline_day !== undefined ? systemConfig.betting_deadline_day : 5; // default Friday (5)
   const deadlineHour = systemConfig.betting_deadline_hour !== undefined ? systemConfig.betting_deadline_hour : 18; // default 6 PM (18:00)
   
@@ -729,6 +1028,11 @@ function renderLiveScores(fixtures) {
   const container = document.getElementById("live-scores-container");
   if (!container) return;
   container.innerHTML = "";
+  
+  if (!fixtures || fixtures.length === 0) {
+    container.innerHTML = `<p class="text-xxs opacity-40 text-center uppercase tracking-widest py-14 w-full" style="grid-column: 1 / -1; font-size: 10px; color: var(--text-primary); text-transform: uppercase;">No hay partidos reales registrados en la cartelera de esta semana.</p>`;
+    return;
+  }
   
   // Mapear partidos en vivo o terminados de Liga MX
   fixtures.forEach(f => {
@@ -770,6 +1074,11 @@ function renderLeaderboard(leaderboard, containerId = "leaderboard-container") {
   if (!container) return;
   container.innerHTML = "";
   
+  if (!leaderboard || leaderboard.length === 0) {
+    container.innerHTML = `<p class="text-xxs opacity-40 text-center uppercase tracking-widest py-20 w-full" style="font-size: 10px; color: var(--text-primary); text-transform: uppercase;">No hay aciertos registrados de jugadores reales todavía esta semana.</p>`;
+    return;
+  }
+  
   leaderboard.forEach(row => {
     const div = document.createElement("div");
     div.className = "board-row flex justify-between items-center py-10";
@@ -793,33 +1102,232 @@ function renderLeaderboard(leaderboard, containerId = "leaderboard-container") {
   });
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// MEJORAS DE CARTELERA — Countdown, Timezone, Notificación 30 min
+// ══════════════════════════════════════════════════════════════════════════
+
+// ── Mejora 2: Detectar zona horaria del usuario ───────────────────────────
+const USER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Mexico_City';
+console.log('🌍 Zona horaria detectada:', USER_TZ);
+
+// ── Mejora 1: Countdown en tiempo real ───────────────────────────────────
+let _countdownInterval = null;
+
+function startMatchCountdownTimer() {
+  // Limpiar intervalo previo si existe
+  if (_countdownInterval) {
+    clearInterval(_countdownInterval);
+    _countdownInterval = null;
+  }
+  // Actualizar cada 60 segundos sin re-renderizar todo
+  _countdownInterval = setInterval(() => {
+    const chips = document.querySelectorAll('[data-countdown-ts]');
+    chips.forEach(chip => {
+      const ts = Number(chip.getAttribute('data-countdown-ts'));
+      const now = Date.now() + (typeof serverTimeOffset !== 'undefined' ? serverTimeOffset : 0);
+      const diffMs = ts - now;
+      if (diffMs <= 0) {
+        // Partido iniciado — mostrar EN CURSO y deshabilitar botones
+        chip.innerHTML = '<span style="color:#ef4444;font-weight:900;animation:pulse 1s infinite;">🔴 EN CURSO</span>';
+        // Deshabilitar botones de ese partido
+        const matchId = chip.getAttribute('data-match-id');
+        if (matchId) {
+          ['L','E','V'].forEach(op => {
+            const btn = document.getElementById(`btn-bet-${matchId}-${op}`);
+            if (btn) { btn.disabled = true; btn.style.opacity = '0.35'; btn.style.cursor = 'not-allowed'; }
+          });
+        }
+        return;
+      }
+      const diffMins = Math.round(diffMs / 60000);
+      const diffHours = Math.round(diffMs / 3600000);
+      const diffDays = Math.round(diffMs / 86400000);
+      let rel = '';
+      if (diffMins < 60) rel = `En ${diffMins} min`;
+      else if (diffHours < 24) rel = `En ${diffHours} h`;
+      else if (diffDays === 1) rel = 'Mañana';
+      else if (diffDays === 2) rel = 'Pasado mañana';
+      else rel = `En ${diffDays} días`;
+      chip.textContent = `⚡ ${rel}`;
+    });
+  }, 60000);
+}
+
+// ── Mejora 3: Notificación 30 min antes del primer partido ───────────────
+let _reminderTimeout = null;
+
+function scheduleMatchReminder30min(fixtures) {
+  if (_reminderTimeout) { clearTimeout(_reminderTimeout); _reminderTimeout = null; }
+  if (!fixtures || fixtures.length === 0) return;
+
+  // Encontrar el partido más próximo que aún no haya iniciado
+  const now = Date.now() + (typeof serverTimeOffset !== 'undefined' ? serverTimeOffset : 0);
+  let earliest = Infinity;
+  let earliestName = '';
+
+  fixtures.forEach(f => {
+    if (!f.date) return;
+    const ts = new Date(f.date).getTime();
+    if (!isNaN(ts) && ts > now && ts < earliest) {
+      earliest = ts;
+      earliestName = `${f.team_local} vs ${f.team_visita}`;
+    }
+  });
+
+  if (earliest === Infinity) return;
+
+  const msUntil30MinBefore = (earliest - now) - (30 * 60 * 1000);
+  if (msUntil30MinBefore <= 0) return; // ya pasó la ventana de 30 min
+
+  console.log(`🔔 Recordatorio programado en ${Math.round(msUntil30MinBefore/60000)} min para: ${earliestName}`);
+
+  _reminderTimeout = setTimeout(() => {
+    if (typeof window.sendLocalNotification === 'function') {
+      window.sendLocalNotification(
+        '⚡ ¡30 MIN PARA EL PRIMER PARTIDO!',
+        `${earliestName} está por comenzar. ¡Ingresa tus predicciones antes de que cierre la quiniela!`
+      );
+    }
+  }, msUntil30MinBefore);
+}
+
+// ── Helper: tiempo relativo en español ────────────────────────────────────
+function getRelativeTime(dateObj) {
+  const now = Date.now() + (typeof serverTimeOffset !== 'undefined' ? serverTimeOffset : 0);
+  const diffMs = dateObj.getTime() - now;
+  const diffMins = Math.round(diffMs / 60000);
+  const diffHours = Math.round(diffMs / 3600000);
+  const diffDays = Math.round(diffMs / 86400000);
+
+  if (diffMs < 0) return null; // ya inició
+  if (diffMins < 60) return `En ${diffMins} min`;
+  if (diffHours < 24) return `En ${diffHours} h`;
+  if (diffDays === 1) return 'Mañana';
+  if (diffDays === 2) return 'Pasado mañana';
+  return `En ${diffDays} días`;
+}
+
+// ── Helper: color de badge según liga/grupo ───────────────────────────────
+function getLeagueBadge(group) {
+  if (!group) return '';
+  const g = group.toUpperCase();
+  let bg, color, icon;
+  if (g.includes('LIGA MX') || g.includes('MEX')) { bg='rgba(0,189,60,0.15)'; color='#00bd3c'; icon='🇲🇽'; }
+  else if (g.includes('CHAMPIONS') || g.includes('UCL')) { bg='rgba(0,120,255,0.15)'; color='#0078ff'; icon='⭐'; }
+  else if (g.includes('EUROPA') || g.includes('UEL')) { bg='rgba(255,140,0,0.15)'; color='#ff8c00'; icon='🟠'; }
+  else if (g.includes('PREMIER') || g.includes('PL')) { bg='rgba(103,0,255,0.15)'; color='#6700ff'; icon='🏴󠁧󠁢󠁥󠁮󠁧󠁿'; }
+  else if (g.includes('LALIGA') || g.includes('ESP')) { bg='rgba(255,0,60,0.15)'; color='#ff003c'; icon='🇪🇸'; }
+  else if (g.includes('SERIE A') || g.includes('ITA')) { bg='rgba(0,90,170,0.15)'; color='#005aaa'; icon='🇮🇹'; }
+  else if (g.includes('BUNDESLIGA') || g.includes('GER')) { bg='rgba(230,0,0,0.15)'; color='#e60000'; icon='🇩🇪'; }
+  else if (g.includes('MLS') || g.includes('USA')) { bg='rgba(12,35,64,0.15)'; color='#0c2340'; icon='🇺🇸'; }
+  else if (g.includes('COPA') || g.includes('AMERICA')) { bg='rgba(255,215,0,0.15)'; color='#cd7f32'; icon='🌎'; }
+  else if (g.includes('MUNDIAL') || g.includes('FIFA') || g.includes('FRIENDLY')) { bg='rgba(255,215,0,0.15)'; color='#ffd700'; icon='🌍'; }
+  else { bg='rgba(255,255,255,0.08)'; color='rgba(255,255,255,0.5)'; icon='⚽'; }
+  return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:7px;font-weight:900;text-transform:uppercase;letter-spacing:1px;padding:2px 7px;border-radius:20px;background:${bg};color:${color};border:1px solid ${color}33;">${icon} ${group}</span>`;
+}
+
 // Renderizadores de Jugar Quiniela
 function renderPlayFixtures(fixtures) {
   const container = document.getElementById("play-matches-container");
   if (!container) return;
   container.innerHTML = "";
   
+  // Ordenar por fecha: los más próximos primero
+  fixtures.sort((a, b) => {
+    const tsA = new Date(a.date).getTime();
+    const tsB = new Date(b.date).getTime();
+    if (!isNaN(tsA) && !isNaN(tsB)) return tsA - tsB;
+    return 0;
+  });
+  
   fixtures.forEach((f, idx) => {
     const row = document.createElement("div");
     row.className = "match-play-row";
     
     const sel = currentTicketSelections[f.id] || "";
-    
+
+    // ── 1. Fecha, hora y estado del partido ─────────────────────────────
+    let dateLabel = '';
+    let isLive = false;
+    let relativeTag = '';
+
+    if (f.date) {
+      try {
+        const d = new Date(f.date);
+        if (!isNaN(d.getTime())) {
+          const now = Date.now() + (typeof serverTimeOffset !== 'undefined' ? serverTimeOffset : 0);
+          const diffMs = d.getTime() - now;
+
+          // ¿Ya inició? (menos de 0ms = en curso, asumimos 105 min de duración)
+          isLive = diffMs < 0 && diffMs > -(105 * 60000);
+
+          // Mejora 2: usar zona horaria real del usuario
+          const tzOpts = { timeZone: USER_TZ };
+          const weekday = d.toLocaleDateString('es-MX', { ...tzOpts, weekday: 'long' });
+          const weekdayCap = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+          const dayMonth = d.toLocaleDateString('es-MX', { ...tzOpts, day: 'numeric', month: 'short' });
+          const time = d.toLocaleTimeString('es-MX', { ...tzOpts, hour: '2-digit', minute: '2-digit', hour12: true });
+
+          if (isLive) {
+            dateLabel = `<span style="display:inline-flex;align-items:center;gap:5px;color:#ef4444;font-weight:900;font-size:9px;animation:pulse 1.5s infinite;">
+              <span style="width:7px;height:7px;background:#ef4444;border-radius:50%;display:inline-block;animation:pulse 1s infinite;"></span>
+              EN CURSO
+            </span>`;
+          } else {
+            // ── Tiempo relativo ─────────────────────────────────────────
+            const rel = getRelativeTime(d);
+            // Mejora 1: atributos data para countdown en tiempo real
+            const relHtml = rel
+              ? `<span data-countdown-ts="${d.getTime()}" data-match-id="${f.id}" style="display:inline-flex;align-items:center;font-size:7px;font-weight:900;padding:2px 8px;border-radius:20px;background:rgba(0,229,255,0.1);color:#00e5ff;border:1px solid rgba(0,229,255,0.2);margin-left:5px;">⚡ ${rel}</span>`
+              : '';
+            relativeTag = relHtml;
+            dateLabel = `📅 ${weekdayCap} ${dayMonth} &nbsp;·&nbsp; ⏰ ${time}`;
+          }
+        }
+      } catch(e) {
+        dateLabel = `📅 ${f.date}`;
+      }
+    } else {
+      dateLabel = '📅 Por Confirmar';
+    }
+
+    // ── 2. Badge de liga/grupo ──────────────────────────────────────────
+    const leagueBadge = getLeagueBadge(f.group);
+
+    // ── 3. Deshabilitar botones si el partido ya inició ─────────────────
+    const btnDisabled = isLive ? 'disabled style="opacity:0.35;cursor:not-allowed;"' : '';
+    const btnClass = (op) => `bet-btn ${sel === op ? 'selected' : ''}`;
+
+    let vsContent = '<span class="text-accent italic text-xxxxs tracking-[2px] self-center">VS</span>';
+    if ((f.status === 'live' || f.status === 'finished') && typeof f.score_local === 'number' && typeof f.score_visita === 'number') {
+      vsContent = `<span class="text-white text-[11px] bg-black/40 px-8 py-4 rounded-lg font-black border border-white/10 tracking-[2px] self-center shadow-[0_0_10px_rgba(0,0,0,0.5)]">${f.score_local} - ${f.score_visita}</span>`;
+    }
+
     row.innerHTML = `
-      <div class="match-play-teams">
-        <span class="">${f.team_local}</span>
-        <span class="text-accent italic text-xxxxs tracking-[2px] self-center">VS</span>
-        <span class=" text-right">${f.team_visita}</span>
+      <div class="match-play-teams" style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="flex:1; text-align:left;">${f.team_local}</span>
+        ${vsContent}
+        <span style="flex:1; text-align:right;">${f.team_visita}</span>
       </div>
+
+      <div style="display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;margin-top:-2px;margin-bottom:6px;">
+        ${leagueBadge}
+        ${isLive
+          ? dateLabel
+          : `<span style="font-size:9px;font-weight:700;opacity:0.55;text-transform:uppercase;letter-spacing:1px;color:var(--accent);">${dateLabel}</span>${relativeTag}`
+        }
+      </div>
+
       <div class="bet-selector-grid">
-        <button id="btn-bet-${f.id}-L" class="bet-btn ${sel === 'L' ? 'selected' : ''}" onclick="window.selectBet('${f.id}', 'L')">LOCAL</button>
-        <button id="btn-bet-${f.id}-E" class="bet-btn ${sel === 'E' ? 'selected' : ''}" onclick="window.selectBet('${f.id}', 'E')">EMPATE</button>
-        <button id="btn-bet-${f.id}-V" class="bet-btn ${sel === 'V' ? 'selected' : ''}" onclick="window.selectBet('${f.id}', 'V')">VISITA</button>
+        <button id="btn-bet-${f.id}-L" class="${btnClass('L')}" onclick="window.selectBet('${f.id}', 'L')" ${btnDisabled}>LOCAL</button>
+        <button id="btn-bet-${f.id}-E" class="${btnClass('E')}" onclick="window.selectBet('${f.id}', 'E')" ${btnDisabled}>EMPATE</button>
+        <button id="btn-bet-${f.id}-V" class="${btnClass('V')}" onclick="window.selectBet('${f.id}', 'V')" ${btnDisabled}>VISITA</button>
       </div>
     `;
     container.appendChild(row);
   });
 }
+
 
 window.selectBet = function(matchId, selection) {
   if (currentTicketSelections[matchId] === selection) {
@@ -829,8 +1337,9 @@ window.selectBet = function(matchId, selection) {
     // Check limit if adding new match
     if (!currentTicketSelections[matchId]) {
       const count = Object.keys(currentTicketSelections).length;
-      if (count >= 10) {
-        if (typeof showToast === "function") showToast("Ya elegiste 10 partidos. Quita uno si quieres cambiar.", "error");
+      const reqSel = Number(systemConfig.required_selections) || 10;
+      if (count >= reqSel) {
+        if (typeof showToast === "function") showToast(`Ya elegiste ${reqSel} partidos. Quita uno si quieres cambiar.`, "error");
         return;
       }
     }
@@ -850,6 +1359,17 @@ window.selectBet = function(matchId, selection) {
   if (countEl) countEl.textContent = currentCount;
   
   window.updatePoolCost();
+
+  // Ofrecer compra automática e inmediata al completar las 10 predicciones (required_selections)
+  const reqSel = Number(systemConfig.required_selections) || 10;
+  if (currentCount === reqSel) {
+    setTimeout(() => {
+      const confirmPurchase = confirm(`¡Acabas de elegir tus ${reqSel} resultados!\n\n¿Deseas comprar esta quiniela ahora mismo por $${(Number(systemConfig.pool_cost) || 50).toFixed(2)} MXN?`);
+      if (confirmPurchase) {
+        window.purchaseTicket();
+      }
+    }, 250);
+  }
 };
 
 window.updatePoolCost = function() {
@@ -867,6 +1387,8 @@ window.updatePoolCost = function() {
 
 // Confirmar y comprar ticket
 window.purchaseTicket = async function() {
+  if (isPurchasing) return;
+
   // 1. Validar límite de apuestas (Sugerencia 3)
   const isLocked = window.checkBettingDeadlineStatus();
   if (isLocked) {
@@ -877,61 +1399,109 @@ window.purchaseTicket = async function() {
     }
   }
 
-  // Asegurar que ha seleccionado todos los partidos
-  const fixtures = await getFixtures();
-  const missing = fixtures.filter(f => !currentTicketSelections[f.id]);
+  // Asegurar que ha seleccionado exactamente el número configurado de partidos
+  const reqSel = Number(systemConfig.required_selections) || 10;
+  const currentSelCount = Object.keys(currentTicketSelections).length;
   
-  if (missing.length > 0) {
-    showToast(`Te falta predecir ${missing.length} partidos de la quiniela.`, "error");
+  if (currentSelCount !== reqSel) {
+    showToast(`Debes seleccionar exactamente ${reqSel} partidos para ingresar tu quiniela (llevas ${currentSelCount}).`, "error");
     return;
   }
   
   // Validar saldo
   const cost = parseFloat(document.getElementById("pool-total-cost").textContent.replace("$", ""));
-  if (Number(currentUser.balance) < cost) {
-    showToast("Saldo insuficiente. Ve a la Billetera para realizar una recarga.", "error");
-    window.appNavigate("wallet");
-    return;
+  const balance = Number(currentUser.balance) || 0;
+  
+  let ticketStatus = "active";
+  
+  if (balance < cost) {
+    isPurchasing = true; 
+    try {
+      const dbMod = await import('./app_db.js');
+      const userTxs = await dbMod.getTransactions(currentUser.phone || currentUser.email);
+      const hasPendingSPEI = userTxs.some(tx => tx.gateway === "spei" && tx.status === "pending");
+      
+      if (hasPendingSPEI) {
+        showToast("⏳ No tienes saldo, pero tu quiniela se guardará como RESERVADA hasta que se apruebe tu recarga.", "info");
+        ticketStatus = "reserved";
+      } else {
+        isPurchasing = false;
+        showToast("Saldo insuficiente. Ve a la Billetera para reportar una recarga.", "error");
+        window.appNavigate("wallet");
+        return;
+      }
+    } catch(e) {
+      isPurchasing = false;
+      showToast("Error al verificar transacciones.", "error");
+      return;
+    }
+  } else {
+    isPurchasing = true;
   }
   
-  showToast("Emitiendo ticket encriptado...", "info");
+  const btn = document.querySelector("#panel-play button[onclick='window.purchaseTicket()']");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = ticketStatus === "reserved" ? "RESERVANDO..." : "EMITIENDO JUGADA...";
+  }
+
+  showToast(ticketStatus === "reserved" ? "Guardando reserva..." : "Emitiendo ticket encriptado...", "info");
   
   setTimeout(async () => {
-    const sidebetGoals = document.getElementById("sidebet-goals")?.checked || false;
-    const sidebetStriker = document.getElementById("sidebet-striker")?.checked || false;
-    
-    const ticket = {
-      id: "tkt-" + Date.now(),
-      user_id: currentUser.phone || currentUser.email,
-      user_alias: currentUser.alias,
-      matches: Object.keys(currentTicketSelections).map(matchId => ({
-        match_id: matchId,
-        prediction: currentTicketSelections[matchId]
-      })),
-      sidebet_goals: sidebetGoals,
-      sidebet_goals_value: sidebetGoals ? 3 : null, // predicción de goles promedio por default
-      sidebet_striker: sidebetStriker,
-      sidebet_striker_value: sidebetStriker ? "Henry Martín" : null,
-      total_cost: cost,
-      status: "active",
-      hits: 0
-    };
-    
-    lastCreatedTicket = await createTicket(ticket);
-    showToast("¡Ticket emitido con éxito!", "success");
-    
-    // Enviar notificación local al celular
-    window.sendLocalNotification("🎫 TICKET QUINIELA EMITIDO", `Tu ticket ${lastCreatedTicket.id} por $${cost.toFixed(2)} MXN ha sido guardado con éxito.`);
-    
-    // Limpiar predicciones
-    currentTicketSelections = {};
-    const elGoals = document.getElementById("sidebet-goals");
-    if (elGoals) elGoals.checked = false;
-    const elStriker = document.getElementById("sidebet-striker");
-    if (elStriker) elStriker.checked = false;
-    
-    // Abrir Modal de Ticket y Compartir por WhatsApp
-    showTicketDetails(lastCreatedTicket);
+    try {
+      const sidebetGoals = document.getElementById("sidebet-goals")?.checked || false;
+      const sidebetStriker = document.getElementById("sidebet-striker")?.checked || false;
+      
+      const ticket = {
+        id: "tkt-" + Date.now(),
+        user_id: currentUser.email || currentUser.phone,
+        user_alias: currentUser.alias,
+        matches: Object.keys(currentTicketSelections).map(matchId => ({
+          match_id: matchId,
+          prediction: currentTicketSelections[matchId]
+        })),
+        sidebet_goals: sidebetGoals,
+        sidebet_goals_value: sidebetGoals ? 3 : null, // predicción de goles promedio por default
+        sidebet_striker: sidebetStriker,
+        sidebet_striker_value: sidebetStriker ? "Henry Martín" : null,
+        total_cost: cost,
+        status: ticketStatus,
+        hits: 0
+      };
+      
+      const dbMod = await import('./app_db.js');
+      lastCreatedTicket = await dbMod.createTicket(ticket);
+      
+      if (ticketStatus === "active") {
+        currentUser.balance = (Number(currentUser.balance) || 0) - cost;
+        localStorage.setItem("qia_current_user", JSON.stringify(dbMod.encryptData(currentUser)));
+        document.getElementById("header-balance").textContent = `$${Number(currentUser.balance).toFixed(2)}`;
+      }
+      
+      showToast(ticketStatus === "reserved" ? "¡Quiniela Reservada con éxito!" : "¡Ticket emitido con éxito!", "success");
+      
+      window.sendLocalNotification(
+        ticketStatus === "reserved" ? "⏳ QUINIELA RESERVADA" : "🎫 TICKET QUINIELA EMITIDO", 
+        ticketStatus === "reserved" ? `Tu quiniela ${lastCreatedTicket.id} está reservada y a la espera de pago.` : `Tu ticket ${lastCreatedTicket.id} por $${cost.toFixed(2)} MXN ha sido guardado.`
+      );
+      
+      currentTicketSelections = {};
+      const elGoals = document.getElementById("sidebet-goals");
+      if (elGoals) elGoals.checked = false;
+      const elStriker = document.getElementById("sidebet-striker");
+      if (elStriker) elStriker.checked = false;
+      
+      showTicketDetails(lastCreatedTicket);
+    } catch (e) {
+      console.error(e);
+      showToast("Error al emitir: " + (e.message || "Desc"), "error");
+    } finally {
+      isPurchasing = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Confirmar y Emitir Ticket";
+      }
+    }
   }, 1000);
 };
 
@@ -945,7 +1515,10 @@ function showTicketDetails(ticket) {
     <div class="bg-white/5 p-12 rounded-2xl border border-black/5 space-y-6 text-xxs font-bold uppercase tracking-wider ">
       <div>Ticket ID: <span class="text-accent">${ticket.id}</span></div>
       <div>Usuario: <span class="text-accent">@${ticket.user_alias}</span></div>
-      <div>Fecha de Emisión: <span class="opacity-50">${new Date(ticket.created_at).toLocaleString()}</span></div>
+      <div style="display:flex; justify-content:space-between;">
+        <span>Fecha de Emisión: <span class="opacity-50">${new Date(ticket.created_at).toLocaleString()}</span></span>
+        <span class="text-[#00ff88]">Aciertos Totales: <span id="modal-total-hits" class="font-black text-sm">0</span></span>
+      </div>
     </div>
     
     <div class="space-y-6">
@@ -966,18 +1539,49 @@ function showTicketDetails(ticket) {
   // Agregar predicciones
   getFixtures().then(fixtures => {
     const predContainer = document.getElementById("ticket-modal-predictions");
+    let totalHits = 0;
     ticket.matches.forEach(m => {
       const f = fixtures.find(match => match.id === m.match_id);
       if (f) {
+        let realResult = null;
+        let scoreStr = "";
+        let isFinishedOrLive = f.status === 'finished' || f.status === 'live' || (typeof f.score_local === 'number' && typeof f.score_visita === 'number');
+        
+        if (isFinishedOrLive && typeof f.score_local === 'number' && typeof f.score_visita === 'number') {
+           scoreStr = ` <span class="text-accent ml-2">(${f.score_local} - ${f.score_visita})</span>`;
+           if (f.score_local > f.score_visita) realResult = 'L';
+           else if (f.score_local === f.score_visita) realResult = 'E';
+           else realResult = 'V';
+        }
+        
+        let predClass = "bg-accent text-black";
+        let resultIcon = "";
+        if (realResult !== null) {
+          if (realResult === m.prediction) {
+            predClass = "bg-[#00ff88] text-black";
+            resultIcon = "✅";
+            totalHits++;
+          } else {
+            predClass = "bg-red-500 text-white";
+            resultIcon = "❌";
+          }
+        }
+
         const row = document.createElement("div");
         row.className = "flex justify-between items-center py-6 text-xxs uppercase tracking-wider font-bold";
         row.innerHTML = `
-          <span>${f.team_local} vs ${f.team_visita}</span>
-          <span class="bg-accent text-black font-black px-6 py-2 rounded-lg">${m.prediction}</span>
+          <span>${f.team_local} vs ${f.team_visita}${scoreStr}</span>
+          <div class="flex items-center gap-4">
+            ${resultIcon}
+            <span class="${predClass} font-black px-6 py-2 rounded-lg">${m.prediction}</span>
+          </div>
         `;
         predContainer.appendChild(row);
       }
     });
+    
+    const hitsEl = document.getElementById("modal-total-hits");
+    if (hitsEl) hitsEl.textContent = totalHits;
   });
   
   modal.classList.remove("hidden");
@@ -1063,7 +1667,7 @@ window.simulateStripeDeposit = function() {
   
   setTimeout(async () => {
     const tx = {
-      user_id: currentUser.phone || currentUser.email,
+      user_id: currentUser.email || currentUser.phone,
       amount: amount,
       type: "deposit",
       gateway: "stripe",
@@ -1077,41 +1681,103 @@ window.simulateStripeDeposit = function() {
     // Enviar notificación local
     window.sendLocalNotification("💳 RECARGA CON TARJETA", `Tu saldo ha sido abonado con $${amount.toFixed(2)} MXN exitosamente.`);
     
+    // Alerta al Admin
+    localStorage.setItem("qia_admin_alert", JSON.stringify({ user: currentUser.alias || currentUser.name, amount: amount, ts: Date.now() }));
+    
     window.appNavigate("wallet");
   }, 1500);
 };
 
 // Simular Depósito de SPEI (Subida de Comprobante)
-window.simulateSPEIDeposit = function() {
+window.simulateSPEIDeposit = async function() {
   const amount = Number(document.getElementById("spei-amount").value);
   const ref = document.getElementById("spei-ref").value;
+  const dateStr = document.getElementById("spei-date").value;
+  const timeStr = document.getElementById("spei-time").value;
+  const fileInput = document.getElementById("spei-file");
   
-  if (!amount || !ref) {
-    showToast("Por favor ingresa el monto y la referencia del SPEI.", "error");
+  if (!amount || !ref || !dateStr || !timeStr) {
+    showToast("Por favor ingresa todos los datos: monto, fecha, hora y referencia.", "error");
     return;
   }
   
-  showToast("Subiendo comprobante de transferencia...", "info");
+  const userId = currentUser.email || currentUser.phone;
   
-  setTimeout(async () => {
-    const tx = {
-      user_id: currentUser.phone || currentUser.email,
-      amount: amount,
-      type: "deposit",
-      gateway: "spei",
-      status: "pending",
-      ref: ref
-    };
+  // Anti-Spam: Verificar transacciones pendientes
+  const dbMod = await import('./app_db.js');
+  const userTxs = await dbMod.getTransactions(userId);
+  const hasPending = userTxs.some(tx => tx.gateway === "spei" && tx.status === "pending");
+  if (hasPending) {
+    showToast("⏳ Ya tienes un reporte de transferencia en revisión. Por favor espera a que un administrador lo valide.", "error");
+    return;
+  }
+  
+  showToast("Procesando evidencia y enviando reporte...", "info");
+  
+  let base64Image = null;
+  if (fileInput && fileInput.files.length > 0) {
+    const file = fileInput.files[0];
+    if (file.size > 2 * 1024 * 1024) { // 2MB max
+      showToast("La imagen es muy pesada. Máximo 2MB.", "error");
+      return;
+    }
     
-    await registerTransaction(tx);
-    showToast("Comprobante subido. La recarga se validará en unos minutos.", "success");
-    
-    // Limpiar inputs
-    document.getElementById("spei-amount").value = "";
-    document.getElementById("spei-ref").value = "";
-    
-    window.appNavigate("wallet");
-  }, 1200);
+    // Comprimir imagen usando Canvas
+    base64Image = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let width = img.width;
+          let height = img.height;
+          if (width > height && width > 800) {
+            height *= 800 / width;
+            width = 800;
+          } else if (height > 800) {
+            width *= 800 / height;
+            height = 800;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.6));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  
+  const tx = {
+    user_id: userId,
+    amount: amount,
+    type: "deposit",
+    gateway: "spei",
+    status: "pending",
+    ref: ref,
+    transfer_date: dateStr,
+    transfer_time: timeStr,
+    evidence_b64: base64Image || null
+  };
+  
+  await dbMod.registerTransaction(tx);
+  
+  // Alerta al Admin
+  localStorage.setItem("qia_admin_alert", JSON.stringify({ user: currentUser.alias || currentUser.name, amount: amount, ts: Date.now() }));
+
+  // Limpiar inputs
+  document.getElementById("spei-amount").value = "";
+  document.getElementById("spei-ref").value = "";
+  document.getElementById("spei-date").value = "";
+  document.getElementById("spei-time").value = "";
+  if (fileInput) fileInput.value = "";
+  
+  showToast("✅ ¡Reporte enviado! Se validará en aprox. 1 a 3 horas. Ya puedes PRE-LLENAR y RESERVAR tu quiniela en el Estadio sin saldo.", "success");
+  setTimeout(() => {
+    window.appNavigate("dashboard");
+  }, 3500);
 };
 
 // Renderizadores de Panel de Administrador
@@ -1168,8 +1834,10 @@ function renderAdminSPEI(speis) {
         <span class="">Usuario: @${tx.user_id}</span>
         <span class="text-success">$${Number(tx.amount).toFixed(2)} MXN</span>
       </div>
-      <div>Referencia/Folio SPEI: <span class="text-accent">${tx.ref}</span></div>
-      <div class="flex gap-4 pt-4 border-t border-black/5">
+      <div>Referencia/Concepto: <span class="text-accent">${tx.ref}</span></div>
+      ${tx.transfer_date ? `<div class="text-[9px] text-white/50 tracking-widest mt-2">Fecha/Hora de Envío: ${tx.transfer_date} ${tx.transfer_time || ''}</div>` : ''}
+      ${tx.evidence_b64 ? `<div class="mt-8"><img src="${tx.evidence_b64}" alt="Evidencia SPEI" class="w-full h-auto max-h-32 object-contain rounded border border-white/10 cursor-pointer" onclick="window.open('${tx.evidence_b64}', '_blank')" /></div>` : ''}
+      <div class="flex gap-4 pt-4 border-t border-black/5 mt-6">
         <button onclick="window.approveSPEI('${tx.id}')" class="flex-1 bg-[#00ff88] text-black font-black py-6 rounded-xl text-[8px]">APROBAR</button>
         <button onclick="window.declineSPEI('${tx.id}')" class="w-16 bg-red-500/20 border border-red-500/30 text-red-500 font-black py-6 rounded-xl text-[8px]">RECHAZAR</button>
       </div>
@@ -1226,6 +1894,9 @@ window.saveAdminConfig = async function() {
   const deadlineHour = Number(document.getElementById("cfg-deadline-hour").value);
   const bypassBypass = document.getElementById("cfg-deadline-bypass").checked;
 
+  const poolMatches = Number(document.getElementById("cfg-pool-matches").value) || 10;
+  const reqSelections = Number(document.getElementById("cfg-required-selections").value) || 10;
+
   const updatedCfg = {
     pool_cost: cost,
     pool_fee: fee,
@@ -1236,6 +1907,8 @@ window.saveAdminConfig = async function() {
     betting_deadline_day: deadlineDay,
     betting_deadline_hour: deadlineHour,
     bypass_deadline_testing: bypassBypass,
+    pool_matches_count: poolMatches,
+    required_selections: reqSelections,
     manual_locked: systemConfig.manual_locked || false // PRESERVAR ESTO
   };
   
@@ -1245,7 +1918,7 @@ window.saveAdminConfig = async function() {
   // Guardar log de auditoría
   await createGovernanceLog(
     "Ajuste de Gobernanza",
-    `Costos actualizados: Costo=$${cost}, App=${fee}%, Bolsa=$${jackpot}, Ganadores=${places}, Límite=${deadlineDayStr} a las ${deadlineHour}:00h`,
+    `Costos actualizados: Costo=$${cost}, App=${fee}%, Bolsa=$${jackpot}, Ganadores=${places}, Cartelera=${poolMatches}, Requeridos=${reqSelections}, Límite=${deadlineDayStr} a las ${deadlineHour}:00h`,
     currentUser
   );
 
@@ -1381,7 +2054,36 @@ window.adminSearchAPI = async function() {
 };
 
 // Buscar partidos más atractivos mediante el Buscador Google con Modo IA
+
+function getSelectedScanLeagues() {
+  const cbs = document.querySelectorAll(".scan-league-cb:checked");
+  const leagues = [];
+  cbs.forEach(cb => {
+    const val = cb.value;
+    if (val === "mex.1") leagues.push("mex.1");
+    if (val === "mex.w.1") leagues.push("mex.w.1", "fifa.w.friendly");
+    if (val === "mex.2") leagues.push("mex.2");
+    if (val === "uefa.champions") leagues.push("uefa.champions", "uefa.europa", "uefa.euro");
+    if (val === "esp.1") leagues.push("esp.1", "eng.1", "fra.1", "ned.1", "por.1");
+    if (val === "ita.1") leagues.push("ita.1", "ger.1");
+    if (val === "usa.1") leagues.push("usa.1");
+    if (val === "arg.1") leagues.push("arg.1", "bra.1", "conmebol.america", "conmebol.libertadores", "conmebol.sudamericana");
+    if (val === "fifa.friendly") leagues.push("fifa.friendly");
+  });
+  return leagues;
+}
+
 window.adminSearchGoogleAI = async function(category = 'todos') {
+
+  const daysSelect = document.getElementById("google-ai-search-days");
+  const scanDays = daysSelect ? Number(daysSelect.value) : 8;
+
+
+  const selectedLeagues = getSelectedScanLeagues();
+  const allCbsCount = document.querySelectorAll(".scan-league-cb").length;
+  const checkedCbsCount = document.querySelectorAll(".scan-league-cb:checked").length;
+  const isCustomScan = checkedCbsCount < allCbsCount;
+
   const queryInput = document.getElementById("google-ai-search-input");
   const rawQuery = queryInput ? queryInput.value.trim() : "";
   
@@ -1400,12 +2102,20 @@ window.adminSearchGoogleAI = async function(category = 'todos') {
   const container = document.getElementById("admin-api-matches-container");
   if (!container) return;
   
+  const bulkBar = document.getElementById("admin-bulk-actions-bar");
+  if (bulkBar) {
+    bulkBar.style.display = "none";
+    bulkBar.classList.add("hidden");
+  }
+  
   const overviewContainer = document.getElementById("google-ai-overview-container");
   const overviewText = document.getElementById("google-ai-overview-text");
 
   // Intentar servir desde la caché estructurada de 8 días (Recomendación 3)
   const cacheKey = `qia_ai_cache_${category}`;
-  const cachedDataStr = localStorage.getItem(cacheKey);
+  
+  const cachedDataStr = isCustomScan ? null : localStorage.getItem(cacheKey);
+
   if (cachedDataStr) {
     try {
       const cachedData = decryptAISearchData(cachedDataStr);
@@ -1421,7 +2131,18 @@ window.adminSearchGoogleAI = async function(category = 'todos') {
         container.innerHTML = "";
         if (!cachedData.matches || cachedData.matches.length === 0) {
           container.innerHTML = "<div class='text-center text-xs opacity-40 py-20 uppercase tracking-widest'>No se encontraron partidos en los próximos 8 días.</div>";
+          if (bulkBar) {
+            bulkBar.style.display = "none";
+            bulkBar.classList.add("hidden");
+          }
         } else {
+          if (bulkBar) {
+            bulkBar.style.display = "flex";
+            bulkBar.classList.remove("hidden");
+            const selectAllCb = document.getElementById("bulk-select-all");
+            if (selectAllCb) selectAllCb.checked = false;
+            window.updateBulkSelectedCount();
+          }
           cachedData.matches.forEach(s => {
             const div = document.createElement("div");
             div.className = "flex justify-between items-center p-12 bg-white/5 rounded-xl border border-black/5 text-xxs font-bold uppercase tracking-wider hover:bg-white/10 transition-all";
@@ -1433,13 +2154,30 @@ window.adminSearchGoogleAI = async function(category = 'todos') {
               dateStr = d.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
             } catch(e) {}
 
+            const attractVal = s.attraction_index || 80;
+            let attractColor = "#00e5ff";
+            let attractText = "Recomendado";
+            let attractGlow = "";
+            if (attractVal >= 95) {
+              attractColor = "#ffd700"; // Dorado Premium
+              attractText = "Élite 🔥";
+              attractGlow = "text-shadow: 0 0 10px rgba(255, 215, 0, 0.4);";
+            } else if (attractVal >= 90) {
+              attractColor = "#a855f7"; // Púrpura Alta
+              attractText = "Destacado ⚡";
+            }
+
             div.innerHTML = `
-              <div class="flex flex-col" style="max-width: 70%; text-align: left;">
-                <span class="text-xs font-black text-primary" style="font-size: 11px; font-weight: 900;">${s.team_local} vs ${s.team_visita}</span>
-                <span class="text-xxxxs opacity-35 mt-2 flex items-center gap-4" style="margin-top: 4px; font-size: 8px;"><i class="ri-calendar-line"></i> ${dateStr}</span>
-                <span class="text-[8px] opacity-45 lowercase italic mt-4" style="text-transform: none; line-height: 1.2; margin-top: 4px; display: block; font-size: 8px;">${s.reason || ''}</span>
+              <div class="flex items-center" style="max-width: 65%;">
+                <input type="checkbox" class="bulk-match-checkbox w-18 h-18 accent-accent" value="${s.id}" data-local="${s.team_local}" data-visita="${s.team_visita}" data-date="${s.date}" data-group="${s.group}" data-attraction="${s.attraction_index}" onchange="window.updateBulkSelectedCount()" style="width: 18px; height: 18px; opacity: 1; -webkit-appearance: checkbox; appearance: checkbox; margin-right: 12px; cursor: pointer; flex-shrink: 0; position: relative; z-index: 10;">
+                <div class="flex flex-col" style="text-align: left;">
+                  <span class="text-xs font-black text-primary" style="font-size: 11px; font-weight: 900;">${s.team_local} vs ${s.team_visita}</span>
+                  <span class="text-xxxxs opacity-35 mt-2 flex items-center gap-4" style="margin-top: 4px; font-size: 8px;"><i class="ri-calendar-line"></i> ${dateStr}</span>
+                  <span class="text-[8px] opacity-45 lowercase italic mt-4" style="text-transform: none; line-height: 1.2; margin-top: 4px; display: block; font-size: 8px;">${s.reason || ''}</span>
+                </div>
               </div>
               <div class="flex flex-col items-end gap-6" style="gap: 6px;">
+                <span class="text-[7px] font-black uppercase px-6 py-2 rounded-full" style="font-size: 7px; font-weight: 900; background: ${attractColor}20; color: ${attractColor}; border: 1px solid ${attractColor}30; ${attractGlow}">${attractText} IA ${attractVal}%</span>
                 <span class="text-[8px] bg-purple-500/10 text-purple-600 px-6 py-2 rounded-full border border-purple-500/20 font-black" style="font-size: 8px; font-weight: 900;">${s.group}</span>
                 <button onclick="window.adminAddFromAPI('${s.id}', '${s.team_local}', '${s.team_visita}', '${s.date}', '${s.group}', ${s.attraction_index})" class="bg-[#4285F4] text-white px-10 py-5 rounded-xl text-[9px] uppercase font-black hover:opacity-90 transition-all shadow-[0_0_10px_rgba(66,133,244,0.15)]" style="border: none; cursor: pointer; border-radius: 12px; font-size: 9px; font-weight: 900; padding: 5px 10px;">Agregar</button>
               </div>
@@ -1495,7 +2233,7 @@ window.adminSearchGoogleAI = async function(category = 'todos') {
   
   setTimeout(async () => {
     try {
-      const results = await getGoogleAISearchResults(query, category);
+      const results = await getGoogleAISearchResults(query, category, selectedLeagues, scanDays);
       container.innerHTML = "";
       
       // Mostrar Overview con fade-in suave
@@ -1506,7 +2244,19 @@ window.adminSearchGoogleAI = async function(category = 'todos') {
       
       if (!results.matches || results.matches.length === 0) {
         container.innerHTML = "<div class='text-center text-xs opacity-40 py-20 uppercase tracking-widest'>No se encontraron partidos en los próximos 8 días.</div>";
+        if (bulkBar) {
+          bulkBar.style.display = "none";
+          bulkBar.classList.add("hidden");
+        }
         return;
+      }
+
+      if (bulkBar) {
+        bulkBar.style.display = "flex";
+        bulkBar.classList.remove("hidden");
+        const selectAllCb = document.getElementById("bulk-select-all");
+        if (selectAllCb) selectAllCb.checked = false;
+        window.updateBulkSelectedCount();
       }
 
       results.matches.forEach(s => {
@@ -1520,13 +2270,30 @@ window.adminSearchGoogleAI = async function(category = 'todos') {
           dateStr = d.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
         } catch(e) {}
 
+        const attractVal = s.attraction_index || 80;
+        let attractColor = "#00e5ff";
+        let attractText = "Recomendado";
+        let attractGlow = "";
+        if (attractVal >= 95) {
+          attractColor = "#ffd700"; // Dorado Premium
+          attractText = "Élite 🔥";
+          attractGlow = "text-shadow: 0 0 10px rgba(255, 215, 0, 0.4);";
+        } else if (attractVal >= 90) {
+          attractColor = "#a855f7"; // Púrpura Alta
+          attractText = "Destacado ⚡";
+        }
+
         div.innerHTML = `
-          <div class="flex flex-col" style="max-width: 70%; text-align: left;">
-            <span class="text-xs font-black text-primary" style="font-size: 11px; font-weight: 900;">${s.team_local} vs ${s.team_visita}</span>
-            <span class="text-xxxxs opacity-35 mt-2 flex items-center gap-4" style="margin-top: 4px; font-size: 8px;"><i class="ri-calendar-line"></i> ${dateStr}</span>
-            <span class="text-[8px] opacity-45 lowercase italic mt-4" style="text-transform: none; line-height: 1.2; margin-top: 4px; display: block; font-size: 8px;">${s.reason || ''}</span>
+          <div class="flex items-center" style="max-width: 65%;">
+            <input type="checkbox" class="bulk-match-checkbox w-18 h-18 accent-accent" value="${s.id}" data-local="${s.team_local}" data-visita="${s.team_visita}" data-date="${s.date}" data-group="${s.group}" data-attraction="${s.attraction_index}" onchange="window.updateBulkSelectedCount()" style="width: 18px; height: 18px; opacity: 1; -webkit-appearance: checkbox; appearance: checkbox; margin-right: 12px; cursor: pointer; flex-shrink: 0; position: relative; z-index: 10;">
+            <div class="flex flex-col" style="text-align: left;">
+              <span class="text-xs font-black text-primary" style="font-size: 11px; font-weight: 900;">${s.team_local} vs ${s.team_visita}</span>
+              <span class="text-xxxxs opacity-35 mt-2 flex items-center gap-4" style="margin-top: 4px; font-size: 8px;"><i class="ri-calendar-line"></i> ${dateStr}</span>
+              <span class="text-[8px] opacity-45 lowercase italic mt-4" style="text-transform: none; line-height: 1.2; margin-top: 4px; display: block; font-size: 8px;">${s.reason || ''}</span>
+            </div>
           </div>
           <div class="flex flex-col items-end gap-6" style="gap: 6px;">
+            <span class="text-[7px] font-black uppercase px-6 py-2 rounded-full" style="font-size: 7px; font-weight: 900; background: ${attractColor}20; color: ${attractColor}; border: 1px solid ${attractColor}30; ${attractGlow}">${attractText} IA ${attractVal}%</span>
             <span class="text-[8px] bg-purple-500/10 text-purple-600 px-6 py-2 rounded-full border border-purple-500/20 font-black" style="font-size: 8px; font-weight: 900;">${s.group}</span>
             <button onclick="window.adminAddFromAPI('${s.id}', '${s.team_local}', '${s.team_visita}', '${s.date}', '${s.group}', ${s.attraction_index})" class="bg-[#4285F4] text-white px-10 py-5 rounded-xl text-[9px] uppercase font-black hover:opacity-90 transition-all shadow-[0_0_10px_rgba(66,133,244,0.15)]" style="border: none; cursor: pointer; border-radius: 12px; font-size: 9px; font-weight: 900; padding: 5px 10px;">Agregar</button>
           </div>
@@ -1565,6 +2332,93 @@ window.adminSelectAISearchChip = function(queryText, category) {
   
   // Lanzar la búsqueda de inmediato
   window.adminSearchGoogleAI(category);
+};
+
+// Limpiar específicamente la caché de la barra de búsqueda IA al instante
+window.clearAISearchCacheOnly = function() {
+  localStorage.removeItem("qia_last_ai_search");
+  localStorage.removeItem("qia_ai_cache_todos");
+  localStorage.removeItem("qia_ai_cache_euro");
+  localStorage.removeItem("qia_ai_cache_copa");
+  localStorage.removeItem("qia_ai_cache_local");
+  showToast("Caché del buscador IA vaciada. Recargando cartelera...", "success");
+  
+  // Detectar la categoría activa según la clase del chip
+  let activeCategory = 'todos';
+  const categories = ["todos", "euro", "copa", "local"];
+  categories.forEach(cat => {
+    const el = document.getElementById(`chip-ai-${cat}`);
+    if (el && el.classList.contains("active")) {
+      activeCategory = cat;
+    }
+  });
+  
+  // Ocultar barra por lote al limpiar
+  const bulkBar = document.getElementById("admin-bulk-actions-bar");
+  if (bulkBar) {
+    bulkBar.style.display = "none";
+    bulkBar.classList.add("hidden");
+  }
+
+  window.adminSearchGoogleAI(activeCategory);
+};
+
+// Métodos de selección por lote (Bulk Actions)
+window.updateBulkSelectedCount = function() {
+  const checkboxes = document.querySelectorAll(".bulk-match-checkbox:checked");
+  const countSpan = document.getElementById("bulk-selected-count");
+  if (countSpan) countSpan.textContent = checkboxes.length;
+};
+
+window.toggleSelectAllMatches = function(checked) {
+  const checkboxes = document.querySelectorAll(".bulk-match-checkbox");
+  checkboxes.forEach(cb => cb.checked = checked);
+  window.updateBulkSelectedCount();
+};
+
+window.adminAddSelectedBulk = async function() {
+  const checkboxes = document.querySelectorAll(".bulk-match-checkbox:checked");
+  if (checkboxes.length === 0) {
+    showToast("Por favor selecciona al menos un partido.", "error");
+    return;
+  }
+  
+  showToast(`Agregando ${checkboxes.length} partidos a la Quiniela...`, "info");
+  
+  for (let cb of checkboxes) {
+    const id = cb.value;
+    const local = cb.getAttribute("data-local");
+    const visita = cb.getAttribute("data-visita");
+    const date = cb.getAttribute("data-date");
+    const group = cb.getAttribute("data-group");
+    const attraction = Number(cb.getAttribute("data-attraction")) || 80;
+    
+    const f = {
+      id: "espn-" + id,
+      team_local: local,
+      team_visita: visita,
+      score_local: 0,
+      score_visita: 0,
+      status: "upcoming",
+      priority: attraction > 85 ? "high" : "normal",
+      date: date,
+      attraction_index: attraction,
+      group: group
+    };
+    
+    await addFixture(f);
+  }
+  
+  showToast(`¡Se agregaron ${checkboxes.length} partidos con éxito!`, "success");
+  
+  // Limpiar selección de Todos
+  const allSelectCb = document.getElementById("bulk-select-all");
+  if (allSelectCb) allSelectCb.checked = false;
+  
+  // Recargar vistas de administración y cliente
+  loadAdminPanel();
+  window.refreshPanelData('dashboard');
+  window.refreshPanelData('play');
 };
 
 // Limpiar de forma manual y absoluta la caché del navegador/Service Worker
@@ -1734,45 +2588,100 @@ window.simulateOxxoPayment = async function() {
   window.appNavigate("wallet");
 };
 
-// ── RENDERIZADOR DE TICKETS DE USUARIO (Sugerencia 1) ────────────────────
+// ── RENDERIZADOR DE TICKETS DE USUARIO ───────────────────────────────────
+// Estrategia dual: consulta Firestore Y localStorage, fusiona sin duplicados.
+// Garantiza que los tickets aparezcan sin importar en qué modo se crearon.
 async function renderUserTickets() {
   const container = document.getElementById("user-tickets-container");
-  if (!container) return;
-  
-  const tickets = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
-  const userTickets = tickets.filter(t => t.user_id === currentUser.phone || t.user_id === currentUser.email);
+  if (!container || !currentUser) return;
+
+  container.innerHTML = `<p class="text-xxs opacity-30 text-center uppercase tracking-widest py-10">Cargando jugadas...</p>`;
+
+  const userId = currentUser.email || currentUser.phone;
+  console.log("🎫 [renderUserTickets] Buscando tickets para userId:", userId);
+
+  // --- ESTRATEGIA DUAL: Firestore + localStorage ---
+  let firestoreTickets = [];
+  let localTickets = [];
+
+  // 1. Buscar en Firestore (función getUserTickets ya tiene su propio fallback)
+  try {
+    firestoreTickets = await getUserTickets(userId);
+    console.log("🔥 [Firestore] Tickets encontrados:", firestoreTickets.length);
+  } catch(e) {
+    console.warn("⚠️ [Firestore] Error al obtener tickets:", e);
+  }
+
+  // 2. Buscar también en localStorage directamente (por si quedaron en modo simulación)
+  try {
+    const localList = JSON.parse(localStorage.getItem("qia_tickets") || "[]");
+    localTickets = localList.filter(t =>
+      t.user_id === currentUser.phone || t.user_id === currentUser.email
+    );
+    console.log("💾 [localStorage] Tickets encontrados:", localTickets.length);
+  } catch(e) {
+    console.warn("⚠️ [localStorage] Error al leer tickets:", e);
+  }
+
+  // 3. Fusionar ambas fuentes eliminando duplicados por ID
+  const ticketMap = new Map();
+  [...firestoreTickets, ...localTickets].forEach(t => {
+    if (!ticketMap.has(t.id)) ticketMap.set(t.id, t);
+  });
+  const userTickets = Array.from(ticketMap.values())
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  console.log("✅ [renderUserTickets] Total tickets únicos a mostrar:", userTickets.length);
+
+  // Actualizar contador de jugadas activas
+  const activeCount = userTickets.filter(t => t.status === "active").length;
+  const statEl = document.getElementById("stat-active-tickets");
+  if (statEl) statEl.textContent = activeCount;
+
   container.innerHTML = "";
-  
+
   if (userTickets.length === 0) {
     container.innerHTML = `<p class="text-xxs opacity-40 text-center uppercase tracking-widest py-10">Aún no tienes jugadas esta semana.</p>`;
     return;
   }
-  
+
   userTickets.forEach(t => {
     const div = document.createElement("div");
     div.className = "flex justify-between items-center py-8 text-xxs uppercase tracking-wider font-bold cursor-pointer hover:bg-white/5 p-6 rounded-xl transition-all";
     div.onclick = () => showTicketDetails(t);
-    
+
     let statusColor = "text-accent";
     let statusText = "Activa";
-    if (t.status === "checked") {
+
+    if (t.status === "reserved") {
+      statusColor = "text-yellow-400 font-black";
+      statusText = "⏳ Reservada (pago pendiente)";
+    } else if (t.status === "checked") {
       statusColor = "text-[#00ff88]";
-      statusText = `${t.hits} Aciertos (${t.prize > 0 ? 'Ganador $' + t.prize.toFixed(1) : 'Sin Premio'})`;
+      const prize = Number(t.prize) || 0;
+      statusText = `${t.hits || 0} Aciertos (${prize > 0 ? '🏆 Ganador $' + prize.toFixed(1) : 'Sin Premio'})`;
+    } else if (t.status === "active") {
+      const userBalance = Number(currentUser.balance);
+      if (isNaN(userBalance) || userBalance < 0) {
+        statusColor = "text-red-500 font-black";
+        statusText = "INACTIVA (SIN SALDO)";
+      }
     }
-    
+
     div.innerHTML = `
       <div class="flex flex-col">
-        <span class="">${t.id}</span>
-        <span class="text-xxxxs opacity-30 mt-2">${new Date(t.created_at).toLocaleString()}</span>
+        <span>${t.id}</span>
+        <span class="text-xxxxs opacity-30 mt-2">${new Date(t.created_at).toLocaleString('es-MX', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}</span>
       </div>
       <div class="flex flex-col items-end gap-2">
         <span class="${statusColor}">${statusText}</span>
-        <span class="text-[8px] opacity-40 font-black">$${t.total_cost.toFixed(2)} MXN</span>
+        <span class="text-[8px] opacity-40 font-black">$${Number(t.total_cost).toFixed(2)} MXN</span>
       </div>
     `;
     container.appendChild(div);
   });
 }
+
 
 // ── GRÁFICOS ESTADÍSTICOS INTERACTIVOS (Sugerencia 2) ─────────────────────
 function drawAdminAnalyticsChart() {
@@ -1907,7 +2816,7 @@ window.completeOnboarding = async function() {
   const cleanAlias = alias.toLowerCase();
   const email = cleanAlias + "@quinielamundialista.mx";
   
-  import('./app_db.js?v=15').then(async dbMod => {
+  import('./app_db.js').then(async dbMod => {
     try {
       // Intentar buscar si el usuario ya existe en base de datos
       const existingUser = await dbMod.getUserData(email);
@@ -1923,8 +2832,8 @@ window.completeOnboarding = async function() {
           return;
         }
 
-        // Validación de PIN anti-suplantación (Sugerencia 2)
-        if (existingUser.pin && existingUser.pin !== pin) {
+        // Validación de PIN anti-suplantación ultra-segura
+        if (!existingUser.pin || existingUser.pin !== pin) {
           // Incrementar intentos fallidos
           let attempts = Number(localStorage.getItem("qia_failed_attempts_" + email) || 0) + 1;
           localStorage.setItem("qia_failed_attempts_" + email, attempts);
@@ -1968,8 +2877,8 @@ window.completeOnboarding = async function() {
           name: name,
           alias: alias,
           pin: pin, // Guardar el PIN (será encriptado en registerOrLoginUser)
-          balance: 200, // Saldo inicial de cortesía
-          is_admin: true, // Habilitar admin para pruebas
+          balance: 0, // Saldo inicial 0
+          is_admin: false, // Sin admin
           created_at: new Date().toISOString()
         };
         currentUser = await dbMod.registerOrLoginUser(newUser);
@@ -1997,6 +2906,15 @@ window.completeOnboarding = async function() {
 // ==========================================
 
 window.promptAdminAccess = async function() {
+  // Restringir acceso estricto: Solo Andres con apodo YoY puede acceder
+  const cleanName = (currentUser?.name || "").trim().toLowerCase();
+  const cleanAlias = (currentUser?.alias || "").trim().toLowerCase();
+  
+  if (cleanName !== "andres" || cleanAlias !== "yoy") {
+    showToast("🚫 Acceso Denegado: Solo el Administrador principal @YoY (Andres) tiene permisos.", "error");
+    return;
+  }
+
   const cfg = await getSystemConfig();
   const adminPin = cfg?.admin_pin || "569323";
   
@@ -2020,71 +2938,90 @@ async function loadAdminPanel() {
   }
 
   const users = await fetchAllUsers();
-  const tbody = document.getElementById("admin-users-list");
-  tbody.innerHTML = "";
-  
-  users.forEach(u => {
-    const tr = document.createElement("tr");
-    tr.className = "border-b border-black border-opacity-10";
-    tr.innerHTML = `
-      <td class="py-10">
-        <div class="font-bold ">${u.name}</div>
-        <div class="text-xs opacity-50">@${u.alias || "user"}</div>
-      </td>
-      <td class="py-10 text-right font-black text-accent">$${(u.balance || 0).toLocaleString()}</td>
-      <td class="py-10 text-center">
-        <button onclick="window.adminAdjustBalance('${u.id}', '${u.name}')" class="btn text-xs px-10 py-5" style="background: rgba(16,185,129,0.2); border: 1px solid var(--color-primary);">+/–</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
+  cachedUsersList = users;
+  renderAdminUsersTable(users);
 
   const fixtures = await getFixtures();
-  const fbody = document.getElementById("admin-fixtures-list");
-  fbody.innerHTML = "";
-  
-  fixtures.forEach(f => {
-    const tr = document.createElement("tr");
-    tr.className = "border-b border-black border-opacity-10";
+  const fbody = document.getElementById("admin-master-quiniela-container");
+  if (fbody) {
+    fbody.innerHTML = "";
     
-    const local = f.team_home || f.team_local || "TBA";
-    const visita = f.team_away || f.team_visita || "TBA";
-    
-    let dateStr = f.date;
-    let timeStr = "";
-    if (f.date && f.date.includes("T")) {
-      try {
-        const d = new Date(f.date);
-        if (!isNaN(d.getTime())) {
-          dateStr = d.toLocaleDateString();
-          timeStr = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        }
-      } catch(e) {}
-    } else if (f.date && f.date.includes(",")) {
-      // Split "Mañana, 20:00"
-      const parts = f.date.split(",");
-      dateStr = parts[0].trim();
-      timeStr = parts[1] ? parts[1].trim() : "";
-    }
+    // 1. Obtener partidos que están en las quinielas activas
+    const activeTickets = await getActiveTickets();
+    const activeMatchIds = new Set();
+    activeTickets.forEach(t => {
+      if (t.matches) {
+        t.matches.forEach(m => activeMatchIds.add(m.match_id));
+      }
+      if (t.selections) {
+        Object.keys(t.selections).forEach(matchId => activeMatchIds.add(matchId));
+      }
+    });
 
-    tr.innerHTML = `
-      <td class="py-10 text-xs">
-        <div>${dateStr}</div>
-        <div class="opacity-50">${timeStr}</div>
-      </td>
-      <td class="py-10">
-        <div class="font-bold ">${local} vs ${visita}</div>
-        <div class="text-xs opacity-50">${f.group || "Fase de Grupos"}</div>
-        ${f.status === 'finished' ? `<div class="text-xs text-success font-black mt-2">MARCADOR: ${f.score_local || f.result_home || 0} - ${f.score_visita || f.result_away || 0}</div>` : ''}
-      </td>
-      <td class="py-10 text-center flex gap-5 justify-center">
-        <button onclick="window.adminSetScore('${f.id}', '${local}', '${visita}')" class="btn text-xs px-10 py-5" style="background: rgba(34,197,94,0.2); border: 1px solid #22c55e; color: #22c55e;">🏆</button>
-        <button onclick="window.adminCancelFixture('${f.id}')" class="btn text-xs px-10 py-5" style="background: rgba(227,168,105,0.2); border: 1px solid #e3a869; color: #e3a869;">⛔</button>
-        <button onclick="window.adminDeleteFixture('${f.id}')" class="btn text-xs px-10 py-5" style="background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #ef4444;">🗑</button>
-      </td>
-    `;
-    fbody.appendChild(tr);
-  });
+    const activeFixtures = fixtures.filter(f => activeMatchIds.has(f.id));
+
+    if (activeFixtures.length === 0) {
+      fbody.innerHTML = `<div class="text-center text-xs opacity-40 py-20 uppercase tracking-widest" style="font-size: 10px; color: var(--text-primary); text-transform: uppercase;">No hay quinielas activas registradas en este momento. Los partidos aparecerán aquí cuando los usuarios compren sus boletos.</div>`;
+    } else {
+      // Poblar selecciones actuales
+      activeFixtures.forEach(f => {
+        if (f.status === 'finished') {
+          if (f.result_home > f.result_away) adminMasterSelections[f.id] = 'L';
+          else if (f.result_home < f.result_away) adminMasterSelections[f.id] = 'V';
+          else adminMasterSelections[f.id] = 'E';
+        } else if (f.status === 'canceled') {
+          adminMasterSelections[f.id] = 'C';
+        }
+      });
+
+      activeFixtures.forEach(f => {
+        const row = document.createElement("div");
+        row.className = "flex justify-between items-center gap-12 py-10 border-b border-white/5";
+        row.style.borderBottom = "1px solid rgba(255,255,255,0.04)";
+        
+        const local = f.team_home || f.team_local || "TBA";
+        const visita = f.team_away || f.team_visita || "TBA";
+        
+        let dateStr = f.date;
+        let timeStr = "";
+        if (f.date && f.date.includes("T")) {
+          try {
+            const d = new Date(f.date);
+            if (!isNaN(d.getTime())) {
+              dateStr = d.toLocaleDateString();
+              timeStr = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            }
+          } catch(e) {}
+        } else if (f.date && f.date.includes(",")) {
+          const parts = f.date.split(",");
+          dateStr = parts[0].trim();
+          timeStr = parts[1] ? parts[1].trim() : "";
+        }
+
+        const sel = adminMasterSelections[f.id] || "";
+        
+        row.innerHTML = `
+          <div class="flex flex-col text-left" style="max-width: 45%; flex-grow: 1;">
+            <span class="text-xs font-black text-primary" style="font-size: 11px; font-weight: 900; color: #fff;">${local} vs ${visita}</span>
+            <span class="text-xxxxs opacity-35 mt-2 flex items-center gap-4" style="font-size: 8px; margin-top: 4px; color: rgba(255,255,255,0.4);"><i class="ri-calendar-line"></i> ${dateStr} ${timeStr} | ${f.group || "LIGA MX"}</span>
+          </div>
+          
+          <div class="flex items-center gap-6" style="display: flex; gap: 6px; align-items: center;">
+            <div class="bet-selector-grid" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; width: 140px;">
+              <button id="btn-master-${f.id}-L" class="bet-btn text-[8px] ${sel === 'L' ? 'selected' : ''}" onclick="window.selectMasterResult('${f.id}', 'L')" style="font-size: 8px; padding: 4px 6px; border-radius: 6px;">L</button>
+              <button id="btn-master-${f.id}-E" class="bet-btn text-[8px] ${sel === 'E' ? 'selected' : ''}" onclick="window.selectMasterResult('${f.id}', 'E')" style="font-size: 8px; padding: 4px 6px; border-radius: 6px;">E</button>
+              <button id="btn-master-${f.id}-V" class="bet-btn text-[8px] ${sel === 'V' ? 'selected' : ''}" onclick="window.selectMasterResult('${f.id}', 'V')" style="font-size: 8px; padding: 4px 6px; border-radius: 6px;">V</button>
+            </div>
+            
+            <button id="btn-master-${f.id}-C" class="bet-btn text-[8px]" onclick="window.selectMasterResult('${f.id}', 'C')" style="font-size: 8px; padding: 4px 6px; border-radius: 6px; background: ${sel === 'C' ? '#e3a869' : 'rgba(227,168,105,0.1)'}; border: 1px solid rgba(227,168,105,0.25); color: ${sel === 'C' ? '#000' : '#e3a869'}; width: 28px;" title="Cancelar partido">C</button>
+            
+            <button onclick="window.adminDeleteFixture('${f.id}')" class="btn text-xs p-6" style="background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25); color: #ef4444; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 8px; cursor: pointer; border: none;" title="Eliminar partido">🗑</button>
+          </div>
+        `;
+        fbody.appendChild(row);
+      });
+    }
+  }
 
   const logs = await getGovernanceLogs();
   const lbody = document.getElementById("admin-logs-list");
@@ -2102,6 +3039,138 @@ async function loadAdminPanel() {
     });
   }
 }
+
+// Controladores de la Quiniela Maestra para Lote de Resultados
+window.selectMasterResult = function(matchId, selection) {
+  if (adminMasterSelections[matchId] === selection) {
+    delete adminMasterSelections[matchId];
+  } else {
+    adminMasterSelections[matchId] = selection;
+  }
+  
+  ["L", "E", "V", "C"].forEach(op => {
+    const btn = document.getElementById(`btn-master-${matchId}-${op}`);
+    if (btn) {
+      btn.classList.toggle("selected", op === adminMasterSelections[matchId]);
+      if (op === 'C') {
+        btn.style.background = op === adminMasterSelections[matchId] ? "#e3a869" : "rgba(227,168,105,0.1)";
+        btn.style.color = op === adminMasterSelections[matchId] ? "#000" : "#e3a869";
+      }
+    }
+  });
+};
+
+window.adminSaveMasterQuiniela = async function() {
+  const matchesToUpdate = Object.keys(adminMasterSelections);
+  if (matchesToUpdate.length === 0) {
+    showToast("No has seleccionado resultados para guardar.", "error");
+    return;
+  }
+  
+  showToast("Guardando resultados de la Quiniela Maestra...", "info");
+  
+  let successCount = 0;
+  for (let matchId of matchesToUpdate) {
+    const sel = adminMasterSelections[matchId];
+    let success = false;
+    
+    if (sel === 'C') {
+      success = await cancelFixture(matchId);
+    } else {
+      let homeScore = 0;
+      let awayScore = 0;
+      if (sel === 'L') { homeScore = 1; awayScore = 0; }
+      else if (sel === 'V') { homeScore = 0; awayScore = 1; }
+      else if (sel === 'E') { homeScore = 1; awayScore = 1; }
+      
+      success = await updateFixtureScore(matchId, homeScore, awayScore);
+    }
+    
+    if (success) successCount++;
+  }
+  
+  await createGovernanceLog(
+    "Guardado Quiniela Maestra",
+    `Se definieron resultados para ${successCount} partidos de la cartelera de forma simultánea.`,
+    currentUser
+  );
+  
+  localStorage.setItem("qia_live_event", JSON.stringify({ type: 'score', text: `🏆 ¡El Administrador ha publicado los resultados oficiales de la Quiniela Maestra! Revisa tus aciertos en Estadio.`, ts: Date.now() }));
+  
+  showToast(`✅ Se guardaron ${successCount} resultados correctamente.`, "success");
+  
+  loadAdminPanel();
+  window.refreshPanelData('dashboard');
+  window.refreshPanelData('play');
+};
+
+window.adminConsultMatchResults = async function() {
+  const btn = event && event.currentTarget ? event.currentTarget : document.querySelector('button[onclick="window.adminConsultMatchResults()"]');
+  let originalText = '<i class="ri-google-fill mr-2"></i>Consultar Resultados';
+  if (btn) {
+    originalText = btn.innerHTML;
+    btn.innerHTML = `<i class="ri-loader-4-line animate-spin mr-2"></i>Consultando...`;
+    btn.disabled = true;
+  }
+  showToast("Consultando a través del buscador de Google (Modo IA) los resultados...", "info");
+  
+  try {
+    const updatedCount = await autoUpdateMatchResults(false);
+    if (updatedCount > 0) {
+      showToast(`✅ Se actualizaron automáticamente ${updatedCount} partidos.`, "success");
+      localStorage.setItem("qia_live_event", JSON.stringify({ type: 'score', text: `🏆 ¡El Buscador IA ha actualizado los resultados oficiales de la Quiniela! Revisa tus aciertos.`, ts: Date.now() }));
+      loadAdminPanel();
+      window.refreshPanelData('dashboard');
+      window.refreshPanelData('play');
+    } else {
+      showToast("No se encontraron resultados nuevos o finalizados en la búsqueda.", "info");
+    }
+  } catch(e) {
+    showToast("Error al consultar resultados vía IA.", "error");
+    console.error(e);
+  } finally {
+    if (btn) {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
+  }
+};
+
+function renderAdminUsersTable(usersToRender) {
+  const tbody = document.getElementById("admin-users-list");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  
+  usersToRender.forEach(u => {
+    const tr = document.createElement("tr");
+    tr.className = "border-b border-black border-opacity-10";
+    tr.innerHTML = `
+      <td class="py-10">
+        <div class="font-bold ">${u.name}</div>
+        <div class="text-xs opacity-50">@${u.alias || "user"}</div>
+      </td>
+      <td class="py-10 text-right font-black text-accent">$${(u.balance || 0).toLocaleString()}</td>
+      <td class="py-10 text-center">
+        <button onclick="window.adminAdjustBalance('${u.id}', '${u.name}')" class="btn text-xs px-10 py-5" style="background: rgba(16,185,129,0.2); border: 1px solid var(--color-primary);">+/–</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+window.searchAdminUsers = function(query) {
+  if (!query || query.trim() === "") {
+    renderAdminUsersTable(cachedUsersList);
+    return;
+  }
+  const cleanQuery = query.trim().toLowerCase();
+  const filtered = cachedUsersList.filter(u => {
+    const nameMatch = u.name && u.name.toLowerCase().includes(cleanQuery);
+    const aliasMatch = u.alias && u.alias.toLowerCase().includes(cleanQuery);
+    return nameMatch || aliasMatch;
+  });
+  renderAdminUsersTable(filtered);
+};
 
 window.adminAdjustBalance = async function(uid, userName) {
   const input = prompt(`Ajustar saldo de ${userName}\nIngresa el monto a sumar (o valor negativo para restar):`, "0");
@@ -2168,15 +3237,31 @@ window.adminAddFixture = async function() {
   }
 };
 
+
 window.adminDeleteFixture = async function(id) {
-  if (confirm("¿Seguro que deseas eliminar este partido?")) {
-    const success = await deleteFixture(id);
-    if (success) {
-      showToast("✅ Partido eliminado", "success");
-      loadAdminPanel();
+  import('./app_db.js').then(async dbMod => {
+    const activeTickets = await dbMod.getActiveTickets();
+    const isUsed = activeTickets.some(t => {
+      if (t.matches) return t.matches.some(m => m.match_id === id);
+      if (t.selections) return t.selections[id] !== undefined;
+      return false;
+    });
+    
+    if (isUsed) {
+      showToast("⚠️ Bloqueo de Gobernanza: No puedes eliminar un partido que ya cuenta con apuestas activas en juego.", "error");
+      return;
     }
-  }
+    
+    if (confirm("¿Seguro que deseas eliminar este partido?")) {
+      const success = await dbMod.deleteFixture(id);
+      if (success) {
+        showToast("Partido eliminado", "success");
+        loadAdminPanel();
+      }
+    }
+  });
 };
+
 
 window.adminSetScore = async function(id, home, away) {
   const resultHome = prompt(`🏆 Goles de ${home}:`, "0");
@@ -2201,16 +3286,81 @@ window.adminSetScore = async function(id, home, away) {
   }
 };
 
+
 window.adminClearFixtures = async function() {
-  if (confirm("🚨 ¿ESTÁS SEGURO? Esto eliminará TODOS los partidos actuales.")) {
-    const success = await clearAllFixtures();
-    if (success) {
-      showToast("✅ Partidos limpiados", "success");
-      loadAdminPanel();
-      window.refreshPanelData('dashboard');
-      window.refreshPanelData('play');
+  import('./app_db.js').then(async dbMod => {
+    const activeTickets = await dbMod.getActiveTickets();
+    if (activeTickets.length > 0) {
+      showToast("⚠️ Bloqueo de Gobernanza: No puedes vaciar la cartelera si existen quinielas activas registradas en juego.", "error");
+      return;
     }
+    
+    if (confirm("🚨 ¿ESTÁS SEGURO? Esto eliminará TODOS los partidos actuales.")) {
+      const success = await dbMod.clearAllFixtures();
+      if (success) {
+        showToast("Partidos limpiados", "success");
+        loadAdminPanel();
+        window.refreshPanelData('dashboard');
+        window.refreshPanelData('play');
+      }
+    }
+  });
+};
+
+
+window.adminHardResetDatabase = async function() {
+  if (confirm("🚨 ¡ADVERTENCIA DE GOBERNANZA MÁXIMA!\n\nEsto restablecerá toda la base de datos local de la aplicación al estado original de fábrica:\n- Eliminará todos los usuarios registrados.\n- Limpiará todas las jugadas y transacciones.\n- Vaciará toda la cartelera de partidos.\n\n¿Estás absolutamente seguro de realizar esta acción irreversible?")) {
+    const pin = prompt("Por favor ingresa el PIN de seguridad administrativa para confirmar:");
+    if (pin !== "1234" && pin !== "569323") {
+      showToast("❌ PIN incorrecto. Operación cancelada por gobernanza.", "error");
+      return;
+    }
+    
+    showToast("Restableciendo base de datos local...", "info");
+    
+    setTimeout(() => {
+      localStorage.clear();
+      showToast("✅ Base de datos restablecida a valores de fábrica con éxito.", "success");
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    }, 1500);
   }
+};
+
+
+
+
+window.adminExportGovernanceLogs = async function() {
+  import('./app_db.js').then(async dbMod => {
+    const logs = await dbMod.getGovernanceLogs();
+    if (!logs || logs.length === 0) {
+      showToast("No hay registros en la bitácora para exportar.", "info");
+      return;
+    }
+    
+    // Crear archivo CSV con BOM UTF-8 para compatibilidad absoluta con Excel
+    let csvContent = "\uFEFF";
+    csvContent += "Fecha/Hora,Accion,Detalle,Usuario\n";
+    
+    logs.forEach(log => {
+      const date = new Date(log.created_at || log.timestamp).toLocaleString('es-MX');
+      const action = `"${(log.action || '').replace(/"/g, '""')}"`;
+      const detail = `"${(log.detail || '').replace(/"/g, '""')}"`;
+      const user = `"${(log.user_alias || log.user || '').replace(/"/g, '""')}"`;
+      csvContent += `${date},${action},${detail},${user}\n`;
+    });
+    
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `bitacora_gobernanza_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast("¡Bitácora exportada exitosamente a CSV!", "success");
+  });
 };
 
 window.adminSimulateAPI = async function() {
@@ -2372,6 +3522,40 @@ window.addEventListener('storage', function(e) {
         // Evitamos notificaciones repetidas
         if (Date.now() - eventData.ts < 5000) {
           showToast(eventData.text, "info");
+        }
+      } catch (err) {}
+    }
+  }
+});
+
+// 🚨 Receptor de Alertas para Administrador (Recargas)
+window.addEventListener('storage', function(e) {
+  if (e.key === 'qia_admin_alert' && e.newValue) {
+    if (currentUser && currentUser.is_admin) {
+      try {
+        const alertData = JSON.parse(e.newValue);
+        if (Date.now() - alertData.ts < 5000) {
+          // Sonido de Caja Registradora / Campanilla
+          try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(1, ctx.currentTime + 0.05);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1);
+            osc.start();
+            osc.stop(ctx.currentTime + 1);
+          } catch(err) { console.warn("No se pudo reproducir el sonido de recarga", err); }
+
+          showToast(`🚨 RECARGA SOLICITADA: ${alertData.user} ha depositado $${alertData.amount.toFixed(2)}`, "success");
+          if (currentPanel === "admin") {
+            loadAdminPanel();
+          }
         }
       } catch (err) {}
     }

@@ -2,10 +2,10 @@
    QUINIELA MUNDIALISTA IA — SERVICE WORKER ZENITH (sw.js)
    ============================================================ */
 
-const CACHE_NAME = "quiniela-ia-cache-v15";
+const CACHE_NAME = "quiniela-ia-cache-v20";
 const ASSETS_TO_CACHE = [
   "./",
-  "./index.html?v=" + Date.now(),
+  "./index.html",
   "./index.css",
   "./app.js",
   "./app_db.js",
@@ -18,7 +18,11 @@ self.addEventListener("install", (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log("⚙️ [Service Worker] Cacheando assets esenciales...");
-      return cache.addAll(ASSETS_TO_CACHE);
+      // Generar peticiones que fuercen la recarga desde la red para evitar cachear archivos viejos
+      const requests = ASSETS_TO_CACHE.map(url => {
+        return new Request(url, { cache: "reload" });
+      });
+      return cache.addAll(requests);
     })
   );
   self.skipWaiting();
@@ -46,14 +50,14 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
 
   // Ignorar peticiones de Firebase Firestore/Auth de red
-  if (url.origin.includes("firebase") || url.pathname.includes("firestore")) {
+  if (url.origin.includes("firebase") || url.pathname.includes("firestore") || url.pathname.includes("identitytoolkit")) {
     return;
   }
 
   e.respondWith(
-    caches.match(e.request).then((cachedResponse) => {
+    caches.match(e.request, { ignoreSearch: true }).then((cachedResponse) => {
+      // Si está cacheado (por ejemplo, assets estáticos index.css, app.js), lo servimos de inmediato
       if (cachedResponse) {
-        // Retornar recurso cacheado
         return cachedResponse;
       }
 
@@ -71,9 +75,13 @@ self.addEventListener("fetch", (e) => {
         });
 
         return networkResponse;
-      }).catch(() => {
-        // Retornar fallback básico si no hay red
-        return new Response("Offline Mode Activo en el Quiniela Mundialista");
+      }).catch((err) => {
+        // Si falla la red y es una navegación de página principal (HTML), retornar index.html
+        if (e.request.mode === "navigate") {
+          return caches.match("./index.html", { ignoreSearch: true });
+        }
+        // Para otros recursos (CSS, JS, imágenes), lanzar el error de red para no romper tipos MIME
+        throw err;
       });
     })
   );
