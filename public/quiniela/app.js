@@ -1059,24 +1059,31 @@ function renderLiveScores(fixtures) {
 
   window._prevScores = window._prevScores || {};
 
-  // Mapear todos los partidos de la quiniela
+  // Quitar el scroll horizontal y flex para hacerlo lista compacta
+  container.className = "";
+  container.style.display = "flex";
+  container.style.flexDirection = "column";
+  container.style.gap = "8px";
+  container.style.maxHeight = "350px";
+  container.style.overflowY = "auto";
+  container.style.paddingRight = "6px";
+
   fixtures.forEach(f => {
     const isLive = f.status === "live";
     const isFinished = f.status === "finished";
 
-    let card;
-    if (template) {
-      card = template.content.cloneNode(true).querySelector('.live-match-card');
-    } else {
-      card = document.createElement("div");
-      card.className = "live-match-card";
-    }
-    
-    if (isLive) card.classList.add('is-live');
+    const card = document.createElement("div");
+    card.style.background = isLive ? "rgba(239, 68, 68, 0.05)" : "rgba(255, 255, 255, 0.5)";
+    card.style.border = isLive ? "1px solid rgba(239, 68, 68, 0.2)" : "1px solid var(--border-glass, rgba(205,127,50,0.2))";
+    card.style.borderRadius = "12px";
+    card.style.padding = "10px 14px";
+    card.style.display = "flex";
+    card.style.justifyContent = "space-between";
+    card.style.alignItems = "center";
     
     let statusBadge = "";
     if (isLive) {
-      statusBadge = `<span class="pulsing-live text-xxs font-black text-red-500 uppercase tracking-widest"><span class="live-dot mr-4"></span>En Vivo</span>`;
+      statusBadge = `<span class="pulsing-live text-xxs font-black text-red-500 uppercase tracking-widest" style="color: #ef4444;"><span class="live-dot" style="margin-right:4px;"></span>En Vivo</span>`;
     } else if (isFinished) {
       statusBadge = `<span class="text-xxs font-black opacity-30 uppercase tracking-widest">Finalizado</span>`;
     } else {
@@ -1090,64 +1097,51 @@ function renderLiveScores(fixtures) {
       statusBadge = `<span class="text-xxs font-black opacity-40 uppercase tracking-widest">${dateLabel}</span>`;
     }
 
-    let localScore = (isLive || isFinished) && typeof f.score_local === 'number' ? f.score_local : '-';
-    let visitaScore = (isLive || isFinished) && typeof f.score_visita === 'number' ? f.score_visita : '-';
+    let localScore = (isLive || isFinished) && f.score_local != null ? f.score_local : '-';
+    let visitaScore = (isLive || isFinished) && f.score_visita != null ? f.score_visita : '-';
     
     // Check hit
     let hitBadge = "";
-    if (latestTicket && isFinished && typeof f.score_local === 'number' && typeof f.score_visita === 'number') {
+    if (latestTicket && isFinished && f.score_local != null && f.score_visita != null) {
       let realResult = 'E';
-      if (f.score_local > f.score_visita) realResult = 'L';
-      else if (f.score_local < f.score_visita) realResult = 'V';
+      if (Number(f.score_local) > Number(f.score_visita)) realResult = 'L';
+      else if (Number(f.score_local) < Number(f.score_visita)) realResult = 'V';
       const m = latestTicket.matches.find(x => x.match_id === f.id);
       if (m && m.prediction === realResult) {
         card.style.borderColor = 'rgba(0, 255, 136, 0.4)';
         card.style.background = 'rgba(0, 255, 136, 0.05)';
-        hitBadge = `<span class="text-xxs font-black uppercase" style="margin-left: 4px; background: rgba(0,255,136,0.2); color: #00ff88; padding: 2px 8px; border-radius: 9999px;" title="¡Atinaste!">✅ Acertado</span>`;
+        hitBadge = `<span class="text-xxs font-black uppercase" style="margin-left: 6px; background: rgba(0,255,136,0.2); color: #00ff88; padding: 2px 8px; border-radius: 9999px;" title="¡Atinaste!">✅ Acertado</span>`;
       }
     }
 
     // Check blink for live score changes
-    let scoreClassLocal = "text-md font-black italic text-accent score-local";
-    let scoreClassVisita = "text-md font-black italic text-accent score-visita";
+    let scoreStyle = "font-size: 14px; font-weight: 900; font-style: italic; color: var(--accent, #cd7f32);";
     if (isLive) {
       const prev = window._prevScores[f.id] || { l: localScore, v: visitaScore };
-      if (prev.l !== localScore) scoreClassLocal += " animate-pulse text-white";
-      if (prev.v !== visitaScore) scoreClassVisita += " animate-pulse text-white";
+      if (prev.l !== localScore || prev.v !== visitaScore) {
+        scoreStyle += " animation: live-pulse 1s infinite; color: white;";
+      }
       window._prevScores[f.id] = { l: localScore, v: visitaScore };
     }
 
-    if (template) {
-      card.querySelector('.group-badge').innerHTML = (f.group || "QUINIELA") + hitBadge;
-      card.querySelector('.status-badge').innerHTML = statusBadge;
-      card.querySelector('.team-local').textContent = f.team_local;
-      card.querySelector('.team-visita').textContent = f.team_visita;
-      
-      const sLocal = card.querySelector('.score-local');
-      sLocal.className = scoreClassLocal;
-      sLocal.textContent = localScore;
-      
-      const sVisita = card.querySelector('.score-visita');
-      sVisita.className = scoreClassVisita;
-      sVisita.textContent = visitaScore;
-    } else {
-      card.innerHTML = `
-        <div class="flex justify-between items-center">
-          <span class="text-xxxxs px-6 font-black uppercase text-accent" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(0,0,0,0.05); padding-top: 2px; padding-bottom: 2px; border-radius: 9999px;">${f.group || "QUINIELA"} ${hitBadge}</span>
-          ${statusBadge}
+    card.innerHTML = `
+      <div style="flex:1;">
+        <div style="margin-bottom: 6px; display:flex; align-items:center;">
+          <span class="text-xxxxs font-black uppercase text-accent" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(0,0,0,0.05); padding: 2px 8px; border-radius: 9999px;">${f.group || "QUINIELA"}</span>
+          ${hitBadge}
         </div>
-        <div class="flex items-center justify-between mt-4">
-          <div class="flex flex-col">
-            <span class="text-xs font-black uppercase">${f.team_local}</span>
-            <span class="text-xs font-black uppercase mt-4">${f.team_visita}</span>
-          </div>
-          <div class="flex flex-col items-end gap-4">
-            <span class="${scoreClassLocal}">${localScore}</span>
-            <span class="${scoreClassVisita}">${visitaScore}</span>
-          </div>
+        <div style="font-size: 11px; font-weight: 900; text-transform: uppercase;">
+          <div style="margin-bottom: 2px;">${f.team_local}</div>
+          <div>${f.team_visita}</div>
         </div>
-      `;
-    }
+      </div>
+      <div style="text-align: right; display:flex; flex-direction:column; justify-content:space-between; height:100%;">
+        <div style="margin-bottom: 6px;">${statusBadge}</div>
+        <div style="${scoreStyle}">
+          ${localScore} - ${visitaScore}
+        </div>
+      </div>
+    `;
     
     container.appendChild(card);
     if (!isFinished && !firstActiveCard) {
@@ -1432,8 +1426,8 @@ function renderPlayFixtures(fixtures) {
     const btnClass = (op) => `bet-btn ${sel === op ? 'selected' : ''}`;
 
     let vsContent = '<span class="text-accent italic text-xxxxs tracking-[2px] self-center">VS</span>';
-    if ((f.status === 'live' || f.status === 'finished') && typeof f.score_local === 'number' && typeof f.score_visita === 'number') {
-      vsContent = `<span class="text-white text-[11px] bg-black/40 px-8 py-4 rounded-lg font-black border border-white/10 tracking-[2px] self-center shadow-[0_0_10px_rgba(0,0,0,0.5)]">${f.score_local} - ${f.score_visita}</span>`;
+    if ((isLive || f.status === 'finished' || f.score_local != null) && f.score_local != null && f.score_visita != null) {
+      vsContent = `<span class="font-black italic tracking-[2px] self-center" style="color:#ffffff; font-size:11px; background:rgba(0,0,0,0.4); padding:4px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); box-shadow:0 0 10px rgba(0,0,0,0.5);">${f.score_local} - ${f.score_visita}</span>`;
     }
 
     row.innerHTML = `
