@@ -3240,21 +3240,22 @@ window.adminConsultMatchResults = async function() {
     btn.innerHTML = `<i class="ri-loader-4-line animate-spin mr-2"></i>Consultando...`;
     btn.disabled = true;
   }
-  showToast("Consultando a través del buscador de Google (Modo IA) los resultados...", "info");
-  
+  showToast("Consultando API-Football Oficial...", "info");
   try {
-    const updatedCount = await autoUpdateMatchResults(false);
-    if (updatedCount > 0) {
-      showToast(`✅ Se actualizaron automáticamente ${updatedCount} partidos.`, "success");
-      localStorage.setItem("qia_live_event", JSON.stringify({ type: 'score', text: `🏆 ¡El Buscador IA ha actualizado los resultados oficiales de la Quiniela! Revisa tus aciertos.`, ts: Date.now() }));
+    const res = await syncWithApiFootball('34c8e5e450da905d34480516f6876eaa');
+    if (res.success && res.updated > 0) {
+      showToast(`¡Listo! Se actualizaron automáticamente ${res.updated} partidos.`, "success");
+      localStorage.setItem("qia_live_event", JSON.stringify({ type: 'score', text: `¡Los marcadores oficiales han sido actualizados en vivo!`, ts: Date.now() }));
       loadAdminPanel();
       window.refreshPanelData('dashboard');
       window.refreshPanelData('play');
+    } else if (res.success && res.updated === 0) {
+      showToast(res.msg || "No se encontraron resultados nuevos.", "info");
     } else {
-      showToast("No se encontraron resultados nuevos o finalizados en la búsqueda.", "info");
+      showToast(res.msg || "No se encontraron resultados.", "info");
     }
   } catch(e) {
-    showToast("Error al consultar resultados vía IA.", "error");
+    showToast("Error al consultar resultados.", "error");
     console.error(e);
   } finally {
     if (btn) {
