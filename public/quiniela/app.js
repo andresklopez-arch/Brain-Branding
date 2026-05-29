@@ -1081,24 +1081,29 @@ function renderLiveScores(fixtures) {
     card.style.justifyContent = "space-between";
     card.style.alignItems = "center";
     
+    let dateLabel = f.date;
+    try {
+      const d = new Date(f.date);
+      if (!isNaN(d.getTime())) {
+        dateLabel = d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) + " " + d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true });
+      }
+    } catch(e) {}
+    
     let statusBadge = "";
     if (isLive) {
       statusBadge = `<span class="pulsing-live text-xxs font-black text-red-500 uppercase tracking-widest" style="color: #ef4444;"><span class="live-dot" style="margin-right:4px;"></span>En Vivo</span>`;
     } else if (isFinished) {
       statusBadge = `<span class="text-xxs font-black opacity-30 uppercase tracking-widest">Finalizado</span>`;
     } else {
-      let dateLabel = f.date;
-      try {
-        const d = new Date(f.date);
-        if (!isNaN(d.getTime())) {
-          dateLabel = d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) + " " + d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true });
-        }
-      } catch(e) {}
       statusBadge = `<span class="text-xxs font-black opacity-40 uppercase tracking-widest">${dateLabel}</span>`;
     }
 
-    let localScore = (isLive || isFinished) && f.score_local != null ? f.score_local : '-';
-    let visitaScore = (isLive || isFinished) && f.score_visita != null ? f.score_visita : '-';
+    const now = Date.now() + (typeof serverTimeOffset !== 'undefined' ? serverTimeOffset : 0);
+    const matchTime = f.date ? new Date(f.date).getTime() : 0;
+    const isPastOrLive = (matchTime > 0 && matchTime < now) || isLive || isFinished;
+
+    let localScore = isPastOrLive && f.score_local != null ? f.score_local : '-';
+    let visitaScore = isPastOrLive && f.score_visita != null ? f.score_visita : '-';
     
     // Check hit
     let hitBadge = "";
@@ -1426,7 +1431,11 @@ function renderPlayFixtures(fixtures) {
     const btnClass = (op) => `bet-btn ${sel === op ? 'selected' : ''}`;
 
     let vsContent = '<span class="text-accent italic text-xxxxs tracking-[2px] self-center">VS</span>';
-    if ((isLive || f.status === 'finished' || f.score_local != null) && f.score_local != null && f.score_visita != null) {
+    const nowPlay = Date.now() + (typeof serverTimeOffset !== 'undefined' ? serverTimeOffset : 0);
+    const matchTimePlay = f.date ? new Date(f.date).getTime() : 0;
+    const isPastOrLivePlay = (matchTimePlay > 0 && matchTimePlay < nowPlay) || isLive || f.status === 'finished';
+
+    if (isPastOrLivePlay && f.score_local != null && f.score_visita != null) {
       vsContent = `<span class="font-black italic tracking-[2px] self-center" style="color:#ffffff; font-size:11px; background:rgba(0,0,0,0.4); padding:4px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); box-shadow:0 0 10px rgba(0,0,0,0.5);">${f.score_local} - ${f.score_visita}</span>`;
     }
 
