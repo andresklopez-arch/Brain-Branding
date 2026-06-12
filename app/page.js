@@ -22,27 +22,14 @@ export default function HomePage() {
       setCatalog(PRODUCTOS_SEMILLA.slice(0, 8));
     }
 
-    // Comprobar estado de entrada de sesión para no obligar a volver a bienvenida al navegar atrás
-    if (typeof window !== "undefined") {
-      const entered = sessionStorage.getItem("shoesqr_entered_client");
-      if (entered === "true") {
-        setHasEnteredClient(true);
-      }
-    }
   }, []);
 
   const enterAsClient = () => {
     setHasEnteredClient(true);
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("shoesqr_entered_client", "true");
-    }
   };
 
   const exitClient = () => {
     setHasEnteredClient(false);
-    if (typeof window !== "undefined") {
-      sessionStorage.removeItem("shoesqr_entered_client");
-    }
   };
 
   // VISTA 1: Pantalla de Bienvenida (Gateway)
