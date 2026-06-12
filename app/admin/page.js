@@ -21,10 +21,10 @@ export default function AdminPanel() {
   const [photoSelected, setPhotoSelected] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [pdfFileName, setPdfFileName] = useState("");
-  const [uploadProgress, setUploadProgress] = useState(-1); // -1 = no activo
+  const [uploadProgress, setUploadProgress] = useState(-1);
   
   // Estado para visor de etiquetas para impresión
-  const [selectedLabels, setSelectedLabels] = useState([]); // Array de ids
+  const [selectedLabels, setSelectedLabels] = useState([]);
   const [showLabelPrint, setShowLabelPrint] = useState(false);
 
   const fileInputRef = useRef(null);
@@ -75,6 +75,26 @@ export default function AdminPanel() {
       localStorage.setItem("shoesqr_catalog", JSON.stringify(filled));
       setCatalog(filled);
     }
+  }, []);
+
+  // Sincronización continua de datos entre ventanas
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const stored = localStorage.getItem("shoesqr_catalog");
+      if (stored) {
+        try {
+          setCatalog(JSON.parse(stored));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    const interval = setInterval(handleStorageChange, 1500);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      clearInterval(interval);
+    };
   }, []);
 
   // Filtrado y búsqueda
@@ -130,7 +150,7 @@ export default function AdminPanel() {
           precio: parseFloat(cols[3].trim()) || 3500,
           stock: parseInt(cols[4].trim()) || 10,
           tallas: [23, 24, 25, 26],
-          imagen: "/assets/designer_loafer.png", // default
+          imagen: "/assets/designer_loafer.png",
           caracteristicas: "Modelo importado en lote via Excel.",
           descripcion: "Calzado de lujo cargado dinámicamente en lote para pruebas de catálogo masivo."
         });
@@ -167,14 +187,14 @@ export default function AdminPanel() {
             const nuevo = {
               id,
               sku: `SH-PH${Math.floor(1000 + Math.random() * 9000)}`,
-              nombre: "Calzado Importado Foto X",
+              nombre: "Zapatilla Sport Vanguard IA",
               categoria: "Sport / Sneaker",
               precio: 4200,
               stock: 25,
               tallas: [24, 25, 26, 27],
               imagen: "/assets/luxury_sneaker.png",
-              caracteristicas: "Identificado por IA a través de imagen.",
-              descripcion: "Calzado identificado por fotografía. Atributos autocompletados mediante reconocimiento visual del catálogo."
+              caracteristicas: "Identificado por IA a través de fotografía.",
+              descripcion: "Calzado identificado por fotografía en el cargador dinámico. Atributos auto-rellenados por reconocimiento visual."
             };
             const updated = [nuevo, ...catalog];
             setCatalog(updated);
@@ -256,7 +276,7 @@ export default function AdminPanel() {
     }
   };
 
-  // Estadísticas del catálogo
+  // KPIs
   const totalModelos = catalog.length;
   const sinStock = catalog.filter(p => p.stock === 0).length;
   const valorInventario = catalog.reduce((sum, p) => sum + (p.precio * p.stock), 0);
@@ -264,15 +284,54 @@ export default function AdminPanel() {
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "var(--bg-primary)" }}>
-      {/* Header */}
+      {/* Sticky Header with Mode Switcher Links */}
       <header className="boutique-header">
-        <div className="luxury-container boutique-header-inner">
+        <div className="luxury-container boutique-header-inner" style={{ height: "90px" }}>
           <div className="boutique-logo">
-            <Link href="/">ShoesQR <span style={{ color: "var(--bronze)", fontSize: 14 }}>Admin</span></Link>
+            <Link href="/">ShoesQR <span style={{ color: "var(--bronze)", fontSize: 13, letterSpacing: "0.05em" }}>Admin</span></Link>
           </div>
-          <span style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-muted)" }}>
-            Boutique Catalog Manager v1.0
-          </span>
+
+          {/* Mode switch navigation linking to pages */}
+          <div style={{
+            display: "flex",
+            background: "var(--bg-primary)",
+            border: "1px solid var(--border)",
+            padding: 4,
+            borderRadius: 0
+          }}>
+            <Link
+              href="/"
+              style={{
+                background: "transparent",
+                color: "var(--text-secondary)",
+                padding: "8px 20px",
+                fontSize: "12px",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                display: "inline-flex",
+                alignItems: "center"
+              }}
+            >
+              <i className="ri-user-line" style={{ marginRight: 6 }} /> Vista Cliente
+            </Link>
+            <Link
+              href="/admin"
+              style={{
+                background: "var(--text-primary)",
+                color: "#fff",
+                padding: "8px 20px",
+                fontSize: "12px",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                display: "inline-flex",
+                alignItems: "center"
+              }}
+            >
+              <i className="ri-settings-4-line" style={{ marginRight: 6 }} /> Vista Administrador
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -299,7 +358,7 @@ export default function AdminPanel() {
           </div>
         </div>
 
-        {/* Carga Masiva (Loader Menu) */}
+        {/* Loaders Panel */}
         <div style={{ background: "#fff", border: "1px solid var(--border)", padding: 30, boxShadow: "var(--shadow)" }}>
           <h2 style={{ fontSize: 18, marginBottom: 20, fontFamily: "var(--font-sans)", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>
             <i className="ri-upload-cloud-line" style={{ marginRight: 8, color: "var(--bronze)" }} />
@@ -308,18 +367,21 @@ export default function AdminPanel() {
           
           <div style={{ display: "flex", gap: 12, borderBottom: "1px solid var(--border)", paddingBottom: 12, marginBottom: 20 }}>
             <button 
+              type="button"
               className={`btn btn-sm ${uploadTab === "photo" ? "btn-primary" : "btn-secondary"}`}
               onClick={() => setUploadTab("photo")}
             >
               📷 Foto de Calzado
             </button>
             <button 
+              type="button"
               className={`btn btn-sm ${uploadTab === "excel" ? "btn-primary" : "btn-secondary"}`}
               onClick={() => setUploadTab("excel")}
             >
               📄 Copiar Excel / CSV
             </button>
             <button 
+              type="button"
               className={`btn btn-sm ${uploadTab === "pdf" ? "btn-primary" : "btn-secondary"}`}
               onClick={() => setUploadTab("pdf")}
             >
@@ -352,7 +414,7 @@ export default function AdminPanel() {
                   onChange={handlePhotoSelect} 
                   style={{ display: "none" }} 
                 />
-                <button className="btn btn-secondary" onClick={() => fileInputRef.current.click()}>
+                <button type="button" className="btn btn-secondary" onClick={() => fileInputRef.current.click()}>
                   <i className="ri-image-add-line" /> Seleccionar Fotografía
                 </button>
               </div>
@@ -362,7 +424,7 @@ export default function AdminPanel() {
                     <img src={photoPreview} style={{ width: 100, height: 100, objectFit: "cover" }} />
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       <span style={{ fontSize: 11, fontWeight: 700 }}>{photoSelected.name}</span>
-                      <button className="btn btn-primary btn-sm" onClick={subirFotoSimulada}>
+                      <button type="button" className="btn btn-primary btn-sm" onClick={subirFotoSimulada}>
                         Comenzar Reconocimiento IA
                       </button>
                     </div>
@@ -382,7 +444,7 @@ export default function AdminPanel() {
                 <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                   Pega filas separadas por punto y coma con el formato: <code>SKU;Nombre;Categoría;Precio;Stock</code>.
                 </span>
-                <button className="btn btn-secondary btn-sm" onClick={prellenarExcel} style={{ padding: "4px 8px" }}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={prellenarExcel} style={{ padding: "4px 8px" }}>
                   Pegar Ejemplo
                 </button>
               </div>
@@ -394,7 +456,7 @@ export default function AdminPanel() {
                 onChange={e => setExcelText(e.target.value)}
                 style={{ fontFamily: "monospace", fontSize: 12 }}
               />
-              <button className="btn btn-primary" onClick={procesarExcel} disabled={!excelText.trim()}>
+              <button type="button" className="btn btn-primary" onClick={procesarExcel} disabled={!excelText.trim()}>
                 Cargar en Lote
               </button>
             </div>
@@ -406,7 +468,7 @@ export default function AdminPanel() {
                 <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
                   Arrastra o selecciona un archivo PDF con la colección de calzado. La herramienta extraerá los modelos, SKU, precios y stock automáticamente.
                 </span>
-                <button className="btn btn-secondary" onClick={() => setPdfFileName("Catalogo_Calzado_Otono2026.pdf")}>
+                <button type="button" className="btn btn-secondary" onClick={() => setPdfFileName("Catalogo_Calzado_Otono2026.pdf")}>
                   <i className="ri-file-pdf-line" /> Seleccionar Archivo PDF
                 </button>
               </div>
@@ -416,7 +478,7 @@ export default function AdminPanel() {
                     <div style={{ fontSize: 36, color: "var(--danger)" }}><i className="ri-file-pdf-fill" /></div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       <span style={{ fontSize: 11, fontWeight: 700 }}>{pdfFileName}</span>
-                      <button className="btn btn-primary btn-sm" onClick={subirPdfSimulado}>
+                      <button type="button" className="btn btn-primary btn-sm" onClick={subirPdfSimulado}>
                         Analizar e Importar
                       </button>
                     </div>
@@ -461,6 +523,7 @@ export default function AdminPanel() {
 
             <div style={{ display: "flex", gap: 10 }}>
               <button 
+                type="button"
                 className="btn btn-secondary btn-sm" 
                 onClick={seleccionarTodos}
                 disabled={paginated.length === 0}
@@ -468,6 +531,7 @@ export default function AdminPanel() {
                 {selectedLabels.length === paginated.length ? "Deseleccionar" : "Seleccionar Página"}
               </button>
               <button 
+                type="button"
                 className="btn btn-primary btn-sm" 
                 onClick={() => setShowLabelPrint(true)}
                 disabled={selectedLabels.length === 0}
@@ -540,7 +604,7 @@ export default function AdminPanel() {
                             <Link href={`/calzado/${p.id}`} target="_blank" className="btn btn-icon btn-sm" title="Ver catálogo cliente">
                               <i className="ri-external-link-line" />
                             </Link>
-                            <button className="btn btn-icon btn-sm" onClick={() => setEditingShoe(p)} title="Editar precio / stock">
+                            <button type="button" className="btn btn-icon btn-sm" onClick={() => setEditingShoe(p)} title="Editar precio / stock">
                               <i className="ri-pencil-line" />
                             </button>
                           </div>
@@ -561,6 +625,7 @@ export default function AdminPanel() {
               </span>
               <div style={{ display: "flex", gap: 6 }}>
                 <button 
+                  type="button"
                   className="btn btn-secondary btn-sm" 
                   onClick={() => setCurrentPage(1)} 
                   disabled={currentPage === 1}
@@ -568,6 +633,7 @@ export default function AdminPanel() {
                   <i className="ri-double-left-line" /> Primero
                 </button>
                 <button 
+                  type="button"
                   className="btn btn-secondary btn-sm" 
                   onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
                   disabled={currentPage === 1}
@@ -578,6 +644,7 @@ export default function AdminPanel() {
                   Pág. <strong>{currentPage}</strong> de <strong>{totalPages}</strong>
                 </span>
                 <button 
+                  type="button"
                   className="btn btn-secondary btn-sm" 
                   onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} 
                   disabled={currentPage === totalPages}
@@ -585,6 +652,7 @@ export default function AdminPanel() {
                   Siguiente
                 </button>
                 <button 
+                  type="button"
                   className="btn btn-secondary btn-sm" 
                   onClick={() => setCurrentPage(totalPages)} 
                   disabled={currentPage === totalPages}
@@ -662,7 +730,7 @@ export default function AdminPanel() {
           <div className="boutique-modal" style={{ maxWidth: 650 }}>
             <div className="boutique-modal-header">
               <h3 style={{ fontSize: 18, margin: 0 }}>Vista de Impresión de Etiquetas QR</h3>
-              <button onClick={() => setShowLabelPrint(false)} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 20 }}><i className="ri-close-line" /></button>
+              <button type="button" onClick={() => setShowLabelPrint(false)} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 20 }}><i className="ri-close-line" /></button>
             </div>
             <div className="boutique-modal-body" style={{ maxHeight: "60vh", overflowY: "auto" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
@@ -700,8 +768,8 @@ export default function AdminPanel() {
               </div>
             </div>
             <div className="boutique-modal-footer">
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowLabelPrint(false)}>Cerrar</button>
-              <button className="btn btn-primary btn-sm" onClick={() => window.print()}><i className="ri-printer-line" /> Imprimir Etiquetas</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowLabelPrint(false)}>Cerrar</button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => window.print()}><i className="ri-printer-line" /> Imprimir Etiquetas</button>
             </div>
           </div>
         </div>

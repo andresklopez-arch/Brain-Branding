@@ -5,32 +5,186 @@ import { PRODUCTOS_SEMILLA } from "./db";
 
 export default function HomePage() {
   const [catalog, setCatalog] = useState([]);
+  const [hasEnteredClient, setHasEnteredClient] = useState(false);
+  const [welcomeTab, setWelcomeTab] = useState("cliente"); // "cliente" | "admin"
 
+  // Sincronizar catálogo y verificar si ya ingresó en la sesión actual
   useEffect(() => {
     const stored = localStorage.getItem("shoesqr_catalog");
     if (stored) {
       try {
-        setCatalog(JSON.parse(stored).slice(0, 6)); // Mostrar los 6 primeros destacados
+        setCatalog(JSON.parse(stored).slice(0, 8)); // Mostrar los destacados
       } catch (e) {
-        setCatalog(PRODUCTOS_SEMILLA.slice(0, 6));
+        setCatalog(PRODUCTOS_SEMILLA.slice(0, 8));
       }
     } else {
       localStorage.setItem("shoesqr_catalog", JSON.stringify(PRODUCTOS_SEMILLA));
-      setCatalog(PRODUCTOS_SEMILLA.slice(0, 6));
+      setCatalog(PRODUCTOS_SEMILLA.slice(0, 8));
+    }
+
+    // Comprobar estado de entrada de sesión para no obligar a volver a bienvenida al navegar atrás
+    if (typeof window !== "undefined") {
+      const entered = sessionStorage.getItem("shoesqr_entered_client");
+      if (entered === "true") {
+        setHasEnteredClient(true);
+      }
     }
   }, []);
 
+  const enterAsClient = () => {
+    setHasEnteredClient(true);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("shoesqr_entered_client", "true");
+    }
+  };
+
+  const exitClient = () => {
+    setHasEnteredClient(false);
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("shoesqr_entered_client");
+    }
+  };
+
+  // VISTA 1: Pantalla de Bienvenida (Gateway)
+  if (!hasEnteredClient) {
+    return (
+      <div className="welcome-container animate-fade-in">
+        <div className="welcome-bg-decoration" />
+        <div className="welcome-card">
+          <div className="welcome-logo">
+            ShoesQR <span style={{ color: "var(--bronze)" }}>Boutique</span>
+          </div>
+          <div className="welcome-subtitle">Plataforma de Calzado Inteligente</div>
+
+          {/* Dos Pestañas de Bienvenida */}
+          <div className="welcome-tabs">
+            <button
+              type="button"
+              className={`welcome-tab-btn ${welcomeTab === "cliente" ? "active" : ""}`}
+              onClick={() => setWelcomeTab("cliente")}
+            >
+              <i className="ri-user-line" /> Cliente
+            </button>
+            <Link
+              href="/admin"
+              className={`welcome-tab-btn ${welcomeTab === "admin" ? "active" : ""}`}
+              style={{ textDecoration: "none" }}
+            >
+              <i className="ri-settings-4-line" /> Administrador
+            </Link>
+          </div>
+
+          {/* Panel según pestaña activa */}
+          {welcomeTab === "cliente" ? (
+            <div className="welcome-panel">
+              <h3 className="welcome-panel-title">Portal de Clientes</h3>
+              <p className="welcome-panel-desc">
+                Explore nuestra colección exclusiva de calzado de lujo, consulte características y stock en tiempo real mediante simulación de escaneo de etiquetas QR.
+              </p>
+              <button
+                type="button"
+                className="btn btn-bronze animate-pulse-gold"
+                onClick={enterAsClient}
+                style={{ width: "100%", padding: "14px", marginTop: 10 }}
+              >
+                Ingresar como Cliente <i className="ri-arrow-right-line" style={{ marginLeft: 6 }} />
+              </button>
+            </div>
+          ) : (
+            <div className="welcome-panel">
+              <h3 className="welcome-panel-title">Portal de Administración</h3>
+              <p className="welcome-panel-desc">
+                Acceso restringido para personal. Gestione precios, existencias y descargue plantillas de códigos QR listos para imprimir para 2,000+ modelos.
+              </p>
+              <Link
+                href="/admin"
+                className="btn btn-primary"
+                style={{ width: "100%", padding: "14px", marginTop: 10, display: "flex", justifyContent: "center", alignItems: "center" }}
+              >
+                Ingresar como Administrador <i className="ri-shield-user-line" style={{ marginLeft: 6 }} />
+              </Link>
+            </div>
+          )}
+
+          <div className="welcome-footer-tag">
+            <i className="ri-qr-code-line" style={{ color: "var(--bronze)" }} /> YoY Scratch Studio
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // VISTA 2: Portal del Cliente (Catálogo)
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      {/* Header */}
+      {/* Sticky Header with Mode Switcher Links */}
       <header className="boutique-header">
-        <div className="luxury-container boutique-header-inner">
+        <div className="luxury-container boutique-header-inner" style={{ height: "90px" }}>
           <div className="boutique-logo">
-            <Link href="/">ShoesQR <span style={{ color: "var(--bronze)", fontSize: 14 }}>Boutique</span></Link>
+            <Link href="/" onClick={exitClient}>ShoesQR <span style={{ color: "var(--bronze)", fontSize: 13, letterSpacing: "0.05em" }}>Boutique</span></Link>
           </div>
-          <Link href="/admin" className="btn btn-primary btn-sm">
-            <i className="ri-settings-4-line" /> Panel Admin
-          </Link>
+
+          {/* Mode switch navigation linking to pages */}
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 15
+          }}>
+            <div style={{
+              display: "flex",
+              background: "var(--bg-primary)",
+              border: "1px solid var(--border)",
+              padding: 4,
+              borderRadius: 0
+            }}>
+              <button
+                type="button"
+                onClick={() => {}}
+                style={{
+                  background: "var(--text-primary)",
+                  color: "#fff",
+                  padding: "8px 20px",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  border: "none",
+                  cursor: "default"
+                }}
+              >
+                <i className="ri-user-line" style={{ marginRight: 6 }} /> Vista Cliente
+              </button>
+              <Link
+                href="/admin"
+                style={{
+                  background: "transparent",
+                  color: "var(--text-secondary)",
+                  padding: "8px 20px",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  display: "inline-flex",
+                  alignItems: "center"
+                }}
+              >
+                <i className="ri-settings-4-line" style={{ marginRight: 6 }} /> Vista Administrador
+              </Link>
+            </div>
+
+            {/* Botón de Salir para regresar a la pantalla de bienvenida */}
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={exitClient}
+              style={{ padding: "8px 12px", fontSize: "11px", display: "inline-flex", alignItems: "center" }}
+              title="Volver a la portada de bienvenida"
+            >
+              <i className="ri-logout-box-r-line" style={{ marginRight: 6 }} /> Salir
+            </button>
+          </div>
         </div>
       </header>
 
@@ -39,7 +193,7 @@ export default function HomePage() {
         backgroundImage: "linear-gradient(rgba(0,0,0,0.1), rgba(0,0,0,0.25)), url('/assets/luxury_sneaker.png')", 
         backgroundSize: "cover", 
         backgroundPosition: "center", 
-        height: "450px", 
+        height: "400px", 
         display: "flex", 
         alignItems: "center", 
         justifyContent: "center", 
@@ -47,51 +201,24 @@ export default function HomePage() {
         textAlign: "center" 
       }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 650, padding: 24, background: "rgba(25, 25, 25, 0.45)", backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.15)" }} className="animate-fade-in">
-          <h1 style={{ fontSize: "44px", color: "#fff", fontFamily: "var(--font-display)" }}>ShoesQR Boutique</h1>
-          <p style={{ fontSize: "14px", fontWeight: 300, letterSpacing: "0.1em" }}>
-            EL FUTURO DEL COMERCIO DE CALZADO A GRAN ESCALA MEDIANTE CÓDIGOS QR INTELIGENTES.
+          <h1 style={{ fontSize: "40px", color: "#fff", fontFamily: "var(--font-display)", fontWeight: 700 }}>Catálogo Boutique QR</h1>
+          <p style={{ fontSize: "13px", fontWeight: 300, letterSpacing: "0.1em" }}>
+            ESCANEA EL CÓDIGO QR DE CUALQUIER CALZADO PARA VER SU DETALLE O COMPRAR AL INSTANTE.
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 8 }}>
-            <Link href="/admin" className="btn btn-bronze btn-sm">Gestionar Catálogo</Link>
-            <a href="#destacados" className="btn btn-secondary btn-sm" style={{ color: "#fff", borderColor: "#fff" }}>Ver Modelos de Prueba</a>
+            <Link href="/admin" className="btn btn-bronze btn-sm">Ir al Administrador</Link>
+            <a href="#catalogo-cliente" className="btn btn-secondary btn-sm" style={{ color: "#fff", borderColor: "#fff" }}>Ver Modelos</a>
           </div>
         </div>
       </section>
 
-      {/* Brand Value Section */}
-      <section style={{ padding: "60px 0", backgroundColor: "#fff", borderBottom: "1px solid var(--border)" }}>
-        <div className="luxury-container" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 30, textAlign: "center" }}>
-          <div>
-            <div style={{ fontSize: 24, color: "var(--bronze)", marginBottom: 8 }}><i className="ri-qr-code-line" /></div>
-            <h3 style={{ fontSize: 16, marginBottom: 8 }}>Actualización Instantánea vía QR</h3>
-            <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-              Olvídate de cambiar precios de forma manual en tus tiendas físicas o catálogos impresos. Actualiza el stock o precio en el sistema y se reflejará de inmediato cuando tus clientes escaneen el calzado.
-            </p>
-          </div>
-          <div>
-            <div style={{ fontSize: 24, color: "var(--bronze)", marginBottom: 8 }}><i className="ri-database-2-line" /></div>
-            <h3 style={{ fontSize: 16, marginBottom: 8 }}>Catálogo Masivo</h3>
-            <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-              Diseñado para desplazar inventarios a gran escala. El demo simula un catálogo premium precargado de **2,000 modelos** de calzado con paginación optimizada.
-            </p>
-          </div>
-          <div>
-            <div style={{ fontSize: 24, color: "var(--bronze)", marginBottom: 8 }}><i className="ri-upload-2-line" /></div>
-            <h3 style={{ fontSize: 16, marginBottom: 8 }}>Cargas Dinámicas y Exportación</h3>
-            <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-              Importa colecciones en lote mediante arrastrar archivos de Excel, PDF de catálogo o fotos con auto-reconocimiento por IA, y exporta etiquetas QR listas para pegar en las cajas de zapatos.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Featured Products */}
-      <section id="destacados" style={{ flex: 1, padding: "80px 0" }}>
+      {/* Featured items */}
+      <section id="catalogo-cliente" style={{ padding: "60px 0", flex: 1 }} className="animate-fade-in">
         <div className="luxury-container">
-          <div style={{ textAlign: "center", marginBottom: 50 }}>
-            <span style={{ fontSize: 11, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--bronze)", fontWeight: 700 }}>Colección Exclusiva</span>
-            <h2 style={{ fontSize: "36px", marginTop: 8 }}>Modelos Destacados de Demostración</h2>
-            <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 6 }}>Haz clic en cualquier modelo para simular el escaneo del código QR por parte de un cliente.</p>
+          <div style={{ textAlign: "center", marginBottom: 40 }}>
+            <span style={{ fontSize: 11, letterSpacing: "0.15em", textTransform: "uppercase", color: "var(--bronze)", fontWeight: 700 }}>Modelos Disponibles</span>
+            <h2 style={{ fontSize: "32px", marginTop: 8 }}>Calzado Boutique de Lujo</h2>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 6 }}>Haz clic en un modelo para simular el escaneo del código QR físico.</p>
           </div>
 
           <div className="shoes-grid">
@@ -103,7 +230,7 @@ export default function HomePage() {
                 <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
                   <div>
                     <span style={{ fontSize: 10, textTransform: "uppercase", color: "var(--text-muted)", letterSpacing: "0.05em" }}>{p.categoria}</span>
-                    <h3 style={{ fontSize: 18, marginTop: 4 }}>{p.nombre}</h3>
+                    <h3 style={{ fontSize: 17, marginTop: 4 }}>{p.nombre}</h3>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "auto" }}>
                     <span style={{ fontSize: 15, fontWeight: 700, color: "var(--bronze)" }}>${p.precio.toLocaleString()} MXN</span>
@@ -115,24 +242,14 @@ export default function HomePage() {
               </div>
             ))}
           </div>
-
-          <div style={{ textAlign: "center", marginTop: 50 }}>
-            <Link href="/admin" className="btn btn-primary">
-              Ir al Panel Administrador para ver los 2,000 modelos
-            </Link>
-          </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer style={{ borderTop: "1px solid var(--border)", padding: "40px 0", backgroundColor: "#fff" }}>
+      <footer style={{ borderTop: "1px solid var(--border)", padding: "30px 0", backgroundColor: "#fff" }}>
         <div className="luxury-container" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 20 }}>
-          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>© 2026 ShoesQR Inc. Demo Cliente Boutique de Lujo. Todos los derechos reservados.</span>
-          <div style={{ display: "flex", gap: 16 }}>
-            <Link href="/admin" style={{ fontSize: 12, color: "var(--text-secondary)" }}>Administrador</Link>
-            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>|</span>
-            <span style={{ fontSize: 12, color: "var(--bronze)", fontWeight: 600 }}>Desarrollado en YoY Scratch Studio</span>
-          </div>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>© 2026 ShoesQR Inc. Demo Cliente Boutique de Lujo. Todos los derechos reservados.</span>
+          <span style={{ fontSize: 11, color: "var(--bronze)", fontWeight: 600 }}><i className="ri-qr-code-line" style={{ marginRight: 4 }} /> YoY Scratch Studio</span>
         </div>
       </footer>
     </div>
