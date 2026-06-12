@@ -5,6 +5,12 @@ import { QRCodeSVG } from "qrcode.react";
 import { PRODUCTOS_SEMILLA } from "../db";
 
 export default function AdminPanel() {
+  // Autenticación de Administrador
+  const [isAdminLogged, setIsAdminLogged] = useState(false);
+  const [loginUser, setLoginUser] = useState("");
+  const [loginPass, setLoginPass] = useState("");
+  const [loginError, setLoginError] = useState("");
+
   // Pestaña principal: "resumen" | "catalogo" | "inventario" | "clientes" | "reportes"
   const [adminTab, setAdminTab] = useState("resumen");
   
@@ -64,6 +70,16 @@ export default function AdminPanel() {
   const [retReason, setRetReason] = useState("Talla incorrecta");
 
   const fileInputRef = useRef(null);
+
+  // Comprobar estado de sesión al inicio
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const logged = sessionStorage.getItem("shoesqr_admin_logged");
+      if (logged === "true") {
+        setIsAdminLogged(true);
+      }
+    }
+  }, []);
 
   // Inicializar 2000 modelos
   useEffect(() => {
@@ -178,6 +194,28 @@ export default function AdminPanel() {
   }, [catalog, searchTerm, categoryFilter, currentPage]);
 
   const totalPages = Math.ceil(filteredCatalog.length / itemsPerPage);
+
+  // Iniciar sesión
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (loginUser.trim() === "master admin" && loginPass === "1111") {
+      setIsAdminLogged(true);
+      setLoginError("");
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("shoesqr_admin_logged", "true");
+      }
+    } else {
+      setLoginError("Usuario o contraseña incorrectos");
+    }
+  };
+
+  // Cerrar sesión
+  const handleLogout = () => {
+    setIsAdminLogged(false);
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("shoesqr_admin_logged");
+    }
+  };
 
   // Guardar cambios clásicos de edición
   const saveShoeChanges = (e) => {
@@ -501,18 +539,86 @@ export default function AdminPanel() {
   const valorInventario = catalog.reduce((sum, p) => sum + (p.precio * p.stock), 0);
   const totalEscaneosSimulados = 5420 + ordersList.length * 4; // incremento dinámico
 
+  // VISTA 1: FORMULARIO DE ACCESO (LOGIN)
+  if (!isAdminLogged) {
+    return (
+      <div className="welcome-container animate-fade-in">
+        <div className="welcome-bg-decoration" />
+        <div className="welcome-card">
+          <div className="welcome-logo">
+            ShoesQR <span style={{ color: "var(--bronze)" }}>Admin</span>
+          </div>
+          <div className="welcome-subtitle">Acceso Panel de Administración</div>
+
+          <form onSubmit={handleLogin} style={{ width: "100%", display: "flex", flexDirection: "column", gap: 16 }}>
+            {loginError && (
+              <div style={{ padding: "10px 12px", background: "var(--danger-subtle)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.2)", fontSize: 12, textAlign: "center" }}>
+                <i className="ri-error-warning-line" style={{ marginRight: 6 }} /> {loginError}
+              </div>
+            )}
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Usuario</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="master admin"
+                value={loginUser}
+                onChange={e => setLoginUser(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Contraseña</label>
+              <input
+                type="password"
+                className="form-input"
+                placeholder="••••"
+                value={loginPass}
+                onChange={e => setLoginPass(e.target.value)}
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary animate-pulse-gold"
+              style={{ width: "100%", padding: "14px", marginTop: 10 }}
+            >
+              Iniciar Sesión <i className="ri-lock-unlock-line" style={{ marginLeft: 6 }} />
+            </button>
+          </form>
+
+          <Link
+            href="/"
+            className="btn btn-secondary btn-sm"
+            style={{ width: "100%", padding: "12px", marginTop: 14, textTransform: "uppercase", fontSize: 11, letterSpacing: "0.05em" }}
+          >
+            <i className="ri-arrow-left-line" style={{ marginRight: 6 }} /> Volver a Bienvenida
+          </Link>
+
+          <div className="welcome-footer-tag">
+            <i className="ri-qr-code-line" style={{ color: "var(--bronze)" }} /> YoY Scratch Studio
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // VISTA 2: PANEL DE ADMINISTRACIÓN COMPLETO (ERP & CRM)
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "var(--bg-primary)" }}>
       {/* Sticky Header */}
       <header className="boutique-header">
         <div className="luxury-container boutique-header-inner" style={{ height: "90px" }}>
           <div className="boutique-logo">
-            <Link href="/">ShoesQR <span style={{ color: "var(--bronze)", fontSize: 13, letterSpacing: "0.05em" }}>Admin</span></Link>
+            <Link href="/" onClick={handleLogout}>ShoesQR <span style={{ color: "var(--bronze)", fontSize: 13, letterSpacing: "0.05em" }}>Admin</span></Link>
           </div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <Link href="/" className="btn btn-secondary btn-sm" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <i className="ri-logout-box-r-line" /> Ir a Bienvenida
+            <Link href="/" onClick={handleLogout} className="btn btn-secondary btn-sm" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <i className="ri-logout-box-r-line" /> Cerrar Sesión y Salir
             </Link>
           </div>
         </div>
