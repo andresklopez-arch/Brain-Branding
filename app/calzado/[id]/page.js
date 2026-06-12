@@ -14,6 +14,9 @@ export default function FichaCalzado({ params }) {
   const [compraExitosa, setCompraExitosa] = useState(false);
   const [metodoPago, setMetodoPago] = useState("tarjeta");
   const [email, setEmail] = useState("");
+  const [nombre, setNombre] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [ticketId, setTicketId] = useState("");
 
   // Polling de sincronización en tiempo real con LocalStorage
   useEffect(() => {
@@ -74,7 +77,12 @@ export default function FichaCalzado({ params }) {
   };
 
   const confirmarCompra = () => {
-    // Restar stock en LocalStorage
+    const generatedTicket = `SH-${Math.floor(100000 + Math.random() * 900000)}`;
+    setTicketId(generatedTicket);
+
+    const nowStr = new Date().toISOString();
+
+    // 1. Restar stock en LocalStorage del Catálogo
     const stored = localStorage.getItem("shoesqr_catalog");
     if (stored) {
       try {
@@ -90,6 +98,65 @@ export default function FichaCalzado({ params }) {
         console.error(e);
       }
     }
+
+    // 2. Registrar Pedido/Venta en shoesqr_orders
+    const storedOrders = localStorage.getItem("shoesqr_orders");
+    let ordersList = [];
+    if (storedOrders) {
+      try {
+        ordersList = JSON.parse(storedOrders);
+      } catch (e) {
+        ordersList = [];
+      }
+    }
+    const nuevoPedido = {
+      orderId: generatedTicket,
+      clienteNombre: nombre.trim(),
+      clienteTelefono: telefono.trim(),
+      clienteEmail: email.trim(),
+      productoId: producto.id,
+      productoNombre: producto.nombre,
+      productoSku: producto.sku,
+      precio: producto.precio,
+      talla: tallaSel,
+      fecha: nowStr,
+      metodoPago: metodoPago
+    };
+    ordersList.push(nuevoPedido);
+    localStorage.setItem("shoesqr_orders", JSON.stringify(ordersList));
+
+    // 3. Registrar o actualizar cliente en shoesqr_clients
+    const storedClients = localStorage.getItem("shoesqr_clients");
+    let clientsList = [];
+    if (storedClients) {
+      try {
+        clientsList = JSON.parse(storedClients);
+      } catch (e) {
+        clientsList = [];
+      }
+    }
+    const idx = clientsList.findIndex(c => c.telefono === telefono.trim());
+    if (idx !== -1) {
+      // Actualizar cliente existente
+      clientsList[idx].nombre = nombre.trim();
+      clientsList[idx].email = email.trim();
+      clientsList[idx].comprasCount += 1;
+      clientsList[idx].gastoTotal += producto.precio;
+      clientsList[idx].fechaUltima = nowStr;
+    } else {
+      // Insertar nuevo cliente
+      clientsList.push({
+        nombre: nombre.trim(),
+        telefono: telefono.trim(),
+        email: email.trim(),
+        comprasCount: 1,
+        gastoTotal: producto.precio,
+        fechaIngreso: nowStr,
+        fechaUltima: nowStr
+      });
+    }
+    localStorage.setItem("shoesqr_clients", JSON.stringify(clientsList));
+
     setCompraExitosa(true);
   };
 
@@ -97,6 +164,10 @@ export default function FichaCalzado({ params }) {
     setShowCheckout(false);
     setCompraExitosa(false);
     setTallaSel(null);
+    setEmail("");
+    setNombre("");
+    setTelefono("");
+    setTicketId("");
   };
 
   return (
@@ -249,14 +320,40 @@ export default function FichaCalzado({ params }) {
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Correo Electrónico</label>
+                    <label className="form-label">Nombre Completo</label>
                     <input 
-                      type="email" 
+                      type="text" 
                       className="form-input" 
-                      placeholder="ejemplo@cliente.com"
-                      value={email}
-                      onChange={e => setEmail(e.target.value)}
+                      placeholder="Ej. Juan Pérez"
+                      value={nombre}
+                      onChange={e => setNombre(e.target.value)}
+                      required
                     />
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div className="form-group">
+                      <label className="form-label">Teléfono</label>
+                      <input 
+                        type="tel" 
+                        className="form-input" 
+                        placeholder="Ej. 5512345678"
+                        value={telefono}
+                        onChange={e => setTelefono(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Correo Electrónico</label>
+                      <input 
+                        type="email" 
+                        className="form-input" 
+                        placeholder="ejemplo@cliente.com"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        required
+                      />
+                    </div>
                   </div>
 
                   <div className="form-group">
@@ -292,10 +389,11 @@ export default function FichaCalzado({ params }) {
                   </div>
                   <h3 style={{ fontSize: 20 }}>¡Pedido Confirmado!</h3>
                   <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-                    Gracias por tu compra. Se ha enviado un correo con tu recibo de compra.
+                    Gracias por tu compra, <strong>{nombre}</strong>. Se ha enviado un recibo a tu correo.
                   </p>
                   <div style={{ border: "1px dashed var(--bronze)", padding: 12, fontSize: 11, background: "var(--bronze-light)", color: "var(--text-secondary)", fontFamily: "monospace", textAlign: "left", display: "flex", flexDirection: "column", gap: 4 }}>
-                    <div><strong>TICKET DE COMPRA:</strong> #SH-{(Math.floor(100000 + Math.random() * 900000))}</div>
+                    <div><strong>TICKET DE COMPRA:</strong> #{ticketId}</div>
+                    <div><strong>CLIENTE:</strong> {nombre} ({telefono})</div>
                     <div><strong>PRODUCTO:</strong> {producto.nombre}</div>
                     <div><strong>TALLA:</strong> {tallaSel} MX</div>
                     <div><strong>FECHA:</strong> {new Date().toLocaleString()}</div>
@@ -309,7 +407,7 @@ export default function FichaCalzado({ params }) {
               {!compraExitosa ? (
                 <>
                   <button className="btn btn-secondary btn-sm" onClick={cerrarCheckout}>Cancelar</button>
-                  <button className="btn btn-primary btn-sm" onClick={confirmarCompra} disabled={!email.trim()}>Confirmar y Pagar</button>
+                  <button className="btn btn-primary btn-sm" onClick={confirmarCompra} disabled={!email.trim() || !nombre.trim() || !telefono.trim()}>Confirmar y Pagar</button>
                 </>
               ) : (
                 <button className="btn btn-primary btn-sm" onClick={cerrarCheckout}>Cerrar</button>
