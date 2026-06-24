@@ -77,10 +77,16 @@ export default function LeadsCRM({ tenantId }) {
                         </div>
                       )}
                       {lead.telefono && (
-                        <div className="flex items-center space-x-1.5 text-slate-300">
-                          <Phone className="w-3.5 h-3.5 text-slate-500" />
+                        <a 
+                          href={`https://wa.me/${lead.telefono.replace(/[^0-9]/g, '')}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="flex items-center space-x-1.5 text-brand-400 hover:text-brand-300 hover:underline transition-all"
+                          title="Contactar por WhatsApp"
+                        >
+                          <Phone className="w-3.5 h-3.5 text-brand-500" />
                           <span>{lead.telefono}</span>
-                        </div>
+                        </a>
                       )}
                       {!lead.email && !lead.telefono && <span className="text-slate-600">Sin datos de contacto</span>}
                     </div>

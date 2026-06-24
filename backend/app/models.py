@@ -91,6 +91,8 @@ class ChannelsCredentials(Base):
     youtube_api_key = Column(String(255), nullable=True)
     google_business_profile_id = Column(String(100), nullable=True)
     gemini_api_key = Column(Text, nullable=True)
+    gemini_model_name = Column(String(100), nullable=True)
+    gemini_temperature = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     tenant = relationship("Tenant", back_populates="credentials")

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   MessageSquare, Send, Bot, User, ShieldAlert, ShieldCheck, 
-  AlertCircle, Smartphone, Instagram, Globe, HelpCircle 
+  AlertCircle, Smartphone, Instagram, Globe, HelpCircle, Trash2
 } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -68,6 +68,36 @@ export default function Inbox({ tenantId }) {
       setSandboxError(err.message || 'Error al conectar con el servidor');
     } finally {
       setSendingSandbox(false);
+    }
+  };
+
+  const [clearingSimulation, setClearingSimulation] = useState(false);
+
+  const handleClearSimulation = async () => {
+    if (!window.confirm("¿Estás seguro de que deseas vaciar todo el historial de chats de simulación (Web Widget)?")) {
+      return;
+    }
+    
+    setClearingSimulation(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/inbox/${tenantId}/clear-simulation`, {
+        method: 'POST'
+      });
+      if (!res.ok) throw new Error('Error al limpiar el historial');
+      
+      // Reload conversations list
+      loadConversations();
+      // If the selected thread was a widget thread, clear selection
+      if (selectedThread && selectedThread.canal_origen === 'web_widget') {
+        setSelectedThread(null);
+        setMessages([]);
+      }
+      alert("Historial de simulación eliminado correctamente.");
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "Error al conectar con el servidor");
+    } finally {
+      setClearingSimulation(false);
     }
   };
 
@@ -412,14 +442,25 @@ export default function Inbox({ tenantId }) {
         ) : (
           <div className="flex-1 flex flex-col justify-center items-center p-8 bg-slate-950/40 overflow-y-auto">
             <div className="max-w-md w-full bg-slate-900/60 border border-indigo-500/20 rounded-2xl p-6 shadow-2xl backdrop-blur-md">
-              <div className="flex items-center space-x-3 mb-6">
-                <div className="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-xl text-indigo-400">
-                  <Bot className="w-6 h-6 animate-pulse" />
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center space-x-3">
+                  <div className="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-xl text-indigo-400">
+                    <Bot className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white uppercase tracking-wider">Consola de Simulación</h4>
+                    <p className="text-[10px] text-indigo-300">Sandbox para pruebas de IA sin tokens reales</p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-sm font-bold text-white uppercase tracking-wider">Consola de Simulación</h4>
-                  <p className="text-[10px] text-indigo-300">Sandbox para pruebas de IA sin tokens reales</p>
-                </div>
+                
+                <button
+                  onClick={handleClearSimulation}
+                  disabled={clearingSimulation}
+                  title="Limpiar Historial de Simulación"
+                  className="p-2 bg-slate-950/60 hover:bg-rose-500/10 border border-slate-800 hover:border-rose-500/30 rounded-lg text-slate-400 hover:text-rose-400 transition-all flex items-center justify-center cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
               
               <p className="text-xs text-slate-400 leading-relaxed mb-6">

@@ -67,10 +67,33 @@ def test_db_schema():
     Base.metadata.create_all(bind=engine)
     print("[SUCCESS] Database tables mapped successfully on sqlite memory.")
 
+# 4. Test Credential Encryption/Decryption
+def test_encryption_decryption():
+    print("\n[TEST] Testing credential encryption and decryption at rest...")
+    from app.utils import encrypt_val, decrypt_val
+    original_key = "AIzaSyD_TestAPIKeyHere12345"
+    
+    # Verify encryption produces a different string
+    encrypted = encrypt_val(original_key)
+    print("Encrypted key:", encrypted)
+    assert encrypted != original_key
+    assert len(encrypted) > len(original_key)
+    
+    # Verify decryption returns original value
+    decrypted = decrypt_val(encrypted)
+    print("Decrypted key:", decrypted)
+    assert decrypted == original_key
+    
+    # Verify plain text fallback (graceful recovery of unencrypted old keys)
+    unencrypted = "old_plain_key"
+    assert decrypt_val(unencrypted) == unencrypted
+    print("[SUCCESS] Credential encryption, decryption, and fallback validated.")
+
 async def main():
     test_scraper_clean_html()
     await test_gemini_mock_flow()
     test_db_schema()
+    test_encryption_decryption()
     print("\n[COMPLETE] All local unit verifications passed successfully.")
 
 if __name__ == "__main__":

@@ -17,7 +17,16 @@ try:
             conn.execute(text("ALTER TABLE channels_credentials ADD COLUMN gemini_api_key TEXT;"))
             print("[DATABASE MIGRATION] Added gemini_api_key column to channels_credentials.")
         except Exception as col_err:
-            # Column likely already exists
+            pass
+        try:
+            conn.execute(text("ALTER TABLE channels_credentials ADD COLUMN gemini_model_name VARCHAR(100);"))
+            print("[DATABASE MIGRATION] Added gemini_model_name column to channels_credentials.")
+        except Exception as col_err:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE channels_credentials ADD COLUMN gemini_temperature FLOAT;"))
+            print("[DATABASE MIGRATION] Added gemini_temperature column to channels_credentials.")
+        except Exception as col_err:
             pass
 except Exception as e:
     print(f"[DATABASE ERROR] Could not synchronize tables: {str(e)}")

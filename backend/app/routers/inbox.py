@@ -131,3 +131,13 @@ async def websocket_endpoint(websocket: WebSocket, tenant_id: str):
     except Exception as e:
         print(f"[WS CONNECTION ERROR] {str(e)}")
         socket_manager.disconnect(websocket, tenant_id)
+
+# 6. Clear simulation history (web_widget channel)
+@router.post("/{tenant_id}/clear-simulation")
+def clear_simulation_history(tenant_id: str, db: Session = Depends(get_db)):
+    db.query(ConversationsThread).filter(
+        ConversationsThread.tenant_id == tenant_id,
+        ConversationsThread.canal_origen == "web_widget"
+    ).delete()
+    db.commit()
+    return {"status": "success", "message": "Simulation history cleared."}

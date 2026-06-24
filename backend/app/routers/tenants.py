@@ -5,6 +5,7 @@ from ..models import Tenant, ChannelsCredentials, KnowledgeBase
 from ..schemas import TenantResponse, CredentialsResponse, CredentialsUpdate, ScraperCallbackInput
 from ..services.websocket import socket_manager
 from ..tasks import run_scraper_celery
+from ..utils import encrypt_val, decrypt_val
 import uuid
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
@@ -137,7 +138,12 @@ def get_credentials(tenant_id: str, db: Session = Depends(get_db)):
     creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
     if not creds:
         raise HTTPException(status_code=404, detail="Credentials record not found for tenant.")
-    return creds
+    
+    # Decrypt key for API response serialization
+    resp = CredentialsResponse.model_validate(creds)
+    if resp.gemini_api_key:
+        resp.gemini_api_key = decrypt_val(resp.gemini_api_key)
+    return resp
 
 @router.put("/{tenant_id}/credentials", response_model=CredentialsResponse)
 def update_credentials(tenant_id: str, payload: CredentialsUpdate, db: Session = Depends(get_db)):
@@ -148,8 +154,15 @@ def update_credentials(tenant_id: str, payload: CredentialsUpdate, db: Session =
     # Update fields
     update_data = payload.model_dump(exclude_unset=True)
     for key, value in update_data.items():
+        if key == "gemini_api_key" and value:
+            value = encrypt_val(value)
         setattr(creds, key, value)
         
     db.commit()
     db.refresh(creds)
-    return creds
+    
+    # Decrypt key for API response serialization
+    resp = CredentialsResponse.model_validate(creds)
+    if resp.gemini_api_key:
+        resp.gemini_api_key = decrypt_val(resp.gemini_api_key)
+    return resp

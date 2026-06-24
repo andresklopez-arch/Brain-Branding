@@ -45,7 +45,9 @@ REGLAS DE COMPORTAMIENTO:
         knowledge_base: str, 
         chat_history: List[Dict[str, Any]], 
         new_message: str,
-        api_key: Optional[str] = None
+        api_key: Optional[str] = None,
+        model_name: Optional[str] = None,
+        temperature: Optional[float] = None
     ) -> GeminiOutput:
         """Calls Gemini 3.5 Flash using structured schema output."""
         system_instruction = self.get_system_prompt(knowledge_base)
@@ -61,6 +63,8 @@ REGLAS DE COMPORTAMIENTO:
         prompt = "\n".join(contents)
 
         current_api_key = api_key or self.api_key
+        current_model = model_name or 'gemini-2.5-flash'
+        current_temp = temperature if temperature is not None else 0.7
         if not current_api_key:
             # Mock mode implementation for offline/keyless development
             return self._mock_response(new_message)
@@ -73,13 +77,13 @@ REGLAS DE COMPORTAMIENTO:
 
             # We use gemini-2.5-flash as the default endpoint (Gemini 3.5 Flash alias or current stable flash)
             response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model=current_model,
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
                     response_mime_type="application/json",
                     response_schema=GeminiOutput,
-                    temperature=0.7,
+                    temperature=current_temp,
                 ),
             )
             

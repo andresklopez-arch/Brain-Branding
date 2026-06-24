@@ -12,6 +12,7 @@ from ..services.gemini import GeminiService
 from ..services.channels import omnichannel
 from ..services.websocket import socket_manager
 from ..config import settings
+from ..utils import decrypt_val
 import datetime
 import json
 import hmac
@@ -265,11 +266,16 @@ async def process_incoming_message(
     kb_text = kb.texto_scrapeado_limpio if kb else "No hay información adicional de la empresa."
 
     creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
-    api_key = creds.gemini_api_key if creds else None
+    api_key = decrypt_val(creds.gemini_api_key) if (creds and creds.gemini_api_key) else None
+    model_name = creds.gemini_model_name if (creds and creds.gemini_model_name) else None
+    temperature = creds.gemini_temperature if (creds and creds.gemini_temperature is not None) else None
 
     # 3. Call Gemini
     history = thread.historial_chat_json
-    ai_response = await gemini_service.generate_response(kb_text, history, message_text, api_key=api_key)
+    ai_response = await gemini_service.generate_response(
+        kb_text, history, message_text, 
+        api_key=api_key, model_name=model_name, temperature=temperature
+    )
 
     # 4. CRM Leads Extraction
     if ai_response.extracted_name or ai_response.extracted_email or ai_response.extracted_phone:

@@ -51,6 +51,8 @@ class CredentialsUpdate(BaseModel):
     youtube_api_key: Optional[str] = None
     google_business_profile_id: Optional[str] = None
     gemini_api_key: Optional[str] = None
+    gemini_model_name: Optional[str] = None
+    gemini_temperature: Optional[float] = None
 
 class CredentialsResponse(CredentialsUpdate):
     id: int

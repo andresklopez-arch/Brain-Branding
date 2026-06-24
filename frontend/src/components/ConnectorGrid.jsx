@@ -7,7 +7,20 @@ import {
 import { api } from '../services/api';
 
 const CHANNELS_CONFIG = [
-  { key: 'gemini', name: 'Motor de IA (Gemini)', icon: Bot, color: 'border-indigo-500/30 text-indigo-400 hover:border-indigo-500/50 bg-indigo-500/5', fields: [{key: 'gemini_api_key', label: 'Gemini API Key', secret: true}] },
+  { 
+    key: 'gemini', 
+    name: 'Motor de IA (Gemini)', 
+    icon: Bot, 
+    color: 'border-indigo-500/30 text-indigo-400 hover:border-indigo-500/50 bg-indigo-500/5', 
+    fields: [
+      {key: 'gemini_api_key', label: 'Gemini API Key', secret: true, type: 'password'},
+      {key: 'gemini_model_name', label: 'Modelo de IA', type: 'select', options: [
+        {value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Veloz y Económico)'},
+        {value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (Razonamiento Complejo)'}
+      ]},
+      {key: 'gemini_temperature', label: 'Temperatura (Creatividad 0.0 - 1.0)', type: 'number', step: '0.1', min: '0.0', max: '1.0'}
+    ]
+  },
   { key: 'whatsapp', name: 'WhatsApp Business', icon: MessageSquare, color: 'border-emerald-500/20 text-emerald-400 hover:border-emerald-500/40 bg-emerald-500/5', fields: [{key: 'whatsapp_phone_id', label: 'Phone Number ID'}, {key: 'whatsapp_token', label: 'Access Token', secret: true}] },
   { key: 'telegram', name: 'Telegram Bot', icon: Send, color: 'border-sky-500/20 text-sky-400 hover:border-sky-500/40 bg-sky-500/5', fields: [{key: 'telegram_bot_token', label: 'Bot Token', secret: true}] },
   { key: 'sms', name: 'Twilio SMS', icon: Smartphone, color: 'border-red-500/20 text-red-400 hover:border-red-500/40 bg-red-500/5', fields: [{key: 'twilio_sms_sid', label: 'Account SID'}, {key: 'twilio_sms_auth', label: 'Auth Token', secret: true}] },
@@ -138,16 +151,44 @@ export default function ConnectorGrid({ tenantId }) {
                     <div className="mt-4 space-y-3 pt-3 border-t border-slate-800/50">
                       {chan.fields.map((field) => (
                         <div key={field.key}>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
                             {field.label}
                           </label>
-                          <input
-                            type={field.secret ? "password" : "text"}
-                            value={formState[field.key] || ''}
-                            onChange={(e) => handleInputChange(field.key, e.target.value)}
-                            placeholder={`Ingresa ${field.label.toLowerCase()}`}
-                            className="w-full bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-brand-500"
-                          />
+                          {field.type === 'select' ? (
+                            <select
+                              value={formState[field.key] || 'gemini-2.5-flash'}
+                              onChange={(e) => handleInputChange(field.key, e.target.value)}
+                              className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
+                            >
+                              {field.options.map(opt => (
+                                <option key={opt.value} value={opt.value} className="bg-slate-950 text-white">
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : field.type === 'number' ? (
+                            <input
+                              type="number"
+                              step={field.step || 'any'}
+                              min={field.min}
+                              max={field.max}
+                              value={formState[field.key] === undefined || formState[field.key] === null ? '' : formState[field.key]}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? '' : parseFloat(e.target.value);
+                                handleInputChange(field.key, val);
+                              }}
+                              placeholder={`Ingresa ${field.label.toLowerCase()}`}
+                              className="w-full bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-brand-500"
+                            />
+                          ) : (
+                            <input
+                              type={field.secret || field.type === 'password' ? "password" : "text"}
+                              value={formState[field.key] || ''}
+                              onChange={(e) => handleInputChange(field.key, e.target.value)}
+                              placeholder={`Ingresa ${field.label.toLowerCase()}`}
+                              className="w-full bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-brand-500"
+                            />
+                          )}
                         </div>
                       ))}
 
@@ -167,10 +208,30 @@ export default function ConnectorGrid({ tenantId }) {
                         </div>
                       )}
 
+                      {['whatsapp', 'telegram', 'sms', 'instagram', 'messenger'].includes(chan.key) && (
+                        <div className="mt-3 p-2 bg-slate-950/80 border border-slate-800 rounded-lg">
+                          <label className="block text-[9px] font-bold text-indigo-400 uppercase tracking-wider mb-1">
+                            URL de Webhook para Configurar
+                          </label>
+                          <div 
+                            onClick={() => {
+                              navigator.clipboard.writeText(`${API_BASE_URL}/webhooks/${tenantId}/${chan.key}`);
+                              alert('URL de Webhook copiada al portapapeles');
+                            }}
+                            className="text-[10px] text-slate-300 font-mono break-all cursor-pointer hover:text-white select-all"
+                          >
+                            {`${API_BASE_URL}/webhooks/${tenantId}/${chan.key}`}
+                          </div>
+                          <p className="text-[8px] text-slate-500 mt-1">
+                            Haz clic para copiar esta URL en la consola de desarrollador del canal.
+                          </p>
+                        </div>
+                      )}
+
                       {chan.fields.length > 0 && (
                         <button
                           onClick={() => handleSave(chan.key)}
-                          className="mt-2 w-full bg-brand-600 hover:bg-brand-500 text-white font-semibold py-1.5 px-3 rounded-lg text-xs flex items-center justify-center space-x-1 transition-all"
+                          className="mt-3 w-full bg-brand-600 hover:bg-brand-500 text-white font-semibold py-1.5 px-3 rounded-lg text-xs flex items-center justify-center space-x-1 transition-all"
                         >
                           <Save className="w-4 h-4" />
                           <span>{status === 'saving' ? 'Guardando...' : status === 'saved' ? '¡Guardado!' : 'Guardar Credenciales'}</span>
