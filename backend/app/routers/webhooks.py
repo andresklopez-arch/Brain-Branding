@@ -272,8 +272,13 @@ async def process_incoming_message(
             }
         )
 
-        # If human agent took over, save the incoming message to database history and do not reply automatically
-        if not thread.ai_active_status:
+        # Check if Gemini engine is globally active for this tenant
+        creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
+        active_channels = (creds.active_channels_json or {}) if creds else {}
+        is_gemini_active = active_channels.get("gemini", True)
+
+        # If human agent took over, or Gemini AI engine is globally inactive, save the incoming message to database history and do not reply automatically
+        if not thread.ai_active_status or not is_gemini_active:
             history = thread.historial_chat_json or []
             history.append({"role": "user", "content": message_text, "timestamp": str(datetime.datetime.utcnow())})
             thread.historial_chat_json = list(history)
@@ -438,10 +443,16 @@ async def verify_whatsapp(
     db: Session = Depends(get_db)
 ):
     """WhatsApp verification token webhook."""
+    if not hub_mode:
+        return Response(
+            content=f"El Webhook de WhatsApp para el tenant {tenant_id} está activo. Por favor configure esta URL en el Portal de Desarrolladores de Meta.",
+            media_type="text/plain"
+        )
     creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
     if creds and creds.whatsapp_token:
         expected_token = decrypt_val(creds.whatsapp_token, salt_str=creds.encryption_salt)
-        if expected_token and hub_verify_token != expected_token:
+        allowed_tokens = [expected_token, tenant_id, creds.whatsapp_phone_id]
+        if expected_token and hub_verify_token not in allowed_tokens:
             raise HTTPException(status_code=403, detail="Verification token mismatch")
     return Response(content=hub_challenge, media_type="text/plain")
 
@@ -531,10 +542,16 @@ async def verify_instagram(
     db: Session = Depends(get_db)
 ):
     """Instagram verification token webhook."""
+    if not hub_mode:
+        return Response(
+            content=f"El Webhook de Instagram para el tenant {tenant_id} está activo. Por favor configure esta URL en el Portal de Desarrolladores de Meta.",
+            media_type="text/plain"
+        )
     creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
     if creds and creds.instagram_page_token:
         expected_token = decrypt_val(creds.instagram_page_token, salt_str=creds.encryption_salt)
-        if expected_token and hub_verify_token != expected_token:
+        allowed_tokens = [expected_token, tenant_id]
+        if expected_token and hub_verify_token not in allowed_tokens:
             raise HTTPException(status_code=403, detail="Verification token mismatch")
     return Response(content=hub_challenge, media_type="text/plain")
 
@@ -616,10 +633,16 @@ async def verify_messenger(
     db: Session = Depends(get_db)
 ):
     """Messenger verification token webhook."""
+    if not hub_mode:
+        return Response(
+            content=f"El Webhook de Messenger para el tenant {tenant_id} está activo. Por favor configure esta URL en el Portal de Desarrolladores de Meta.",
+            media_type="text/plain"
+        )
     creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
     if creds and creds.messenger_page_token:
         expected_token = decrypt_val(creds.messenger_page_token, salt_str=creds.encryption_salt)
-        if expected_token and hub_verify_token != expected_token:
+        allowed_tokens = [expected_token, tenant_id, creds.messenger_page_id]
+        if expected_token and hub_verify_token not in allowed_tokens:
             raise HTTPException(status_code=403, detail="Verification token mismatch")
     return Response(content=hub_challenge, media_type="text/plain")
 
@@ -657,6 +680,11 @@ async def verify_global_whatsapp(
     hub_verify_token: str = Query(None, alias="hub.verify_token")
 ):
     """Global WhatsApp verification token webhook."""
+    if not hub_mode:
+        return Response(
+            content="El Webhook global de WhatsApp de Astro Link está activo. Por favor configure esta URL en el Portal de Desarrolladores de Meta.",
+            media_type="text/plain"
+        )
     return Response(content=hub_challenge, media_type="text/plain")
 
 @router.post("/whatsapp")
@@ -706,6 +734,11 @@ async def verify_global_messenger(
     hub_verify_token: str = Query(None, alias="hub.verify_token")
 ):
     """Global Messenger verification token webhook."""
+    if not hub_mode:
+        return Response(
+            content="El Webhook global de Messenger de Astro Link está activo. Por favor configure esta URL en el Portal de Desarrolladores de Meta.",
+            media_type="text/plain"
+        )
     return Response(content=hub_challenge, media_type="text/plain")
 
 @router.post("/messenger")

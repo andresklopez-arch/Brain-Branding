@@ -19,19 +19,163 @@ const CHANNELS_CONFIG = [
         {value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (Razonamiento Complejo)'}
       ]},
       {key: 'gemini_temperature', label: 'Temperatura (Creatividad 0.0 - 1.0)', type: 'number', step: '0.1', min: '0.0', max: '1.0'}
+    ],
+    instructions: [
+      "Configura tu API Key de Gemini para activar la inteligencia artificial de tu negocio.",
+      "Puedes obtener una clave gratuita o de pago ingresando a Google AI Studio."
     ]
   },
-  { key: 'whatsapp', name: 'WhatsApp Business', icon: MessageSquare, color: 'border-emerald-500/20 text-emerald-400 hover:border-emerald-500/40 bg-emerald-500/5', fields: [{key: 'whatsapp_phone_id', label: 'Phone Number ID'}, {key: 'whatsapp_token', label: 'Access Token', secret: true}] },
-  { key: 'telegram', name: 'Telegram Bot', icon: Send, color: 'border-sky-500/20 text-sky-400 hover:border-sky-500/40 bg-sky-500/5', fields: [{key: 'telegram_bot_token', label: 'Bot Token', secret: true}] },
-  { key: 'sms', name: 'Twilio SMS', icon: Smartphone, color: 'border-red-500/20 text-red-400 hover:border-red-500/40 bg-red-500/5', fields: [{key: 'twilio_sms_sid', label: 'Account SID'}, {key: 'twilio_sms_auth', label: 'Auth Token', secret: true}] },
-  { key: 'instagram', name: 'Instagram Graph', icon: Instagram, color: 'border-pink-500/20 text-pink-400 hover:border-pink-500/40 bg-pink-500/5', fields: [{key: 'instagram_page_token', label: 'Page Access Token', secret: true}] },
-  { key: 'messenger', name: 'Facebook Messenger', icon: MessageSquare, color: 'border-blue-500/20 text-blue-400 hover:border-blue-500/40 bg-blue-500/5', fields: [{key: 'messenger_page_id', label: 'Page ID'}, {key: 'messenger_page_token', label: 'Page Access Token', secret: true}] },
-  { key: 'twitter', name: 'Twitter/X Bot', icon: Twitter, color: 'border-slate-500/20 text-slate-400 hover:border-slate-500/40 bg-slate-500/5', fields: [{key: 'twitter_x_bearer_token', label: 'Bearer Token', secret: true}] },
-  { key: 'tiktok', name: 'TikTok Business', icon: Video, color: 'border-cyan-500/20 text-cyan-400 hover:border-cyan-500/40 bg-cyan-500/5', fields: [{key: 'tiktok_business_access_token', label: 'Business Access Token', secret: true}] },
-  { key: 'youtube', name: 'YouTube Moderation', icon: Youtube, color: 'border-rose-500/20 text-rose-400 hover:border-rose-500/40 bg-rose-500/5', fields: [{key: 'youtube_api_key', label: 'Data API Key', secret: true}] },
-  { key: 'google_business', name: 'Google Business', icon: MapPin, color: 'border-blue-500/20 text-blue-400 hover:border-blue-500/40 bg-blue-500/5', fields: [{key: 'google_business_profile_id', label: 'Profile ID'}] },
-  { key: 'email', name: 'Email IMAP/SMTP', icon: Mail, color: 'border-yellow-500/20 text-yellow-400 hover:border-yellow-500/40 bg-yellow-500/5', fields: [{key: 'email_config_user', label: 'SMTP Email Address'}, {key: 'email_config_pass', label: 'SMTP App Password', secret: true}] },
-  { key: 'web_widget', name: 'Chat Web Widget', icon: Code, color: 'border-indigo-500/20 text-indigo-400 hover:border-indigo-500/40 bg-indigo-500/5', fields: [], widgetEmbed: true }
+  { 
+    key: 'whatsapp', 
+    name: 'WhatsApp Business', 
+    icon: MessageSquare, 
+    color: 'border-emerald-500/20 text-emerald-400 hover:border-emerald-500/40 bg-emerald-500/5', 
+    fields: [
+      {key: 'whatsapp_phone_id', label: 'Phone Number ID'}, 
+      {key: 'whatsapp_token', label: 'Access Token', secret: true}
+    ],
+    instructions: [
+      "1. Crea una app de tipo Negocio en Meta for Developers.",
+      "2. Agrega el producto 'WhatsApp' a tu app.",
+      "3. En 'Configuración de la API', copia el Phone Number ID y el Access Token (No tu número de teléfono).",
+      "4. En Meta, configura el Webhook usando la URL provista abajo y usa tu Access Token o tu Tenant ID como Verification Token."
+    ]
+  },
+  { 
+    key: 'telegram', 
+    name: 'Telegram Bot', 
+    icon: Send, 
+    color: 'border-sky-500/20 text-sky-400 hover:border-sky-500/40 bg-sky-500/5', 
+    fields: [
+      {key: 'telegram_bot_token', label: 'Bot Token', secret: true}
+    ],
+    instructions: [
+      "1. Habla con @BotFather en Telegram y envía el comando /newbot.",
+      "2. Sigue los pasos para elegir un nombre y un usuario para tu bot.",
+      "3. Copia el token HTTP API que te proporciona y pégalo arriba."
+    ]
+  },
+  { 
+    key: 'sms', 
+    name: 'Twilio SMS', 
+    icon: Smartphone, 
+    color: 'border-red-500/20 text-red-400 hover:border-red-500/40 bg-red-500/5', 
+    fields: [
+      {key: 'twilio_sms_sid', label: 'Account SID'}, 
+      {key: 'twilio_sms_auth', label: 'Auth Token', secret: true}
+    ],
+    instructions: [
+      "1. Crea una cuenta en Twilio y adquiere un número de teléfono habilitado para SMS.",
+      "2. Copia tu Account SID y Auth Token desde el panel principal de Twilio.",
+      "3. Configura la URL de Webhook de abajo en la configuración de tu número en Twilio."
+    ]
+  },
+  { 
+    key: 'instagram', 
+    name: 'Instagram Graph', 
+    icon: Instagram, 
+    color: 'border-pink-500/20 text-pink-400 hover:border-pink-500/40 bg-pink-500/5', 
+    fields: [
+      {key: 'instagram_page_token', label: 'Page Access Token', secret: true}
+    ],
+    instructions: [
+      "1. Conecta tu cuenta de Instagram Business a una página de Facebook de tu propiedad.",
+      "2. Crea una App en Meta Developers y añade 'Instagram Graph API'.",
+      "3. Genera un Token de Acceso de Página de Facebook vinculada y pégalo arriba."
+    ]
+  },
+  { 
+    key: 'messenger', 
+    name: 'Facebook Messenger', 
+    icon: MessageSquare, 
+    color: 'border-blue-500/20 text-blue-400 hover:border-blue-500/40 bg-blue-500/5', 
+    fields: [
+      {key: 'messenger_page_id', label: 'Page ID'}, 
+      {key: 'messenger_page_token', label: 'Page Access Token', secret: true}
+    ],
+    instructions: [
+      "1. Ve a Meta Developers, crea una App de tipo Negocio y agrega el producto 'Messenger'.",
+      "2. Vincula tu página de Facebook, obtén su Page ID y genera un Page Access Token."
+    ]
+  },
+  { 
+    key: 'twitter', 
+    name: 'Twitter/X Bot', 
+    icon: Twitter, 
+    color: 'border-slate-500/20 text-slate-400 hover:border-slate-500/40 bg-slate-500/5', 
+    fields: [
+      {key: 'twitter_x_bearer_token', label: 'Bearer Token', secret: true}
+    ],
+    instructions: [
+      "1. Crea un portal de desarrollador en Twitter/X Developers.",
+      "2. Genera un Bearer Token en las llaves de tu proyecto y pégalo arriba."
+    ]
+  },
+  { 
+    key: 'tiktok', 
+    name: 'TikTok Business', 
+    icon: Video, 
+    color: 'border-cyan-500/20 text-cyan-400 hover:border-cyan-500/40 bg-cyan-500/5', 
+    fields: [
+      {key: 'tiktok_business_access_token', label: 'Business Access Token', secret: true}
+    ],
+    instructions: [
+      "1. Regístrate en TikTok Developer Portal y crea una app comercial.",
+      "2. Obtén el Access Token de producción y pégalo arriba."
+    ]
+  },
+  { 
+    key: 'youtube', 
+    name: 'YouTube Moderation', 
+    icon: Youtube, 
+    color: 'border-rose-500/20 text-rose-400 hover:border-rose-500/40 bg-rose-500/5', 
+    fields: [
+      {key: 'youtube_api_key', label: 'Data API Key', secret: true}
+    ],
+    instructions: [
+      "1. Crea un proyecto en Google Cloud Console.",
+      "2. Habilita 'YouTube Data API v3'.",
+      "3. Genera una API Key en la sección Credenciales y pégala arriba."
+    ]
+  },
+  { 
+    key: 'google_business', 
+    name: 'Google Business', 
+    icon: MapPin, 
+    color: 'border-blue-500/20 text-blue-400 hover:border-blue-500/40 bg-blue-500/5', 
+    fields: [
+      {key: 'google_business_profile_id', label: 'Profile ID'}
+    ],
+    instructions: [
+      "1. Ingresa a Google Business Profile Manager.",
+      "2. Busca el ID de perfil en la sección Ajustes de tu ficha de negocio y pégalo arriba."
+    ]
+  },
+  { 
+    key: 'email', 
+    name: 'Email IMAP/SMTP', 
+    icon: Mail, 
+    color: 'border-yellow-500/20 text-yellow-400 hover:border-yellow-500/40 bg-yellow-500/5', 
+    fields: [
+      {key: 'email_config_user', label: 'SMTP Email Address'}, 
+      {key: 'email_config_pass', label: 'SMTP App Password', secret: true}
+    ],
+    instructions: [
+      "1. Configura tu correo IMAP/SMTP (Gmail, Outlook, etc.).",
+      "2. Si usas Gmail, debes generar una 'Contraseña de Aplicación' en la seguridad de tu cuenta de Google."
+    ]
+  },
+  { 
+    key: 'web_widget', 
+    name: 'Chat Web Widget', 
+    icon: Code, 
+    color: 'border-indigo-500/20 text-indigo-400 hover:border-indigo-500/40 bg-indigo-500/5', 
+    fields: [], 
+    widgetEmbed: true,
+    instructions: [
+      "Copia el snippet de código HTML provisto abajo y pégalo en el cuerpo de tu sitio web para renderizar el chat flotante simulado."
+    ]
+  }
 ];
 
 export default function ConnectorGrid({ tenantId }) {
@@ -53,14 +197,16 @@ export default function ConnectorGrid({ tenantId }) {
       setCredentials(data);
       // Map initial formState from fetched database credentials
       const initialForm = {};
-      const initialActive = {};
+      const initialActive = data.active_channels_json || {};
       CHANNELS_CONFIG.forEach(chan => {
         chan.fields.forEach(field => {
           initialForm[field.key] = data[field.key] || '';
         });
-        // Simplification: channel is active if token is present
-        const hasToken = chan.fields.some(f => !!data[f.key]) || chan.key === 'web_widget';
-        initialActive[chan.key] = hasToken;
+        if (initialActive[chan.key] === undefined) {
+          // Simplification: channel is active if token is present
+          const hasToken = chan.fields.some(f => !!data[f.key]) || chan.key === 'web_widget';
+          initialActive[chan.key] = hasToken;
+        }
       });
       setFormState(initialForm);
       setActiveChannels(initialActive);
@@ -69,11 +215,24 @@ export default function ConnectorGrid({ tenantId }) {
     }
   };
 
-  const handleToggle = (channelKey) => {
+  const handleToggle = async (channelKey) => {
+    const nextActive = !activeChannels[channelKey];
     setActiveChannels(prev => ({
       ...prev,
-      [channelKey]: !prev[channelKey]
+      [channelKey]: nextActive
     }));
+
+    try {
+      const updatedActiveChannels = {
+        ...activeChannels,
+        [channelKey]: nextActive
+      };
+      await api.updateCredentials(tenantId, {
+        active_channels_json: updatedActiveChannels
+      });
+    } catch (err) {
+      console.error("Error updating active channels status:", err);
+    }
   };
 
   const handleInputChange = (fieldKey, value) => {
@@ -149,6 +308,19 @@ export default function ConnectorGrid({ tenantId }) {
 
                   {isExpanded && (
                     <div className="mt-4 space-y-3 pt-3 border-t border-slate-800/50">
+                      {chan.instructions && (
+                        <div className="p-3 bg-slate-950/40 border border-slate-800/60 rounded-xl text-[10px] text-slate-400 space-y-1">
+                          <p className="font-bold text-slate-300 uppercase tracking-wider mb-1">Guía de Configuración:</p>
+                          <ul className="space-y-1.5 leading-relaxed">
+                            {chan.instructions.map((inst, idx) => (
+                              <li key={idx} className="flex items-start space-x-1">
+                                <span className="text-brand-400 flex-shrink-0">•</span>
+                                <span>{inst}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                       {chan.fields.map((field) => (
                         <div key={field.key}>
                           <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">

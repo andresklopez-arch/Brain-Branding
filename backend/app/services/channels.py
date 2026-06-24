@@ -2,6 +2,7 @@ import httpx
 import asyncio
 from typing import Dict, Any, Optional
 from ..models import ChannelsCredentials
+from ..utils import decrypt_val
 import json
 
 class OmnichannelService:
@@ -10,13 +11,14 @@ class OmnichannelService:
 
     async def send_whatsapp_message(self, creds: ChannelsCredentials, phone_number: str, text: str):
         """Sends WhatsApp message via Meta Cloud API with retry logic."""
-        if not creds.whatsapp_token or not creds.whatsapp_phone_id:
+        token = decrypt_val(creds.whatsapp_token, salt_str=creds.encryption_salt) if creds.whatsapp_token else ""
+        if not token or not creds.whatsapp_phone_id:
             print(f"[MOCK WHATSAPP] To: {phone_number} | Message: {text}")
             return True
             
         url = f"https://graph.facebook.com/v18.0/{creds.whatsapp_phone_id}/messages"
         headers = {
-            "Authorization": f"Bearer {creds.whatsapp_token}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
         payload = {
@@ -41,13 +43,14 @@ class OmnichannelService:
 
     async def send_messenger_message(self, creds: ChannelsCredentials, recipient_id: str, text: str):
         """Sends Facebook Messenger message via Meta Graph API with retry logic."""
-        if not creds.messenger_page_token or not creds.messenger_page_id:
+        token = decrypt_val(creds.messenger_page_token, salt_str=creds.encryption_salt) if creds.messenger_page_token else ""
+        if not token or not creds.messenger_page_id:
             print(f"[MOCK MESSENGER] Recipient: {recipient_id} | Message: {text}")
             return True
             
         url = "https://graph.facebook.com/v18.0/me/messages"
         headers = {"Content-Type": "application/json"}
-        params = {"access_token": creds.messenger_page_token}
+        params = {"access_token": token}
         payload = {
             "recipient": {"id": recipient_id},
             "message": {"text": text}
@@ -68,11 +71,12 @@ class OmnichannelService:
 
     async def send_telegram_message(self, creds: ChannelsCredentials, chat_id: str, text: str):
         """Sends Telegram message via Telegram Bot API."""
-        if not creds.telegram_bot_token:
+        token = decrypt_val(creds.telegram_bot_token, salt_str=creds.encryption_salt) if creds.telegram_bot_token else ""
+        if not token:
             print(f"[MOCK TELEGRAM] ChatID: {chat_id} | Message: {text}")
             return True
             
-        url = f"https://api.telegram.org/bot{creds.telegram_bot_token}/sendMessage"
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {
             "chat_id": chat_id,
             "text": text,
@@ -87,16 +91,16 @@ class OmnichannelService:
 
     async def send_sms_twilio(self, creds: ChannelsCredentials, to_number: str, text: str):
         """Sends SMS via Twilio API."""
-        if not creds.twilio_sms_sid or not creds.twilio_sms_auth:
+        auth_token = decrypt_val(creds.twilio_sms_auth, salt_str=creds.encryption_salt) if creds.twilio_sms_auth else ""
+        if not creds.twilio_sms_sid or not auth_token:
             print(f"[MOCK TWILIO SMS] To: {to_number} | Message: {text}")
             return True
             
-        # Twilio sends auth via Basic Auth (SID, Token)
         url = f"https://api.twilio.com/2010-04-01/Accounts/{creds.twilio_sms_sid}/Messages.json"
-        auth = (creds.twilio_sms_sid, creds.twilio_sms_auth)
+        auth = (creds.twilio_sms_sid, auth_token)
         data = {
             "To": to_number,
-            "From": "AstroLink",  # Normally a Twilio phone number configured
+            "From": "AstroLink",
             "Body": text
         }
         try:
@@ -108,13 +112,14 @@ class OmnichannelService:
 
     async def send_instagram_dm(self, creds: ChannelsCredentials, recipient_id: str, text: str):
         """Sends direct message via Meta Graph API for Instagram."""
-        if not creds.instagram_page_token:
+        token = decrypt_val(creds.instagram_page_token, salt_str=creds.encryption_salt) if creds.instagram_page_token else ""
+        if not token:
             print(f"[MOCK INSTAGRAM DM] Recipient: {recipient_id} | Message: {text}")
             return True
             
         url = "https://graph.facebook.com/v18.0/me/messages"
         headers = {"Content-Type": "application/json"}
-        params = {"access_token": creds.instagram_page_token}
+        params = {"access_token": token}
         payload = {
             "recipient": {"id": recipient_id},
             "message": {"text": text}
@@ -137,16 +142,18 @@ class OmnichannelService:
     ):
         """
         Executes Comment-to-DM strategy:
-        1. Responds suttly to the public comment.
+        1. Responds subtly to the public comment.
         2. Sends a direct message with details.
         """
         print(f"[COMMENT-TO-DM] Platform: {platform} | Comment ID: {comment_id} | User: {user_id}")
         
+        token = decrypt_val(creds.instagram_page_token, salt_str=creds.encryption_salt) if creds.instagram_page_token else ""
+        
         # 1. Public Reply
         public_success = False
-        if platform == "instagram" and creds.instagram_page_token:
+        if platform == "instagram" and token:
             url = f"https://graph.facebook.com/v18.0/{comment_id}/replies"
-            params = {"access_token": creds.instagram_page_token}
+            params = {"access_token": token}
             payload = {"message": public_reply_text}
             try:
                 res = await self.client.post(url, params=params, json=payload)

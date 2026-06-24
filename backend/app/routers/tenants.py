@@ -173,8 +173,11 @@ def get_credentials(tenant_id: str, db: Session = Depends(get_db)):
     
     # Decrypt key for API response serialization
     resp = CredentialsResponse.model_validate(creds)
-    if resp.gemini_api_key:
-        resp.gemini_api_key = decrypt_val(resp.gemini_api_key, salt_str=creds.encryption_salt)
+    sensitive_keys = {"gemini_api_key", "whatsapp_token", "instagram_page_token", "messenger_page_token", "twilio_sms_auth", "telegram_bot_token"}
+    for key in sensitive_keys:
+        val = getattr(resp, key, None)
+        if val:
+            setattr(resp, key, decrypt_val(val, salt_str=creds.encryption_salt))
     return resp
 
 @router.put("/{tenant_id}/credentials", response_model=CredentialsResponse)
@@ -192,9 +195,10 @@ def update_credentials(tenant_id: str, payload: CredentialsUpdate, db: Session =
         db.refresh(creds)
 
     # Update fields
+    sensitive_keys = {"gemini_api_key", "whatsapp_token", "instagram_page_token", "messenger_page_token", "twilio_sms_auth", "telegram_bot_token"}
     update_data = payload.model_dump(exclude_unset=True)
     for key, value in update_data.items():
-        if key == "gemini_api_key" and value:
+        if key in sensitive_keys and value:
             value = encrypt_val(value, salt_str=creds.encryption_salt)
         setattr(creds, key, value)
         
@@ -203,6 +207,8 @@ def update_credentials(tenant_id: str, payload: CredentialsUpdate, db: Session =
     
     # Decrypt key for API response serialization
     resp = CredentialsResponse.model_validate(creds)
-    if resp.gemini_api_key:
-        resp.gemini_api_key = decrypt_val(resp.gemini_api_key, salt_str=creds.encryption_salt)
+    for key in sensitive_keys:
+        val = getattr(resp, key, None)
+        if val:
+            setattr(resp, key, decrypt_val(val, salt_str=creds.encryption_salt))
     return resp

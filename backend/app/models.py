@@ -93,6 +93,7 @@ class ChannelsCredentials(Base):
     gemini_api_key = Column(Text, nullable=True)
     gemini_model_name = Column(String(100), nullable=True)
     gemini_temperature = Column(Float, nullable=True)
+    active_channels_json = Column(JSON, nullable=True, default=dict)
     encryption_salt = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
