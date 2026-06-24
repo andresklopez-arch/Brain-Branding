@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     META_APP_SECRET: str = os.getenv("META_APP_SECRET", "")
     RATE_LIMIT_MAX_REQUESTS: int = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "30"))
     RATE_LIMIT_WINDOW: int = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
+    REQUIRE_META_SIGNATURE: bool = os.getenv("REQUIRE_META_SIGNATURE", "false").lower() in ("true", "1", "yes")
+    REQUIRE_REDIS: bool = os.getenv("REQUIRE_REDIS", "false").lower() in ("true", "1", "yes")
+
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

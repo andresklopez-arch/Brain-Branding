@@ -33,7 +33,12 @@ try:
     print("[REDIS] Webhooks: Connected successfully to Redis.")
 except Exception as e:
     redis_client = None
-    print(f"[REDIS WARNING] Webhooks: Redis connection failed ({str(e)}). Falling back to local in-memory store.")
+    msg = f"[REDIS ERROR] Webhooks: Redis connection failed ({str(e)})."
+    if settings.REQUIRE_REDIS:
+        print(f"CRITICAL: {msg} Startup halted because REQUIRE_REDIS is enabled.")
+        raise RuntimeError(msg)
+    else:
+        print(f"{msg} Falling back to local in-memory store.")
 
 def verify_meta_signature(body: bytes, signature_header: str, app_secret: str) -> bool:
     """Validates X-Hub-Signature-256 header sent by Meta to authenticate webhook requests."""
@@ -46,6 +51,19 @@ def verify_meta_signature(body: bytes, signature_header: str, app_secret: str) -
         hashlib.sha256
     ).hexdigest()
     return hmac.compare_digest(expected_sig, computed_sig)
+
+async def enforce_signature(request: Request):
+    """Enforces Meta Webhook signature validation if enabled or secret configured."""
+    if settings.REQUIRE_META_SIGNATURE or settings.META_APP_SECRET:
+        if not settings.META_APP_SECRET:
+            print("[SECURITY ERROR] META_APP_SECRET is not configured but signatures are required!")
+            raise HTTPException(status_code=500, detail="Webhook security configuration error")
+        signature = request.headers.get("X-Hub-Signature-256")
+        body_bytes = await request.body()
+        if not verify_meta_signature(body_bytes, signature, settings.META_APP_SECRET):
+            print("[SECURITY WARNING] Invalid Meta webhook signature! Rejecting request.")
+            raise HTTPException(status_code=403, detail="Invalid signature")
+
 
 # Local in-memory fallback stores
 request_history = defaultdict(list)
@@ -331,27 +349,46 @@ async def process_incoming_message(
         if creds:
             if channel == "whatsapp":
                 await omnichannel.send_whatsapp_message(creds, sender_id, ai_response.reply)
+                if handoff_alert_triggered:
+                    await omnichannel.send_whatsapp_message(creds, sender_id, "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
             elif channel == "messenger":
                 await omnichannel.send_messenger_message(creds, sender_id, ai_response.reply)
+                if handoff_alert_triggered:
+                    await omnichannel.send_messenger_message(creds, sender_id, "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
             elif channel == "telegram":
                 await omnichannel.send_telegram_message(creds, sender_id, ai_response.reply)
+                if handoff_alert_triggered:
+                    await omnichannel.send_telegram_message(creds, sender_id, "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
             elif channel == "sms":
                 await omnichannel.send_sms_twilio(creds, sender_id, ai_response.reply)
+                if handoff_alert_triggered:
+                    await omnichannel.send_sms_twilio(creds, sender_id, "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
             elif channel == "instagram":
                 await omnichannel.send_instagram_dm(creds, sender_id, ai_response.reply)
+                if handoff_alert_triggered:
+                    await omnichannel.send_instagram_dm(creds, sender_id, "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
             else:
                 print(f"[DIRECT MOCK SEND] Channel: {channel} | To: {sender_id} | Msg: {ai_response.reply}")
+                if handoff_alert_triggered:
+                    print(f"[DIRECT MOCK SEND] Channel: {channel} | To: {sender_id} | Msg: Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
 
     # 7. Update Thread History
     history = thread.historial_chat_json or []
     history.append({"role": "user", "content": message_text, "timestamp": str(datetime.datetime.utcnow())})
+    history.append({"role": "model", "content": ai_response.reply, "timestamp": str(datetime.datetime.utcnow())})
+    
     if handoff_alert_triggered:
         history.append({
             "role": "system",
             "content": "Derivación a agente humano: La IA solicitó asistencia o detectó un sentimiento que requiere atención.",
             "timestamp": str(datetime.datetime.utcnow())
         })
-    history.append({"role": "model", "content": ai_response.reply, "timestamp": str(datetime.datetime.utcnow())})
+        history.append({
+            "role": "model",
+            "content": "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.",
+            "timestamp": str(datetime.datetime.utcnow())
+        })
+        
     thread.historial_chat_json = list(history)
     flag_modified(thread, "historial_chat_json")
     
@@ -369,6 +406,17 @@ async def process_incoming_message(
             "ai_active": thread.ai_active_status
         }
     )
+    if handoff_alert_triggered:
+        await socket_manager.broadcast_to_tenant(
+            tenant_id,
+            {
+                "event": "message_sent",
+                "channel": channel,
+                "sender_id": sender_id,
+                "content": "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.",
+                "ai_active": False
+            }
+        )
     return ai_response
 
 
@@ -394,12 +442,7 @@ async def verify_whatsapp(
 @router.post("/{tenant_id}/whatsapp")
 async def receive_whatsapp(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives WhatsApp Cloud API webhook JSON payload."""
-    if settings.META_APP_SECRET:
-        signature = request.headers.get("X-Hub-Signature-256")
-        body_bytes = await request.body()
-        if not verify_meta_signature(body_bytes, signature, settings.META_APP_SECRET):
-            print("[SECURITY WARNING] Invalid WhatsApp webhook signature! Rejecting request.")
-            raise HTTPException(status_code=403, detail="Invalid signature")
+    await enforce_signature(request)
     try:
         body = await request.json()
         # Parse payload WhatsApp message structure
@@ -492,12 +535,7 @@ async def verify_instagram(
 @router.post("/{tenant_id}/instagram")
 async def receive_instagram(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Instagram Webhook supporting both DMs and public comment validation (Comment-to-DM)."""
-    if settings.META_APP_SECRET:
-        signature = request.headers.get("X-Hub-Signature-256")
-        body_bytes = await request.body()
-        if not verify_meta_signature(body_bytes, signature, settings.META_APP_SECRET):
-            print("[SECURITY WARNING] Invalid Instagram webhook signature! Rejecting request.")
-            raise HTTPException(status_code=403, detail="Invalid signature")
+    await enforce_signature(request)
     try:
         body = await request.json()
         entry = body.get("entry", [])[0]
@@ -582,12 +620,7 @@ async def verify_messenger(
 @router.post("/{tenant_id}/messenger")
 async def receive_messenger(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives Messenger webhook JSON payload."""
-    if settings.META_APP_SECRET:
-        signature = request.headers.get("X-Hub-Signature-256")
-        body_bytes = await request.body()
-        if not verify_meta_signature(body_bytes, signature, settings.META_APP_SECRET):
-            print("[SECURITY WARNING] Invalid Messenger webhook signature! Rejecting request.")
-            raise HTTPException(status_code=403, detail="Invalid signature")
+    await enforce_signature(request)
     try:
         body = await request.json()
         entry = body.get("entry", [])[0]
@@ -623,12 +656,7 @@ async def verify_global_whatsapp(
 @router.post("/whatsapp")
 async def receive_global_whatsapp(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives WhatsApp Cloud API webhook JSON payload and routes by phone_number_id."""
-    if settings.META_APP_SECRET:
-        signature = request.headers.get("X-Hub-Signature-256")
-        body_bytes = await request.body()
-        if not verify_meta_signature(body_bytes, signature, settings.META_APP_SECRET):
-            print("[SECURITY WARNING] Invalid Global WhatsApp webhook signature! Rejecting request.")
-            raise HTTPException(status_code=403, detail="Invalid signature")
+    await enforce_signature(request)
     try:
         body = await request.json()
         entry = body.get("entry", [])[0]
@@ -677,12 +705,7 @@ async def verify_global_messenger(
 @router.post("/messenger")
 async def receive_global_messenger(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives Facebook Messenger webhook JSON payload and routes by page_id."""
-    if settings.META_APP_SECRET:
-        signature = request.headers.get("X-Hub-Signature-256")
-        body_bytes = await request.body()
-        if not verify_meta_signature(body_bytes, signature, settings.META_APP_SECRET):
-            print("[SECURITY WARNING] Invalid Global Messenger webhook signature! Rejecting request.")
-            raise HTTPException(status_code=403, detail="Invalid signature")
+    await enforce_signature(request)
     try:
         body = await request.json()
         entry = body.get("entry", [])[0]
