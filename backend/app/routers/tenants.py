@@ -224,62 +224,92 @@ def update_credentials(tenant_id: str, payload: CredentialsUpdate, db: Session =
     return resp
 
 @router.post("/{tenant_id}/rotate-secret")
-def rotate_secret(
-    tenant_id: str,
-    new_secret: str,
-    db: Session = Depends(get_db)
-):
+def rotate_secret(tenant_id: str, new_secret: str, db: Session = Depends(get_db)):
     """
-    Atomic secret key rotation for tenant credentials:
-    Decrypts using the current secret key, then encrypts with the new secret key.
+    Rotates the global encryption secret JWT_SECRET.
+    Decrypts all sensitive credentials with the old key,
+    re-encrypts them with the new key and a fresh salt,
+    saves the new secret to the environment/settings,
+    and logs the action in the audit log.
     """
-    creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
-    if not creds:
-        raise HTTPException(status_code=404, detail="Credentials record not found for tenant.")
+    import os
+    
+    # 1. Fetch current tenant to validate
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found.")
         
+    # 2. Get all ChannelsCredentials records to decrypt and re-encrypt
+    all_creds = db.query(ChannelsCredentials).all()
+    
     sensitive_keys = {
-        "gemini_api_key", "whatsapp_token", "instagram_page_token", 
-        "messenger_page_token", "twilio_sms_auth", "telegram_bot_token"
+        "gemini_api_key",
+        "whatsapp_token",
+        "instagram_page_token",
+        "messenger_page_token",
+        "twilio_sms_auth",
+        "telegram_bot_token"
     }
     
-    decrypted_values = {}
-    for key in sensitive_keys:
-        val = getattr(creds, key, None)
-        if val:
-            decrypted_values[key] = decrypt_val(val, salt_str=creds.encryption_salt)
-            
-    # Helper to encrypt with the new secret key
-    import hashlib
-    import base64
-    import os
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    # Decrypt all existing credentials using the old secret
+    decrypted_records = []
+    for creds in all_creds:
+        decrypted_vals = {}
+        for key in sensitive_keys:
+            val = getattr(creds, key)
+            if val:
+                decrypted_vals[key] = decrypt_val(val, salt_str=creds.encryption_salt)
+            else:
+                decrypted_vals[key] = None
+        decrypted_records.append((creds, decrypted_vals))
+        
+    # 3. Change settings.JWT_SECRET in memory
+    settings.JWT_SECRET = new_secret
     
-    def encrypt_with_new_secret(plaintext: str, secret: str, salt: Optional[str]) -> str:
-        if not plaintext:
-            return ""
-        secret_key = secret
-        if salt:
-            secret_key += salt
-        key = hashlib.sha256(secret_key.encode('utf-8')).digest()
-        aesgcm = AESGCM(key)
-        nonce = os.urandom(12)
-        ciphertext = aesgcm.encrypt(nonce, plaintext.encode('utf-8'), None)
-        return base64.b64encode(nonce + ciphertext).decode('utf-8')
-
-    for key, val in decrypted_values.items():
-        if val:
-            encrypted_val = encrypt_with_new_secret(val, new_secret, creds.encryption_salt)
-            setattr(creds, key, encrypted_val)
+    # 4. Re-encrypt all credentials using the new secret and a fresh salt
+    for creds, decrypted_vals in decrypted_records:
+        import base64
+        import os as os_pkg
+        creds.encryption_salt = base64.b64encode(os_pkg.urandom(16)).decode('utf-8')
+        
+        for key in sensitive_keys:
+            plaintext = decrypted_vals[key]
+            if plaintext:
+                ciphertext = encrypt_val(plaintext, salt_str=creds.encryption_salt)
+                setattr(creds, key, ciphertext)
+            else:
+                setattr(creds, key, None)
+                
+    # 5. Write new JWT_SECRET to backend/.env
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
+    lines = []
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
             
-    # Write Audit Log
+    updated = False
+    new_lines = []
+    for line in lines:
+        if line.strip().startswith("JWT_SECRET="):
+            new_lines.append(f"JWT_SECRET={new_secret}\n")
+            updated = True
+        else:
+            new_lines.append(line)
+    if not updated:
+        new_lines.append(f"JWT_SECRET={new_secret}\n")
+        
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+        
+    # 6. Log in AuditLog
     from ..models import AuditLog
     audit = AuditLog(
         tenant_id=tenant_id,
         usuario_origen="admin",
-        accion_realizada="rotate_secret_key",
-        detalles="Rotación exitosa de la clave secreta global de cifrado."
+        accion_realizada="rotate_secret",
+        detalles=f"Rotación global de secreto JWT_SECRET completada. Re-encriptados {len(all_creds)} registros."
     )
     db.add(audit)
     db.commit()
     
-    return {"status": "success", "message": "Secret key rotated successfully for tenant credentials."}
+    return {"status": "success", "message": f"Global key rotation completed. Re-encrypted {len(all_creds)} records."}

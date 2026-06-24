@@ -34,31 +34,6 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # Base class for DB models
 Base = declarative_base()
 
-# Run dynamic column migrations for SQLite/Postgres compatibility on import
-try:
-    from sqlalchemy import text
-    with engine.begin() as conn:
-        for col, table in [
-            ("gemini_api_key", "channels_credentials"),
-            ("gemini_model_name", "channels_credentials"),
-            ("gemini_temperature", "channels_credentials"),
-            ("encryption_salt", "channels_credentials"),
-            ("custom_lead_fields_json", "channels_credentials"),
-            ("campos_personalizados_json", "leads_crm")
-        ]:
-            try:
-                col_type = "TEXT"
-                if col == "gemini_temperature":
-                    col_type = "FLOAT"
-                elif col in ["gemini_model_name", "encryption_salt"]:
-                    col_type = "VARCHAR(100)"
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type};"))
-                print(f"[DATABASE MIGRATION] Added {col} column to {table} (if not already present).")
-            except Exception:
-                pass
-except Exception as migration_err:
-    print(f"[DATABASE MIGRATION ERROR] Could not apply dynamic migrations: {str(migration_err)}")
-
 # Dependency to get db session in FastAPI routes
 def get_db():
     db = SessionLocal()

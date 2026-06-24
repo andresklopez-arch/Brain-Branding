@@ -97,23 +97,15 @@ def health_check():
     return {"status": "healthy", "service": "Astro Link"}
 
 @app.get("/health/worker")
-def health_worker():
-    from .tasks import LAST_WORKER_HEARTBEAT, check_and_recover_worker
+def health_worker_check():
+    from .tasks import check_and_recover_worker, LAST_WORKER_HEARTBEAT
     import time
-    now = time.time()
-    time_since_heartbeat = now - LAST_WORKER_HEARTBEAT
-    recovered = False
-    
-    # Only recover if worker has had time to start (LAST_WORKER_HEARTBEAT > 0)
-    # or if we are well past startup time and it still hasn't heartbeat.
-    if LAST_WORKER_HEARTBEAT > 0.0 and time_since_heartbeat > 15.0:
-        recovered = check_and_recover_worker()
-    
+    recovered = check_and_recover_worker()
+    hb_delta = time.time() - LAST_WORKER_HEARTBEAT if LAST_WORKER_HEARTBEAT > 0 else None
     return {
-        "status": "unhealthy" if (LAST_WORKER_HEARTBEAT > 0.0 and time_since_heartbeat > 15.0) else "healthy",
-        "last_heartbeat": LAST_WORKER_HEARTBEAT,
-        "time_since_heartbeat": time_since_heartbeat,
-        "recovered": recovered
+        "status": "recovered" if recovered else "healthy",
+        "last_heartbeat_seconds_ago": hb_delta,
+        "active": LAST_WORKER_HEARTBEAT > 0
     }
 
 @app.get("/widget.js")

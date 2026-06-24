@@ -12,7 +12,6 @@ class GeminiOutput(BaseModel):
     extracted_phone: Optional[str] = None
     ai_active_status: bool = True
     sentiment_alert: bool = False
-    extracted_custom_fields: Optional[Dict[str, str]] = None
 
 class GeminiService:
     def __init__(self):
@@ -24,8 +23,8 @@ class GeminiService:
             self.client = None
             print("[GEMINI SERVICE] Warning: GEMINI_API_KEY is not configured. Running in mock mode.")
 
-    def get_system_prompt(self, knowledge_base: str, custom_lead_fields: Optional[List[str]] = None) -> str:
-        prompt = f"""Actúas como un humano real y profesional, representando a la empresa de manera natural y empática. 
+    def get_system_prompt(self, knowledge_base: str) -> str:
+        return f"""Actúas como un humano real y profesional, representando a la empresa de manera natural y empática. 
 NUNCA utilices lenguaje corporativo rígido ni digas frases estilo "¡Hola! Soy tu asistente virtual de IA" o "¿En qué puedo ayudarte hoy?". 
 Evita saludos repetitivos y mecánicos. Responde con fluidez, calidez y de forma resolutiva, adaptándote a modismos regionales si es necesario.
 Mantén tus respuestas relativamente cortas y directas, idóneas para canales de mensajería (WhatsApp/DMs).
@@ -40,15 +39,6 @@ REGLAS DE COMPORTAMIENTO:
 2. Si el usuario te proporciona su nombre, correo electrónico o número telefónico, debes extraerlo para guardarlo en el CRM.
 3. Responde estrictamente con la información provista en la base de conocimientos. Si no conoces la respuesta, indícalo con amabilidad y ofrece transferir a un agente humano (poniendo 'ai_active_status' en false).
 """
-        if custom_lead_fields:
-            prompt += f"\n4. Además de los campos estándar, intenta extraer los siguientes campos personalizados proporcionados por el usuario si los menciona en la conversación y agrégalos al objeto 'extracted_custom_fields' (clave-valor de tipo texto):\n"
-            for field in custom_lead_fields:
-                prompt += f"   - '{field}'\n"
-            prompt += "Extrae solo los valores de estos campos específicos cuando los mencionen. Si no se mencionan en la conversación, pon su valor como null en el diccionario o no los incluyas.\n"
-        else:
-            prompt += "\n4. Si no hay campos personalizados configurados, el objeto 'extracted_custom_fields' debe ser un diccionario vacío o null.\n"
-            
-        return prompt
 
     async def generate_response(
         self, 
@@ -57,11 +47,10 @@ REGLAS DE COMPORTAMIENTO:
         new_message: str,
         api_key: Optional[str] = None,
         model_name: Optional[str] = None,
-        temperature: Optional[float] = None,
-        custom_lead_fields: Optional[List[str]] = None
+        temperature: Optional[float] = None
     ) -> GeminiOutput:
         """Calls Gemini 3.5 Flash using structured schema output."""
-        system_instruction = self.get_system_prompt(knowledge_base, custom_lead_fields)
+        system_instruction = self.get_system_prompt(knowledge_base)
         
         # Format conversation history
         # Gemini API expects content list. We'll build the prompt by concatenating history or using the SDK chat structure.
@@ -78,7 +67,7 @@ REGLAS DE COMPORTAMIENTO:
         current_temp = temperature if temperature is not None else 0.7
         if not current_api_key:
             # Mock mode implementation for offline/keyless development
-            return self._mock_response(new_message, custom_lead_fields)
+            return self._mock_response(new_message)
 
         try:
             # Dynamically instantiate genai.Client if using tenant key, or reuse self.client
@@ -105,9 +94,9 @@ REGLAS DE COMPORTAMIENTO:
         except Exception as e:
             print(f"[GEMINI ERROR] API call failed: {str(e)}")
             # Fallback to general text request if structured fails, or mock
-            return self._mock_response(new_message, custom_lead_fields, error_msg=f"Error en motor: {str(e)}")
+            return self._mock_response(new_message, error_msg=f"Error en motor: {str(e)}")
 
-    def _mock_response(self, message: str, custom_lead_fields: Optional[List[str]] = None, error_msg: str = None) -> GeminiOutput:
+    def _mock_response(self, message: str, error_msg: str = None) -> GeminiOutput:
         """Returns mock content if API key is not configured or fails."""
         msg_lower = message.lower()
         extracted_name = None
@@ -134,19 +123,6 @@ REGLAS DE COMPORTAMIENTO:
         phone_match = re_phone.search(message)
         if phone_match:
             extracted_phone = phone_match.group(0)
-
-        # Mock custom fields extraction
-        extracted_custom_fields = {}
-        if custom_lead_fields:
-            for field in custom_lead_fields:
-                field_lower = field.lower()
-                if field_lower in msg_lower:
-                    pattern = re.compile(rf'{field_lower}\s+(?:es\s+de\s+|de\s+|es\s+)?([^\s,;]+)', re.IGNORECASE)
-                    match = pattern.search(message)
-                    if match:
-                        extracted_custom_fields[field] = match.group(1)
-                    else:
-                        extracted_custom_fields[field] = "mencionado"
             
         return GeminiOutput(
             reply=reply,
@@ -154,8 +130,7 @@ REGLAS DE COMPORTAMIENTO:
             extracted_email=extracted_email,
             extracted_phone=extracted_phone,
             ai_active_status=ai_active_status,
-            sentiment_alert=sentiment_alert,
-            extracted_custom_fields=extracted_custom_fields or None
+            sentiment_alert=sentiment_alert
         )
 
 # Precompile regex for mock extraction

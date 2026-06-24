@@ -12,9 +12,7 @@ from .database import SessionLocal
 from .models import AsyncTaskQueue
 
 redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-celery_app = Celery("astro_tasks", broker=redis_url, broker_connection_retry_on_startup=True)
-
-LAST_WORKER_HEARTBEAT = 0.0
+celery_app = Celery("astro_tasks", broker=redis_url, backend=redis_url)
 
 @celery_app.task(name="run_scraper_celery")
 def run_scraper_celery(tenant_id: str, url: str):
@@ -116,10 +114,25 @@ def execute_task(task_type: str, payload: dict, db: Session) -> tuple[bool, str]
     except Exception as e:
         return False, f"{str(e)}\n{traceback.format_exc()}"
 
+LAST_WORKER_HEARTBEAT = 0.0
+
+def check_and_recover_worker() -> bool:
+    """Checks if the worker heartbeat has stalled and restarts the worker thread if needed."""
+    global LAST_WORKER_HEARTBEAT
+    now = time.time()
+    # Heartbeat is considered stalled if it has been active but silent for over 15 seconds
+    if LAST_WORKER_HEARTBEAT > 0.0 and (now - LAST_WORKER_HEARTBEAT > 15.0):
+        print(f"[ASYNC QUEUE] Heartbeat stalled ({now - LAST_WORKER_HEARTBEAT:.2f}s ago). Restarting worker thread...")
+        LAST_WORKER_HEARTBEAT = time.time()  # Reset to prevent multiple spawns
+        start_async_task_processor()
+        return True
+    return False
+
 def start_async_task_processor():
     """Spawns background task worker in a daemon thread."""
     def worker_loop():
         global LAST_WORKER_HEARTBEAT
+        LAST_WORKER_HEARTBEAT = time.time()
         time.sleep(2)  # Wait for DB tables setup in main thread
         print("[ASYNC QUEUE] Persistent SQLite-backed task worker started.")
         while True:
@@ -166,16 +179,3 @@ def start_async_task_processor():
 
     t = threading.Thread(target=worker_loop, daemon=True)
     t.start()
-
-def check_and_recover_worker() -> bool:
-    """Checks if the worker thread is active (via heartbeat) and starts a new one if it's dead/frozen."""
-    global LAST_WORKER_HEARTBEAT
-    now = time.time()
-    # Heartbeat timeout of 15 seconds
-    if now - LAST_WORKER_HEARTBEAT > 15.0:
-        print("[ASYNC QUEUE MONITOR] Heartbeat timeout! Worker appears to be frozen or dead. Restarting worker thread...")
-        # Reset heartbeat to prevent duplicate starts
-        LAST_WORKER_HEARTBEAT = now
-        start_async_task_processor()
-        return True
-    return False
