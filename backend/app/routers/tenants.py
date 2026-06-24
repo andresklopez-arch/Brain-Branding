@@ -222,3 +222,64 @@ def update_credentials(tenant_id: str, payload: CredentialsUpdate, db: Session =
         if val:
             setattr(resp, key, decrypt_val(val, salt_str=creds.encryption_salt))
     return resp
+
+@router.post("/{tenant_id}/rotate-secret")
+def rotate_secret(
+    tenant_id: str,
+    new_secret: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Atomic secret key rotation for tenant credentials:
+    Decrypts using the current secret key, then encrypts with the new secret key.
+    """
+    creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
+    if not creds:
+        raise HTTPException(status_code=404, detail="Credentials record not found for tenant.")
+        
+    sensitive_keys = {
+        "gemini_api_key", "whatsapp_token", "instagram_page_token", 
+        "messenger_page_token", "twilio_sms_auth", "telegram_bot_token"
+    }
+    
+    decrypted_values = {}
+    for key in sensitive_keys:
+        val = getattr(creds, key, None)
+        if val:
+            decrypted_values[key] = decrypt_val(val, salt_str=creds.encryption_salt)
+            
+    # Helper to encrypt with the new secret key
+    import hashlib
+    import base64
+    import os
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    
+    def encrypt_with_new_secret(plaintext: str, secret: str, salt: Optional[str]) -> str:
+        if not plaintext:
+            return ""
+        secret_key = secret
+        if salt:
+            secret_key += salt
+        key = hashlib.sha256(secret_key.encode('utf-8')).digest()
+        aesgcm = AESGCM(key)
+        nonce = os.urandom(12)
+        ciphertext = aesgcm.encrypt(nonce, plaintext.encode('utf-8'), None)
+        return base64.b64encode(nonce + ciphertext).decode('utf-8')
+
+    for key, val in decrypted_values.items():
+        if val:
+            encrypted_val = encrypt_with_new_secret(val, new_secret, creds.encryption_salt)
+            setattr(creds, key, encrypted_val)
+            
+    # Write Audit Log
+    from ..models import AuditLog
+    audit = AuditLog(
+        tenant_id=tenant_id,
+        usuario_origen="admin",
+        accion_realizada="rotate_secret_key",
+        detalles="Rotación exitosa de la clave secreta global de cifrado."
+    )
+    db.add(audit)
+    db.commit()
+    
+    return {"status": "success", "message": "Secret key rotated successfully for tenant credentials."}

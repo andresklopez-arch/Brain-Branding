@@ -94,6 +94,7 @@ class ChannelsCredentials(Base):
     gemini_model_name = Column(String(100), nullable=True)
     gemini_temperature = Column(Float, nullable=True)
     active_channels_json = Column(JSON, nullable=True, default=dict)
+    custom_lead_fields_json = Column(JSON, nullable=True, default=list)
     encryption_salt = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -124,6 +125,7 @@ class LeadCRM(Base):
     email = Column(String(255), nullable=True)
     red_social_origen = Column(String(50), nullable=False)
     notas_interes_ia = Column(Text, nullable=True)
+    campos_personalizados_json = Column(JSON, nullable=True, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     tenant = relationship("Tenant", back_populates="leads")

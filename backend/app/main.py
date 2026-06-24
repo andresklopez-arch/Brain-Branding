@@ -33,6 +33,16 @@ try:
             print("[DATABASE MIGRATION] Added encryption_salt column to channels_credentials.")
         except Exception as col_err:
             pass
+        try:
+            conn.execute(text("ALTER TABLE channels_credentials ADD COLUMN custom_lead_fields_json TEXT;"))
+            print("[DATABASE MIGRATION] Added custom_lead_fields_json column to channels_credentials.")
+        except Exception as col_err:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE leads_crm ADD COLUMN campos_personalizados_json TEXT;"))
+            print("[DATABASE MIGRATION] Added campos_personalizados_json column to leads_crm.")
+        except Exception as col_err:
+            pass
 except Exception as e:
     print(f"[DATABASE ERROR] Could not synchronize tables: {str(e)}")
 
@@ -85,6 +95,26 @@ def startup_event():
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "service": "Astro Link"}
+
+@app.get("/health/worker")
+def health_worker():
+    from .tasks import LAST_WORKER_HEARTBEAT, check_and_recover_worker
+    import time
+    now = time.time()
+    time_since_heartbeat = now - LAST_WORKER_HEARTBEAT
+    recovered = False
+    
+    # Only recover if worker has had time to start (LAST_WORKER_HEARTBEAT > 0)
+    # or if we are well past startup time and it still hasn't heartbeat.
+    if LAST_WORKER_HEARTBEAT > 0.0 and time_since_heartbeat > 15.0:
+        recovered = check_and_recover_worker()
+    
+    return {
+        "status": "unhealthy" if (LAST_WORKER_HEARTBEAT > 0.0 and time_since_heartbeat > 15.0) else "healthy",
+        "last_heartbeat": LAST_WORKER_HEARTBEAT,
+        "time_since_heartbeat": time_since_heartbeat,
+        "recovered": recovered
+    }
 
 @app.get("/widget.js")
 def get_widget_script(tenant_id: str):
