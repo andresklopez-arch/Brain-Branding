@@ -49,20 +49,21 @@ async def process_incoming_message(
         db.commit()
         db.refresh(thread)
 
+    # Broadcast incoming user message to WebSocket in real time
+    await socket_manager.broadcast_to_tenant(
+        tenant_id, 
+        {
+            "event": "new_message",
+            "channel": channel,
+            "sender_id": sender_id,
+            "content": message_text,
+            "ai_active": thread.ai_active_status
+        }
+    )
+
     # If human agent took over, do not reply automatically
     if not thread.ai_active_status:
-        # Broadcast incoming message to Unified Inbox via WebSockets
-        await socket_manager.broadcast_to_tenant(
-            tenant_id, 
-            {
-                "event": "new_message",
-                "channel": channel,
-                "sender_id": sender_id,
-                "content": message_text,
-                "ai_active": False
-            }
-        )
-        return
+        return None
 
     # 2. Get Knowledge Base
     kb = db.query(KnowledgeBase).filter(KnowledgeBase.tenant_id == tenant_id).first()
@@ -124,6 +125,8 @@ async def process_incoming_message(
         if creds:
             if channel == "whatsapp":
                 await omnichannel.send_whatsapp_message(creds, sender_id, ai_response.reply)
+            elif channel == "messenger":
+                await omnichannel.send_messenger_message(creds, sender_id, ai_response.reply)
             elif channel == "telegram":
                 await omnichannel.send_telegram_message(creds, sender_id, ai_response.reply)
             elif channel == "sms":
@@ -136,7 +139,11 @@ async def process_incoming_message(
     # 7. Update Thread History
     history.append({"role": "user", "content": message_text, "timestamp": str(datetime.datetime.utcnow())})
     history.append({"role": "model", "content": ai_response.reply, "timestamp": str(datetime.datetime.utcnow())})
-    thread.historial_chat_json = history
+    thread.historial_chat_json = list(history)
+    
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(thread, "historial_chat_json")
+    
     thread.ultima_interaccion_timestamp = datetime.datetime.utcnow()
     db.commit()
 
@@ -151,6 +158,7 @@ async def process_incoming_message(
             "ai_active": thread.ai_active_status
         }
     )
+    return ai_response
 
 # --- Webhooks Endpoints ---
 
@@ -287,3 +295,116 @@ async def receive_widget_message(
         tenant_id, "web_widget", payload.contacto_id, payload.mensaje, db
     )
     return {"status": "queued"}
+
+# 6. Messenger Webhook (Tenant-specific)
+@router.get("/{tenant_id}/messenger")
+async def verify_messenger(
+    tenant_id: str,
+    hub_mode: str = Query(None, alias="hub.mode"),
+    hub_challenge: str = Query(None, alias="hub.challenge"),
+    hub_verify_token: str = Query(None, alias="hub.verify_token")
+):
+    """Messenger verification token webhook."""
+    return Response(content=hub_challenge, media_type="text/plain")
+
+@router.post("/{tenant_id}/messenger")
+async def receive_messenger(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Receives Messenger webhook JSON payload."""
+    try:
+        body = await request.json()
+        entry = body.get("entry", [])[0]
+        messaging = entry.get("messaging", [])
+        if messaging:
+            msg_event = messaging[0]
+            sender_id = msg_event.get("sender", {}).get("id")
+            text = msg_event.get("message", {}).get("text", "")
+            if sender_id and text:
+                background_tasks.add_task(
+                    process_incoming_message,
+                    tenant_id, "messenger", sender_id, text, db
+                )
+    except Exception as e:
+        print(f"[MESSENGER WEBHOOK PARSE ERROR] {str(e)}")
+    return {"status": "ok"}
+
+# 7. Global (Tenant-Agnostic) WhatsApp Webhook
+@router.get("/whatsapp")
+async def verify_global_whatsapp(
+    hub_mode: str = Query(None, alias="hub.mode"),
+    hub_challenge: str = Query(None, alias="hub.challenge"),
+    hub_verify_token: str = Query(None, alias="hub.verify_token")
+):
+    """Global WhatsApp verification token webhook."""
+    return Response(content=hub_challenge, media_type="text/plain")
+
+@router.post("/whatsapp")
+async def receive_global_whatsapp(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Receives WhatsApp Cloud API webhook JSON payload and routes by phone_number_id."""
+    try:
+        body = await request.json()
+        entry = body.get("entry", [])[0]
+        changes = entry.get("changes", [])[0]
+        value = changes.get("value", {})
+        metadata = value.get("metadata", {})
+        phone_number_id = metadata.get("phone_number_id")
+        messages = value.get("messages", [])
+        
+        if messages and phone_number_id:
+            msg = messages[0]
+            sender_id = msg.get("from")
+            text = msg.get("text", {}).get("body", "")
+            if text:
+                # Find tenant by phone_number_id
+                creds = db.query(ChannelsCredentials).filter(
+                    ChannelsCredentials.whatsapp_phone_id == phone_number_id
+                ).first()
+                if creds:
+                    tenant_id = str(creds.tenant_id)
+                    background_tasks.add_task(
+                        process_incoming_message,
+                        tenant_id, "whatsapp", sender_id, text, db
+                    )
+                else:
+                    print(f"[GLOBAL WHATSAPP WEBHOOK] No tenant found for phone_number_id: {phone_number_id}")
+    except Exception as e:
+        print(f"[GLOBAL WHATSAPP WEBHOOK PARSE ERROR] {str(e)}")
+    return {"status": "ok"}
+
+# 8. Global (Tenant-Agnostic) Messenger Webhook
+@router.get("/messenger")
+async def verify_global_messenger(
+    hub_mode: str = Query(None, alias="hub.mode"),
+    hub_challenge: str = Query(None, alias="hub.challenge"),
+    hub_verify_token: str = Query(None, alias="hub.verify_token")
+):
+    """Global Messenger verification token webhook."""
+    return Response(content=hub_challenge, media_type="text/plain")
+
+@router.post("/messenger")
+async def receive_global_messenger(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Receives Facebook Messenger webhook JSON payload and routes by page_id."""
+    try:
+        body = await request.json()
+        entry = body.get("entry", [])[0]
+        page_id = entry.get("id")
+        messaging = entry.get("messaging", [])
+        if messaging and page_id:
+            msg_event = messaging[0]
+            sender_id = msg_event.get("sender", {}).get("id")
+            text = msg_event.get("message", {}).get("text", "")
+            if sender_id and text:
+                # Find tenant by page_id
+                creds = db.query(ChannelsCredentials).filter(
+                    ChannelsCredentials.messenger_page_id == page_id
+                ).first()
+                if creds:
+                    tenant_id = str(creds.tenant_id)
+                    background_tasks.add_task(
+                        process_incoming_message,
+                        tenant_id, "messenger", sender_id, text, db
+                    )
+                else:
+                    print(f"[GLOBAL MESSENGER WEBHOOK] No tenant found for page_id: {page_id}")
+    except Exception as e:
+        print(f"[GLOBAL MESSENGER WEBHOOK PARSE ERROR] {str(e)}")
+    return {"status": "ok"}

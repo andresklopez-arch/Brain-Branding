@@ -82,6 +82,8 @@ class ChannelsCredentials(Base):
     twilio_sms_sid = Column(String(100), nullable=True)
     twilio_sms_auth = Column(String(100), nullable=True)
     instagram_page_token = Column(Text, nullable=True)
+    messenger_page_token = Column(Text, nullable=True)
+    messenger_page_id = Column(String(100), nullable=True)
     telegram_bot_token = Column(String(255), nullable=True)
     email_imap_smtp_config_json = Column(JSON, nullable=True)
     twitter_x_bearer_token = Column(Text, nullable=True)

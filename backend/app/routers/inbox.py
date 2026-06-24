@@ -72,7 +72,11 @@ async def send_human_message(
         "timestamp": str(datetime.datetime.utcnow()),
         "by_human": True
     })
-    thread.historial_chat_json = history
+    thread.historial_chat_json = list(history)
+    
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(thread, "historial_chat_json")
+    
     thread.ultima_interaccion_timestamp = datetime.datetime.utcnow()
     db.commit()
     
@@ -84,6 +88,8 @@ async def send_human_message(
         recipient_id = thread.contacto_identificador_plataforma
         if channel == "whatsapp":
             sent_success = await omnichannel.send_whatsapp_message(creds, recipient_id, message)
+        elif channel == "messenger":
+            sent_success = await omnichannel.send_messenger_message(creds, recipient_id, message)
         elif channel == "telegram":
             sent_success = await omnichannel.send_telegram_message(creds, recipient_id, message)
         elif channel == "sms":

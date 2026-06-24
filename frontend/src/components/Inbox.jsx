@@ -7,6 +7,7 @@ import { api } from '../services/api';
 
 const CHANNEL_ICONS = {
   whatsapp: { icon: MessageSquare, color: 'text-emerald-400' },
+  messenger: { icon: MessageSquare, color: 'text-blue-400' },
   sms: { icon: Smartphone, color: 'text-red-400' },
   instagram: { icon: Instagram, color: 'text-pink-400' },
   telegram: { icon: Send, color: 'text-sky-400' },

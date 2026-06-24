@@ -31,6 +31,26 @@ class OmnichannelService:
             print(f"[WHATSAPP ERROR] Failed to send: {str(e)}")
             return False
 
+    async def send_messenger_message(self, creds: ChannelsCredentials, recipient_id: str, text: str):
+        """Sends Facebook Messenger message via Meta Graph API."""
+        if not creds.messenger_page_token or not creds.messenger_page_id:
+            print(f"[MOCK MESSENGER] Recipient: {recipient_id} | Message: {text}")
+            return True
+            
+        url = "https://graph.facebook.com/v18.0/me/messages"
+        headers = {"Content-Type": "application/json"}
+        params = {"access_token": creds.messenger_page_token}
+        payload = {
+            "recipient": {"id": recipient_id},
+            "message": {"text": text}
+        }
+        try:
+            response = await self.client.post(url, params=params, headers=headers, json=payload, timeout=10.0)
+            return response.status_code == 200
+        except Exception as e:
+            print(f"[MESSENGER ERROR] Failed to send DM: {str(e)}")
+            return False
+
     async def send_telegram_message(self, creds: ChannelsCredentials, chat_id: str, text: str):
         """Sends Telegram message via Telegram Bot API."""
         if not creds.telegram_bot_token:
@@ -127,6 +147,8 @@ class OmnichannelService:
         dm_success = False
         if platform == "instagram":
             dm_success = await self.send_instagram_dm(creds, user_id, private_dm_text)
+        elif platform == "messenger":
+            dm_success = await self.send_messenger_message(creds, user_id, private_dm_text)
         elif platform == "telegram":
             dm_success = await self.send_telegram_message(creds, user_id, private_dm_text)
         elif platform == "whatsapp":

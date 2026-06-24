@@ -42,6 +42,8 @@ class CredentialsUpdate(BaseModel):
     twilio_sms_sid: Optional[str] = None
     twilio_sms_auth: Optional[str] = None
     instagram_page_token: Optional[str] = None
+    messenger_page_token: Optional[str] = None
+    messenger_page_id: Optional[str] = None
     telegram_bot_token: Optional[str] = None
     email_imap_smtp_config_json: Optional[Dict[str, Any]] = None
     twitter_x_bearer_token: Optional[str] = None
