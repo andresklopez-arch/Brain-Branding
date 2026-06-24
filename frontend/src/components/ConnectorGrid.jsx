@@ -22,7 +22,7 @@ const CHANNELS_CONFIG = [
     ],
     instructions: [
       "Configura tu API Key de Gemini para activar la inteligencia artificial de tu negocio.",
-      "Puedes obtener una clave gratuita o de pago ingresando a Google AI Studio."
+      "Puedes obtener una clave gratuita o de pago ingresando a [Google AI Studio](https://aistudio.google.com/app/apikey)."
     ]
   },
   { 
@@ -35,7 +35,7 @@ const CHANNELS_CONFIG = [
       {key: 'whatsapp_token', label: 'Access Token', secret: true}
     ],
     instructions: [
-      "1. Crea una app de tipo Negocio en Meta for Developers.",
+      "1. Crea una app de tipo Negocio en [Meta for Developers](https://developers.facebook.com/).",
       "2. Agrega el producto 'WhatsApp' a tu app.",
       "3. En 'Configuración de la API', copia el Phone Number ID y el Access Token (No tu número de teléfono).",
       "4. En Meta, configura el Webhook usando la URL provista abajo y usa tu Access Token o tu Tenant ID como Verification Token."
@@ -50,7 +50,7 @@ const CHANNELS_CONFIG = [
       {key: 'telegram_bot_token', label: 'Bot Token', secret: true}
     ],
     instructions: [
-      "1. Habla con @BotFather en Telegram y envía el comando /newbot.",
+      "1. Habla con [@BotFather](https://t.me/BotFather) en Telegram y envía el comando /newbot.",
       "2. Sigue los pasos para elegir un nombre y un usuario para tu bot.",
       "3. Copia el token HTTP API que te proporciona y pégalo arriba."
     ]
@@ -65,8 +65,8 @@ const CHANNELS_CONFIG = [
       {key: 'twilio_sms_auth', label: 'Auth Token', secret: true}
     ],
     instructions: [
-      "1. Crea una cuenta en Twilio y adquiere un número de teléfono habilitado para SMS.",
-      "2. Copia tu Account SID y Auth Token desde el panel principal de Twilio.",
+      "1. Crea una cuenta en [Twilio](https://console.twilio.com/) y adquiere un número de teléfono habilitado para SMS.",
+      "2. Copia tu Account SID y Auth Token desde el [panel principal de Twilio](https://console.twilio.com/).",
       "3. Configura la URL de Webhook de abajo en la configuración de tu número en Twilio."
     ]
   },
@@ -80,7 +80,7 @@ const CHANNELS_CONFIG = [
     ],
     instructions: [
       "1. Conecta tu cuenta de Instagram Business a una página de Facebook de tu propiedad.",
-      "2. Crea una App en Meta Developers y añade 'Instagram Graph API'.",
+      "2. Crea una App en [Meta Developers](https://developers.facebook.com/) y añade 'Instagram Graph API'.",
       "3. Genera un Token de Acceso de Página de Facebook vinculada y pégalo arriba."
     ]
   },
@@ -94,7 +94,7 @@ const CHANNELS_CONFIG = [
       {key: 'messenger_page_token', label: 'Page Access Token', secret: true}
     ],
     instructions: [
-      "1. Ve a Meta Developers, crea una App de tipo Negocio y agrega el producto 'Messenger'.",
+      "1. Ve a [Meta Developers](https://developers.facebook.com/), crea una App de tipo Negocio y agrega el producto 'Messenger'.",
       "2. Vincula tu página de Facebook, obtén su Page ID y genera un Page Access Token."
     ]
   },
@@ -107,7 +107,7 @@ const CHANNELS_CONFIG = [
       {key: 'twitter_x_bearer_token', label: 'Bearer Token', secret: true}
     ],
     instructions: [
-      "1. Crea un portal de desarrollador en Twitter/X Developers.",
+      "1. Crea un portal de desarrollador en [Twitter/X Developers](https://developer.x.com/).",
       "2. Genera un Bearer Token en las llaves de tu proyecto y pégalo arriba."
     ]
   },
@@ -120,7 +120,7 @@ const CHANNELS_CONFIG = [
       {key: 'tiktok_business_access_token', label: 'Business Access Token', secret: true}
     ],
     instructions: [
-      "1. Regístrate en TikTok Developer Portal y crea una app comercial.",
+      "1. Regístrate en [TikTok Developer Portal](https://developers.tiktok.com/) y crea una app comercial.",
       "2. Obtén el Access Token de producción y pégalo arriba."
     ]
   },
@@ -133,7 +133,7 @@ const CHANNELS_CONFIG = [
       {key: 'youtube_api_key', label: 'Data API Key', secret: true}
     ],
     instructions: [
-      "1. Crea un proyecto en Google Cloud Console.",
+      "1. Crea un proyecto en [Google Cloud Console](https://console.cloud.google.com/).",
       "2. Habilita 'YouTube Data API v3'.",
       "3. Genera una API Key en la sección Credenciales y pégala arriba."
     ]
@@ -147,7 +147,7 @@ const CHANNELS_CONFIG = [
       {key: 'google_business_profile_id', label: 'Profile ID'}
     ],
     instructions: [
-      "1. Ingresa a Google Business Profile Manager.",
+      "1. Ingresa a [Google Business Profile Manager](https://business.google.com/).",
       "2. Busca el ID de perfil en la sección Ajustes de tu ficha de negocio y pégalo arriba."
     ]
   },
@@ -162,7 +162,7 @@ const CHANNELS_CONFIG = [
     ],
     instructions: [
       "1. Configura tu correo IMAP/SMTP (Gmail, Outlook, etc.).",
-      "2. Si usas Gmail, debes generar una 'Contraseña de Aplicación' en la seguridad de tu cuenta de Google."
+      "2. Si usas Gmail, debes generar una 'Contraseña de Aplicación' en la [seguridad de tu cuenta de Google](https://myaccount.google.com/apppasswords)."
     ]
   },
   { 
@@ -177,6 +177,42 @@ const CHANNELS_CONFIG = [
     ]
   }
 ];
+
+const parseMarkdownLinks = (text) => {
+  const regex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    const [fullMatch, linkText, url] = match;
+    const index = match.index;
+
+    if (index > lastIndex) {
+      parts.push(text.substring(lastIndex, index));
+    }
+
+    parts.push(
+      <a 
+        key={index} 
+        href={url} 
+        target="_blank" 
+        rel="noopener noreferrer" 
+        className="text-brand-400 hover:text-brand-300 underline font-semibold transition-colors"
+      >
+        {linkText}
+      </a>
+    );
+
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : text;
+};
 
 export default function ConnectorGrid({ tenantId }) {
   const [credentials, setCredentials] = useState({});
@@ -315,7 +351,7 @@ export default function ConnectorGrid({ tenantId }) {
                             {chan.instructions.map((inst, idx) => (
                               <li key={idx} className="flex items-start space-x-1">
                                 <span className="text-brand-400 flex-shrink-0">•</span>
-                                <span>{inst}</span>
+                                <span>{parseMarkdownLinks(inst)}</span>
                               </li>
                             ))}
                           </ul>
