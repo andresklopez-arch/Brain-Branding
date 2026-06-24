@@ -55,6 +55,7 @@ export default function LeadsCRM({ tenantId }) {
                 <th className="pb-3">Nombre</th>
                 <th className="pb-3">Contacto</th>
                 <th className="pb-3">Canal Origen</th>
+                <th className="pb-3">Datos Extraídos</th>
                 <th className="pb-3">Notas de Interés</th>
                 <th className="pb-3">Fecha Captura</th>
               </tr>
@@ -96,6 +97,25 @@ export default function LeadsCRM({ tenantId }) {
                       <MessageSquare className="w-3 h-3 text-slate-500" />
                       <span className="capitalize">{lead.red_social_origen}</span>
                     </span>
+                  </td>
+                  <td className="py-3.5">
+                    <div className="flex flex-wrap gap-1.5 max-w-xs">
+                      {lead.campos_personalizados_json && Object.entries(lead.campos_personalizados_json).length > 0 ? (
+                        Object.entries(lead.campos_personalizados_json).map(([key, val]) => (
+                          val && (
+                            <span 
+                              key={key} 
+                              className="inline-flex items-center px-1.5 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 rounded text-[10px]"
+                            >
+                              <span className="font-bold uppercase mr-1">{key}:</span>
+                              <span>{val}</span>
+                            </span>
+                          )
+                        ))
+                      ) : (
+                        <span className="text-[10px] text-slate-500 italic">-</span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-3.5 text-slate-400 max-w-xs truncate">
                     {lead.notas_interes_ia || 'Interés comercial general'}

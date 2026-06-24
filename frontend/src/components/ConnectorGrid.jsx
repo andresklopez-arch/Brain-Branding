@@ -238,6 +238,7 @@ const parseMarkdownLinks = (text) => {
 
 export default function ConnectorGrid({ tenantId }) {
   const [credentials, setCredentials] = useState({});
+  const [customLeadFields, setCustomLeadFields] = useState([]);
   const [activeChannels, setActiveChannels] = useState({});
   const [expandedChannel, setExpandedChannel] = useState(null);
   const [formState, setFormState] = useState({});
@@ -345,6 +346,7 @@ export default function ConnectorGrid({ tenantId }) {
     try {
       const data = await api.getCredentials(tenantId);
       setCredentials(data);
+      setCustomLeadFields(data.custom_lead_fields_json || []);
       // Map initial formState from fetched database credentials
       const initialForm = {};
       const initialActive = data.active_channels_json || {};
@@ -397,6 +399,9 @@ export default function ConnectorGrid({ tenantId }) {
       channel.fields.forEach(field => {
         payload[field.key] = formState[field.key];
       });
+      if (channelKey === 'gemini') {
+        payload.custom_lead_fields_json = customLeadFields;
+      }
 
       await api.updateCredentials(tenantId, payload);
       setSaveStatus(prev => ({ ...prev, [channelKey]: 'saved' }));
@@ -796,6 +801,67 @@ export default function ConnectorGrid({ tenantId }) {
                               <p className="text-[8px] text-slate-500 mt-1">
                                 Haz clic para copiar esta URL en la consola de desarrollador del canal.
                               </p>
+                            </div>
+                          )}
+
+                          {chan.key === 'gemini' && (
+                            <div className="mt-3 p-3 bg-slate-950/80 border border-slate-800 rounded-lg">
+                              <label className="block text-[9px] font-bold text-indigo-400 uppercase tracking-wider mb-1.5">
+                                Campos de Leads Personalizados (Extraídos por IA)
+                              </label>
+                              <div className="flex gap-2 mb-2">
+                                <input
+                                  type="text"
+                                  placeholder="Ej. presupuesto, servicios, interes"
+                                  id="new-custom-field-input"
+                                  className="flex-1 bg-slate-950/60 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-brand-500"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      const val = e.target.value.trim().toLowerCase();
+                                      if (val && !customLeadFields.includes(val)) {
+                                        setCustomLeadFields([...customLeadFields, val]);
+                                        e.target.value = '';
+                                      }
+                                    }
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const input = document.getElementById('new-custom-field-input');
+                                    const val = input.value.trim().toLowerCase();
+                                    if (val && !customLeadFields.includes(val)) {
+                                      setCustomLeadFields([...customLeadFields, val]);
+                                      input.value = '';
+                                    }
+                                  }}
+                                  className="bg-brand-600 hover:bg-brand-500 text-white font-semibold px-2 py-1 rounded-lg text-xs"
+                                >
+                                  Añadir
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {customLeadFields.length === 0 ? (
+                                  <span className="text-[9px] text-slate-500 italic">No hay campos personalizados configurados.</span>
+                                ) : (
+                                  customLeadFields.map((field) => (
+                                    <span 
+                                      key={field} 
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 rounded text-[10px]"
+                                    >
+                                      <span>{field}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setCustomLeadFields(customLeadFields.filter(f => f !== field))}
+                                        className="text-indigo-400 hover:text-indigo-200 focus:outline-none font-bold"
+                                      >
+                                        ×
+                                      </button>
+                                    </span>
+                                  ))
+                                )}
+                              </div>
                             </div>
                           )}
 
