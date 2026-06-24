@@ -12,6 +12,7 @@ const CHANNELS_CONFIG = [
   { 
     key: 'gemini', 
     name: 'Motor de IA (Gemini)', 
+    category: 'IA',
     icon: Bot, 
     color: 'border-indigo-500/30 text-indigo-400 hover:border-indigo-500/50 bg-indigo-500/5', 
     fields: [
@@ -30,6 +31,7 @@ const CHANNELS_CONFIG = [
   { 
     key: 'whatsapp', 
     name: 'WhatsApp Business', 
+    category: 'Meta',
     icon: MessageSquare, 
     color: 'border-emerald-500/20 text-emerald-400 hover:border-emerald-500/40 bg-emerald-500/5', 
     fields: [
@@ -46,6 +48,7 @@ const CHANNELS_CONFIG = [
   { 
     key: 'telegram', 
     name: 'Telegram Bot', 
+    category: 'Chat',
     icon: Send, 
     color: 'border-sky-500/20 text-sky-400 hover:border-sky-500/40 bg-sky-500/5', 
     fields: [
@@ -60,6 +63,7 @@ const CHANNELS_CONFIG = [
   { 
     key: 'sms', 
     name: 'Twilio SMS', 
+    category: 'Telefonía',
     icon: Smartphone, 
     color: 'border-red-500/20 text-red-400 hover:border-red-500/40 bg-red-500/5', 
     fields: [
@@ -75,6 +79,7 @@ const CHANNELS_CONFIG = [
   { 
     key: 'instagram', 
     name: 'Instagram Graph', 
+    category: 'Meta',
     icon: Instagram, 
     color: 'border-pink-500/20 text-pink-400 hover:border-pink-500/40 bg-pink-500/5', 
     fields: [
@@ -89,6 +94,7 @@ const CHANNELS_CONFIG = [
   { 
     key: 'messenger', 
     name: 'Facebook Messenger', 
+    category: 'Meta',
     icon: MessageSquare, 
     color: 'border-blue-500/20 text-blue-400 hover:border-blue-500/40 bg-blue-500/5', 
     fields: [
@@ -103,6 +109,7 @@ const CHANNELS_CONFIG = [
   { 
     key: 'twitter', 
     name: 'Twitter/X Bot', 
+    category: 'Social',
     icon: Twitter, 
     color: 'border-slate-500/20 text-slate-400 hover:border-slate-500/40 bg-slate-500/5', 
     fields: [
@@ -116,6 +123,7 @@ const CHANNELS_CONFIG = [
   { 
     key: 'tiktok', 
     name: 'TikTok Business', 
+    category: 'Social',
     icon: Video, 
     color: 'border-cyan-500/20 text-cyan-400 hover:border-cyan-500/40 bg-cyan-500/5', 
     fields: [
@@ -129,6 +137,7 @@ const CHANNELS_CONFIG = [
   { 
     key: 'youtube', 
     name: 'YouTube Moderation', 
+    category: 'Social',
     icon: Youtube, 
     color: 'border-rose-500/20 text-rose-400 hover:border-rose-500/40 bg-rose-500/5', 
     fields: [
@@ -143,6 +152,7 @@ const CHANNELS_CONFIG = [
   { 
     key: 'google_business', 
     name: 'Google Business', 
+    category: 'Google',
     icon: MapPin, 
     color: 'border-blue-500/20 text-blue-400 hover:border-blue-500/40 bg-blue-500/5', 
     fields: [
@@ -156,6 +166,7 @@ const CHANNELS_CONFIG = [
   { 
     key: 'email', 
     name: 'Email IMAP/SMTP', 
+    category: 'Email',
     icon: Mail, 
     color: 'border-yellow-500/20 text-yellow-400 hover:border-yellow-500/40 bg-yellow-500/5', 
     fields: [
@@ -170,6 +181,7 @@ const CHANNELS_CONFIG = [
   { 
     key: 'web_widget', 
     name: 'Chat Web Widget', 
+    category: 'Chat',
     icon: Code, 
     color: 'border-indigo-500/20 text-indigo-400 hover:border-indigo-500/40 bg-indigo-500/5', 
     fields: [], 
@@ -232,8 +244,10 @@ export default function ConnectorGrid({ tenantId }) {
   const [saveStatus, setSaveStatus] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [visibleSecrets, setVisibleSecrets] = useState({});
   const [testStatus, setTestStatus] = useState({});
+  const [testLog, setTestLog] = useState({});
   const [toast, setToast] = useState(null);
 
   const showToast = (message, type = 'success') => {
@@ -245,12 +259,15 @@ export default function ConnectorGrid({ tenantId }) {
     setTimeout(() => {
       const channel = CHANNELS_CONFIG.find(c => c.key === channelKey);
       const allFilled = channel.fields.every(f => !!formState[f.key]);
+      const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       
       if (allFilled || channel.key === 'web_widget') {
         setTestStatus(prev => ({ ...prev, [channelKey]: 'success' }));
+        setTestLog(prev => ({ ...prev, [channelKey]: { time: timeString, status: 'success', message: 'Conectado exitosamente' } }));
         showToast(`¡Conexión de ${channel.name} establecida con éxito!`, 'success');
       } else {
         setTestStatus(prev => ({ ...prev, [channelKey]: 'error' }));
+        setTestLog(prev => ({ ...prev, [channelKey]: { time: timeString, status: 'error', message: 'Error: Faltan credenciales obligatorias' } }));
         showToast(`Error de conexión en ${channel.name}: faltan credenciales.`, 'error');
       }
       
@@ -338,18 +355,35 @@ export default function ConnectorGrid({ tenantId }) {
   };
 
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-  const embedCode = `<script src="${API_BASE_URL}/widget.js?tenant_  const filteredChannels = CHANNELS_CONFIG.filter(chan => {
+  const embedCode = `<script src="${API_BASE_URL}/widget.js?tenant_id=${tenantId}"></script>`;
+
+  const filteredChannels = CHANNELS_CONFIG.filter(chan => {
     const matchesSearch = chan.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           chan.key.toLowerCase().includes(searchTerm.toLowerCase());
     const isActive = activeChannels[chan.key];
     const matchesFilter = statusFilter === 'all' || 
                           (statusFilter === 'active' && isActive) || 
                           (statusFilter === 'inactive' && !isActive);
-    return matchesSearch && matchesFilter;
+    const matchesCategory = categoryFilter === 'all' || chan.category === categoryFilter;
+    return matchesSearch && matchesFilter && matchesCategory;
   });
+
+  const svgAnimationStyles = `
+    @keyframes flowDash {
+      to {
+        stroke-dashoffset: -20;
+      }
+    }
+    .animate-flow {
+      stroke-dasharray: 4 4;
+      animation: flowDash 0.8s linear infinite;
+    }
+  `;
 
   return (
     <div className="space-y-6">
+      <style>{svgAnimationStyles}</style>
+
       {/* Search & Filter Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-slate-950/40 border border-slate-900/60 rounded-2xl backdrop-blur-sm">
         <div className="relative flex-1 max-w-md">
@@ -379,10 +413,27 @@ export default function ConnectorGrid({ tenantId }) {
         </div>
       </div>
 
+      {/* Category Filter Pills */}
+      <div className="flex flex-wrap gap-2 px-1">
+        {['all', 'IA', 'Meta', 'Chat', 'Telefonía', 'Social', 'Google', 'Email'].map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setCategoryFilter(cat)}
+            className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all duration-200 ${
+              categoryFilter === cat
+                ? 'bg-indigo-500/20 border-indigo-400 text-indigo-300 shadow-md shadow-indigo-500/5'
+                : 'bg-slate-950/30 border-slate-900 text-slate-500 hover:text-slate-350 hover:border-slate-800'
+            }`}
+          >
+            {cat === 'all' ? 'Ver Todos' : cat}
+          </button>
+        ))}
+      </div>
+
       {filteredChannels.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 border border-dashed border-slate-800 rounded-2xl bg-slate-950/20 text-slate-500 space-y-2">
           <Bot className="w-8 h-8 opacity-40 animate-pulse" />
-          <p className="text-xs font-semibold">No se encontraron conectores que coincidan con tu búsqueda.</p>
+          <p className="text-xs font-semibold">No se encontraron conectores que coincidan con tu búsqueda o categoría.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -448,20 +499,51 @@ export default function ConnectorGrid({ tenantId }) {
                                 <div className="mt-3 pt-3 border-t border-slate-800/40 flex flex-col items-center">
                                   <p className="text-[8px] font-bold text-slate-500 uppercase tracking-wider mb-2">Flujo de Datos del Canal</p>
                                   <svg className="w-full max-w-[280px] h-10" viewBox="0 0 280 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <rect x="5" y="5" width="65" height="30" rx="6" fill="#020617" stroke="#1e293b" strokeWidth="1"/>
-                                    <text x="37.5" y="23" fill="#94a3b8" fontSize="8" fontWeight="bold" textAnchor="middle">{chan.name.split(' ')[0]}</text>
+                                    <rect 
+                                      x="5" y="5" width="65" height="30" rx="6" 
+                                      fill={isActive ? 'rgba(16, 185, 129, 0.05)' : '#020617'} 
+                                      stroke={isActive ? '#10b981' : '#1e293b'} 
+                                      strokeWidth="1"
+                                    />
+                                    <text x="37.5" y="23" fill={isActive ? '#10b981' : '#94a3b8'} fontSize="8" fontWeight="bold" textAnchor="middle">{chan.name.split(' ')[0]}</text>
                                     
-                                    <rect x="110" y="5" width="60" height="30" rx="6" fill="#020617" stroke="#4f46e5" strokeWidth="1.2"/>
-                                    <text x="140" y="23" fill="#818cf8" fontSize="8" fontWeight="bold" textAnchor="middle">Astro Link</text>
+                                    <rect 
+                                      x="110" y="5" width="60" height="30" rx="6" 
+                                      fill="#020617" 
+                                      stroke={isActive ? '#4f46e5' : '#1e293b'} 
+                                      strokeWidth="1.2"
+                                    />
+                                    <text x="140" y="23" fill={isActive ? '#818cf8' : '#64748b'} fontSize="8" fontWeight="bold" textAnchor="middle">Astro Link</text>
                                     
-                                    <rect x="210" y="5" width="65" height="30" rx="6" fill="#020617" stroke="#6366f1" strokeWidth="1"/>
-                                    <text x="242.5" y="23" fill="#a5b4fc" fontSize="8" fontWeight="bold" textAnchor="middle">Gemini AI</text>
+                                    <rect 
+                                      x="210" y="5" width="65" height="30" rx="6" 
+                                      fill="#020617" 
+                                      stroke={isActive ? '#6366f1' : '#1e293b'} 
+                                      strokeWidth="1"
+                                    />
+                                    <text x="242.5" y="23" fill={isActive ? '#a5b4fc' : '#64748b'} fontSize="8" fontWeight="bold" textAnchor="middle">Gemini AI</text>
                                     
-                                    <path d="M70 20 H109" stroke="#334155" strokeWidth="1.2" strokeDasharray="3 3"/>
-                                    <polygon points="109,20 104,17 104,23" fill="#334155"/>
+                                    <path 
+                                      d="M70 20 H109" 
+                                      stroke={checkStatus === 'checking' ? '#6366f1' : isActive ? '#10b981' : '#334155'} 
+                                      strokeWidth="1.2" 
+                                      className={checkStatus === 'checking' || (isActive && checkStatus === 'idle') ? 'animate-flow' : ''}
+                                    />
+                                    <polygon 
+                                      points="109,20 104,17 104,23" 
+                                      fill={checkStatus === 'checking' ? '#6366f1' : isActive ? '#10b981' : '#334155'} 
+                                    />
                                     
-                                    <path d="M170 20 H209" stroke="#4f46e5" strokeWidth="1.2"/>
-                                    <polygon points="209,20 204,17 204,23" fill="#4f46e5"/>
+                                    <path 
+                                      d="M170 20 H209" 
+                                      stroke={checkStatus === 'checking' ? '#818cf8' : isActive ? '#6366f1' : '#334155'} 
+                                      strokeWidth="1.2" 
+                                      className={checkStatus === 'checking' || (isActive && checkStatus === 'idle') ? 'animate-flow' : ''}
+                                    />
+                                    <polygon 
+                                      points="209,20 204,17 204,23" 
+                                      fill={checkStatus === 'checking' ? '#818cf8' : isActive ? '#6366f1' : '#334155'} 
+                                    />
                                   </svg>
                                 </div>
                               )}
@@ -597,6 +679,17 @@ export default function ConnectorGrid({ tenantId }) {
                               </span>
                             </button>
                           </div>
+
+                          {testLog[chan.key] && (
+                            <div className={`mt-2.5 px-2.5 py-1.5 rounded-lg border text-[9px] font-semibold flex items-center justify-between tracking-wide ${
+                              testLog[chan.key].status === 'success'
+                                ? 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400'
+                                : 'bg-rose-950/20 border-rose-500/20 text-rose-400'
+                            }`}>
+                              <span>{testLog[chan.key].message}</span>
+                              <span className="opacity-60">{testLog[chan.key].time}</span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
