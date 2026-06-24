@@ -56,7 +56,10 @@ export default function SetupForm({ onSetupComplete }) {
               disabled={loading}
               placeholder="Ej. Hamburguesas Gourmet Inc."
               value={nombreEmpresa}
-              onChange={(e) => setNombreEmpresa(e.target.value)}
+              onChange={(e) => {
+                setNombreEmpresa(e.target.value);
+                if (statusMessage) setStatusMessage('');
+              }}
               className="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all disabled:opacity-50"
             />
           </div>
@@ -71,7 +74,10 @@ export default function SetupForm({ onSetupComplete }) {
                 disabled={loading}
                 placeholder="https://tupaginaweb.com"
                 value={websiteUrl}
-                onChange={(e) => setWebsiteUrl(e.target.value)}
+                onChange={(e) => {
+                  setWebsiteUrl(e.target.value);
+                  if (statusMessage) setStatusMessage('');
+                }}
                 className="w-full bg-slate-950/70 border border-slate-800 rounded-xl pl-12 pr-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all disabled:opacity-50"
               />
             </div>

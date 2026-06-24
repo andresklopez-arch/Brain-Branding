@@ -71,8 +71,11 @@ class WebScraper:
                 cleaned_url = urllib.parse.urlunparse((
                     parsed_abs.scheme, parsed_abs.netloc, parsed_abs.path, '', '', ''
                 ))
-                # Skip common non-html resources
-                if not re.search(r"\.(pdf|jpg|jpeg|png|gif|zip|xml|css|js|mp4|mp3|svg)$", cleaned_url.lower()):
+                # Skip common non-html resources (images, archives, documents, fonts, audio, video)
+                if not re.search(
+                    r"\.(pdf|jpg|jpeg|png|gif|zip|xml|css|js|mp4|mp3|svg|doc|docx|xls|xlsx|ppt|pptx|gz|tar|rar|dmg|iso|bin|exe|ico|woff|woff2|ttf|eot)$",
+                    cleaned_url.lower()
+                ):
                     links.add(cleaned_url)
         return links
 

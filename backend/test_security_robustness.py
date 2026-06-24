@@ -37,7 +37,7 @@ def test_url_safety():
 
 def test_api_endpoints():
     print("[TEST] Testing setup security API endpoints (calling running backend on port 8000)...")
-    url = "http://localhost:8000/tenants/setup"
+    url = "http://127.0.0.1:8000/tenants/setup"
     
     # Test 1: SSRF Block
     params_unsafe = {

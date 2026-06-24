@@ -12,6 +12,30 @@ export default function App() {
   const [tenant, setTenant] = useState(null);
   const [activeTab, setActiveTab] = useState('connectors');
   const [isWidgetView, setIsWidgetView] = useState(false);
+  const [notification, setNotification] = useState(null);
+
+  // Connect websocket for background notifications in dashboard
+  useEffect(() => {
+    if (!tenant) return;
+    const wsUrl = api.getWebSocketUrl(tenant.id);
+    const ws = new WebSocket(wsUrl);
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.event === "scraper_finished") {
+          setNotification({
+            status: data.status,
+            message: data.message
+          });
+          // Auto-dismiss after 6 seconds
+          setTimeout(() => setNotification(null), 6000);
+        }
+      } catch (err) {
+        console.error("[WS NOTIFICATION ERROR]", err);
+      }
+    };
+    return () => ws.close();
+  }, [tenant]);
   
   // Widget specific states
   const [widgetTenantId, setWidgetTenantId] = useState(null);
@@ -179,6 +203,33 @@ export default function App() {
   // --- RENDER 3: Full Dashboard Pane ---
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
+      {/* Real-time Webhook Scraper Notification Toast */}
+      {notification && (
+        <div className={`fixed top-4 right-4 z-[99999] max-w-sm w-full bg-slate-900 border ${
+          notification.status === 'success' ? 'border-emerald-500/30' : 'border-rose-500/30'
+        } rounded-xl p-4 shadow-2xl backdrop-blur-md animate-in slide-in-from-top-4 duration-300`}>
+          <div className="flex items-start space-x-3">
+            <div className={`p-2 rounded-lg ${
+              notification.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+            }`}>
+              <Sparkles className="w-5 h-5 animate-pulse" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                {notification.status === 'success' ? 'Indexación Completada' : 'Error de Indexación'}
+              </h4>
+              <p className="text-xs text-slate-300 mt-1 leading-relaxed">{notification.message}</p>
+            </div>
+            <button 
+              onClick={() => setNotification(null)}
+              className="text-slate-500 hover:text-white transition-all text-xs"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Navbar */}
       <nav className="bg-slate-900/50 backdrop-blur-md border-b border-slate-800/80 px-6 py-4 flex justify-between items-center z-20">
         <div className="flex items-center space-x-3">
