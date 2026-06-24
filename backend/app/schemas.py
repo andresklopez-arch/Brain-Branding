@@ -54,6 +54,7 @@ class CredentialsUpdate(BaseModel):
     gemini_model_name: Optional[str] = None
     gemini_temperature: Optional[float] = None
     active_channels_json: Optional[Dict[str, bool]] = None
+    custom_lead_fields_json: Optional[List[str]] = None
     encryption_salt: Optional[str] = None
 
 class CredentialsResponse(CredentialsUpdate):
@@ -97,6 +98,7 @@ class LeadCRMResponse(BaseModel):
     email: Optional[str] = None
     red_social_origen: str
     notas_interes_ia: Optional[str] = None
+    campos_personalizados_json: Optional[Dict[str, Any]] = None
     created_at: datetime
 
     class Config:
