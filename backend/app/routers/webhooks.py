@@ -5,7 +5,7 @@ from typing import Optional
 from collections import defaultdict
 from email.mime.text import MIMEText
 from email.header import Header
-from ..database import get_db
+from ..database import get_db, SessionLocal
 from ..models import KnowledgeBase, ConversationsThread, LeadCRM, ChannelsCredentials
 from ..schemas import WidgetMessageInput
 from ..services.gemini import GeminiService
@@ -167,7 +167,7 @@ async def process_incoming_message(
     channel: str,
     sender_id: str,
     message_text: str,
-    db: Session,
+    db: Optional[Session] = None,
     is_public_comment: bool = False,
     comment_id: Optional[str] = None
 ):
@@ -181,70 +181,86 @@ async def process_incoming_message(
     5. Perform action (Reply message / Comment-to-DM).
     6. Update chat history and trigger WebSocket human takeover alerts if paused.
     """
-    # 1. Fetch or create thread
-    thread = db.query(ConversationsThread).filter(
-        ConversationsThread.tenant_id == tenant_id,
-        ConversationsThread.canal_origen == channel,
-        ConversationsThread.contacto_identificador_plataforma == sender_id
-    ).first()
+    is_local_session = db is None
+    db = db if db is not None else SessionLocal()
+    try:
+        # 1. Fetch or create thread
+        thread = db.query(ConversationsThread).filter(
+            ConversationsThread.tenant_id == tenant_id,
+            ConversationsThread.canal_origen == channel,
+            ConversationsThread.contacto_identificador_plataforma == sender_id
+        ).first()
 
-    if not thread:
-        thread = ConversationsThread(
-            tenant_id=tenant_id,
-            canal_origen=channel,
-            contacto_identificador_plataforma=sender_id,
-            historial_chat_json=[]
-        )
-        db.add(thread)
-        db.commit()
-        db.refresh(thread)
-
-    # 0. Rate limiting by sender_id to prevent spam
-    rate_limit_key = f"{tenant_id}:{channel}:{sender_id}"
-    if is_rate_limited(rate_limit_key):
-        print(f"[SPAM DETECTED] Throttling sender {sender_id} on {channel} for tenant {tenant_id}")
-        
-        # Only notify/deactivate if AI is currently active.
-        # This prevents spam loops (repeated emails/websockets/system alerts).
-        if thread.ai_active_status:
-            thread.ai_active_status = False
-            spam_message = f"Alerta de Spam: El contacto {sender_id} ha enviado demasiados mensajes. La IA ha sido desactivada en esta conversación."
-            
-            history = thread.historial_chat_json or []
-            history.append({"role": "user", "content": message_text, "timestamp": str(datetime.datetime.utcnow())})
-            history.append({
-                "role": "system",
-                "content": spam_message,
-                "timestamp": str(datetime.datetime.utcnow())
-            })
-            thread.historial_chat_json = list(history)
-            flag_modified(thread, "historial_chat_json")
-            thread.ultima_interaccion_timestamp = datetime.datetime.utcnow()
+        if not thread:
+            thread = ConversationsThread(
+                tenant_id=tenant_id,
+                canal_origen=channel,
+                contacto_identificador_plataforma=sender_id,
+                historial_chat_json=[]
+            )
+            db.add(thread)
             db.commit()
+            db.refresh(thread)
+
+        # 0. Rate limiting by sender_id to prevent spam
+        rate_limit_key = f"{tenant_id}:{channel}:{sender_id}"
+        if is_rate_limited(rate_limit_key):
+            print(f"[SPAM DETECTED] Throttling sender {sender_id} on {channel} for tenant {tenant_id}")
             
-            # Broadcast spam alert WebSocket event to tenant dashboard
+            # Only notify/deactivate if AI is currently active.
+            # This prevents spam loops (repeated emails/websockets/system alerts).
+            if thread.ai_active_status:
+                thread.ai_active_status = False
+                spam_message = f"Alerta de Spam: El contacto {sender_id} ha enviado demasiados mensajes. La IA ha sido desactivada en esta conversación."
+                
+                history = thread.historial_chat_json or []
+                history.append({"role": "user", "content": message_text, "timestamp": str(datetime.datetime.utcnow())})
+                history.append({
+                    "role": "system",
+                    "content": spam_message,
+                    "timestamp": str(datetime.datetime.utcnow())
+                })
+                thread.historial_chat_json = list(history)
+                flag_modified(thread, "historial_chat_json")
+                thread.ultima_interaccion_timestamp = datetime.datetime.utcnow()
+                db.commit()
+                
+                # Broadcast spam alert WebSocket event to tenant dashboard
+                await socket_manager.broadcast_to_tenant(
+                    tenant_id,
+                    {
+                        "event": "spam_alert",
+                        "channel": channel,
+                        "sender_id": sender_id,
+                        "message": spam_message
+                    }
+                )
+                
+                # Try sending email notification in background
+                await send_spam_email_alert(tenant_id, channel, sender_id, db)
+            else:
+                # If already inactive, just record the user message in history
+                history = thread.historial_chat_json or []
+                history.append({"role": "user", "content": message_text, "timestamp": str(datetime.datetime.utcnow())})
+                thread.historial_chat_json = list(history)
+                flag_modified(thread, "historial_chat_json")
+                thread.ultima_interaccion_timestamp = datetime.datetime.utcnow()
+                db.commit()
+
+            # Broadcast incoming user message to WebSocket in real time even under rate limit
             await socket_manager.broadcast_to_tenant(
-                tenant_id,
+                tenant_id, 
                 {
-                    "event": "spam_alert",
+                    "event": "new_message",
                     "channel": channel,
                     "sender_id": sender_id,
-                    "message": spam_message
+                    "content": message_text,
+                    "ai_active": False
                 }
             )
-            
-            # Try sending email notification in background
-            await send_spam_email_alert(tenant_id, channel, sender_id, db)
-        else:
-            # If already inactive, just record the user message in history
-            history = thread.historial_chat_json or []
-            history.append({"role": "user", "content": message_text, "timestamp": str(datetime.datetime.utcnow())})
-            thread.historial_chat_json = list(history)
-            flag_modified(thread, "historial_chat_json")
-            thread.ultima_interaccion_timestamp = datetime.datetime.utcnow()
-            db.commit()
+            return None
 
-        # Broadcast incoming user message to WebSocket in real time even under rate limit
+        # Broadcast incoming user message to WebSocket in real time
         await socket_manager.broadcast_to_tenant(
             tenant_id, 
             {
@@ -252,172 +268,162 @@ async def process_incoming_message(
                 "channel": channel,
                 "sender_id": sender_id,
                 "content": message_text,
-                "ai_active": False
+                "ai_active": thread.ai_active_status
             }
         )
-        return None
 
-    # Broadcast incoming user message to WebSocket in real time
-    await socket_manager.broadcast_to_tenant(
-        tenant_id, 
-        {
-            "event": "new_message",
-            "channel": channel,
-            "sender_id": sender_id,
-            "content": message_text,
-            "ai_active": thread.ai_active_status
-        }
-    )
+        # If human agent took over, save the incoming message to database history and do not reply automatically
+        if not thread.ai_active_status:
+            history = thread.historial_chat_json or []
+            history.append({"role": "user", "content": message_text, "timestamp": str(datetime.datetime.utcnow())})
+            thread.historial_chat_json = list(history)
+            flag_modified(thread, "historial_chat_json")
+            thread.ultima_interaccion_timestamp = datetime.datetime.utcnow()
+            db.commit()
+            return None
 
-    # If human agent took over, save the incoming message to database history and do not reply automatically
-    if not thread.ai_active_status:
+        # 2. Get Knowledge Base and Credentials
+        kb = db.query(KnowledgeBase).filter(KnowledgeBase.tenant_id == tenant_id).first()
+        kb_text = kb.texto_scrapeado_limpio if kb else "No hay información adicional de la empresa."
+
+        creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
+        api_key = decrypt_val(creds.gemini_api_key, salt_str=creds.encryption_salt) if (creds and creds.gemini_api_key) else None
+        model_name = creds.gemini_model_name if (creds and creds.gemini_model_name) else None
+        temperature = creds.gemini_temperature if (creds and creds.gemini_temperature is not None) else None
+
+        # 3. Call Gemini
+        history = thread.historial_chat_json
+        ai_response = await gemini_service.generate_response(
+            kb_text, history, message_text, 
+            api_key=api_key, model_name=model_name, temperature=temperature
+        )
+
+        # 4. CRM Leads Extraction
+        if ai_response.extracted_name or ai_response.extracted_email or ai_response.extracted_phone:
+            lead = LeadCRM(
+                tenant_id=tenant_id,
+                nombre_extraido=ai_response.extracted_name,
+                email=ai_response.extracted_email,
+                telefono=ai_response.extracted_phone,
+                red_social_origen=channel,
+                notas_interes_ia=f"Interés detectado en el chat. Respuesta IA: {ai_response.reply}"
+            )
+            db.add(lead)
+            db.commit()
+            # Notify CRM updates in real time
+            await socket_manager.broadcast_to_tenant(
+                tenant_id,
+                {"event": "new_lead", "lead_id": lead.id, "name": lead.nombre_extraido}
+            )
+
+        # 5. Check Human Handoff / Pause trigger
+        handoff_alert_triggered = False
+        if not ai_response.ai_active_status:
+            thread.ai_active_status = False
+            db.commit()
+            handoff_alert_triggered = True
+            # Trigger push/websocket alert to agent dashboard
+            await socket_manager.broadcast_to_tenant(
+                tenant_id,
+                {
+                    "event": "human_handoff_alert",
+                    "channel": channel,
+                    "sender_id": sender_id,
+                    "reason": "AI requested handoff / Sentiment detected"
+                }
+            )
+
+        # 6. Execute Reply based on strategy (Direct chat vs Comment-to-DM)
+        creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
+        
+        if is_public_comment and comment_id and creds:
+            # Public Comment: Comment-to-DM Strategy
+            # Reply publicly and trigger private DM
+            await omnichannel.handle_comment_to_dm(
+                creds=creds,
+                platform=channel,
+                comment_id=comment_id,
+                user_id=sender_id,
+                public_reply_text="¡Hola! Te envié todos los detalles por mensaje privado 📩",
+                private_dm_text=ai_response.reply
+            )
+        else:
+            # Direct Chat: Send standard direct message
+            if creds:
+                if channel == "whatsapp":
+                    await omnichannel.send_whatsapp_message(creds, sender_id, ai_response.reply)
+                    if handoff_alert_triggered:
+                        await omnichannel.send_whatsapp_message(creds, sender_id, "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
+                elif channel == "messenger":
+                    await omnichannel.send_messenger_message(creds, sender_id, ai_response.reply)
+                    if handoff_alert_triggered:
+                        await omnichannel.send_messenger_message(creds, sender_id, "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
+                elif channel == "telegram":
+                    await omnichannel.send_telegram_message(creds, sender_id, ai_response.reply)
+                    if handoff_alert_triggered:
+                        await omnichannel.send_telegram_message(creds, sender_id, "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
+                elif channel == "sms":
+                    await omnichannel.send_sms_twilio(creds, sender_id, ai_response.reply)
+                    if handoff_alert_triggered:
+                        await omnichannel.send_sms_twilio(creds, sender_id, "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
+                elif channel == "instagram":
+                    await omnichannel.send_instagram_dm(creds, sender_id, ai_response.reply)
+                    if handoff_alert_triggered:
+                        await omnichannel.send_instagram_dm(creds, sender_id, "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
+                else:
+                    print(f"[DIRECT MOCK SEND] Channel: {channel} | To: {sender_id} | Msg: {ai_response.reply}")
+                    if handoff_alert_triggered:
+                        print(f"[DIRECT MOCK SEND] Channel: {channel} | To: {sender_id} | Msg: Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
+
+        # 7. Update Thread History
         history = thread.historial_chat_json or []
         history.append({"role": "user", "content": message_text, "timestamp": str(datetime.datetime.utcnow())})
+        history.append({"role": "model", "content": ai_response.reply, "timestamp": str(datetime.datetime.utcnow())})
+        
+        if handoff_alert_triggered:
+            history.append({
+                "role": "system",
+                "content": "Derivación a agente humano: La IA solicitó asistencia o detectó un sentimiento que requiere atención.",
+                "timestamp": str(datetime.datetime.utcnow())
+            })
+            history.append({
+                "role": "model",
+                "content": "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.",
+                "timestamp": str(datetime.datetime.utcnow())
+            })
+            
         thread.historial_chat_json = list(history)
         flag_modified(thread, "historial_chat_json")
+        
         thread.ultima_interaccion_timestamp = datetime.datetime.utcnow()
         db.commit()
-        return None
 
-    # 2. Get Knowledge Base and Credentials
-    kb = db.query(KnowledgeBase).filter(KnowledgeBase.tenant_id == tenant_id).first()
-    kb_text = kb.texto_scrapeado_limpio if kb else "No hay información adicional de la empresa."
-
-    creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
-    api_key = decrypt_val(creds.gemini_api_key, salt_str=creds.encryption_salt) if (creds and creds.gemini_api_key) else None
-    model_name = creds.gemini_model_name if (creds and creds.gemini_model_name) else None
-    temperature = creds.gemini_temperature if (creds and creds.gemini_temperature is not None) else None
-
-    # 3. Call Gemini
-    history = thread.historial_chat_json
-    ai_response = await gemini_service.generate_response(
-        kb_text, history, message_text, 
-        api_key=api_key, model_name=model_name, temperature=temperature
-    )
-
-    # 4. CRM Leads Extraction
-    if ai_response.extracted_name or ai_response.extracted_email or ai_response.extracted_phone:
-        lead = LeadCRM(
-            tenant_id=tenant_id,
-            nombre_extraido=ai_response.extracted_name,
-            email=ai_response.extracted_email,
-            telefono=ai_response.extracted_phone,
-            red_social_origen=channel,
-            notas_interes_ia=f"Interés detectado en el chat. Respuesta IA: {ai_response.reply}"
-        )
-        db.add(lead)
-        db.commit()
-        # Notify CRM updates in real time
-        await socket_manager.broadcast_to_tenant(
-            tenant_id,
-            {"event": "new_lead", "lead_id": lead.id, "name": lead.nombre_extraido}
-        )
-
-    # 5. Check Human Handoff / Pause trigger
-    handoff_alert_triggered = False
-    if not ai_response.ai_active_status:
-        thread.ai_active_status = False
-        db.commit()
-        handoff_alert_triggered = True
-        # Trigger push/websocket alert to agent dashboard
-        await socket_manager.broadcast_to_tenant(
-            tenant_id,
-            {
-                "event": "human_handoff_alert",
-                "channel": channel,
-                "sender_id": sender_id,
-                "reason": "AI requested handoff / Sentiment detected"
-            }
-        )
-
-    # 6. Execute Reply based on strategy (Direct chat vs Comment-to-DM)
-    creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
-    
-    if is_public_comment and comment_id and creds:
-        # Public Comment: Comment-to-DM Strategy
-        # Reply publicly and trigger private DM
-        await omnichannel.handle_comment_to_dm(
-            creds=creds,
-            platform=channel,
-            comment_id=comment_id,
-            user_id=sender_id,
-            public_reply_text="¡Hola! Te envié todos los detalles por mensaje privado 📩",
-            private_dm_text=ai_response.reply
-        )
-    else:
-        # Direct Chat: Send standard direct message
-        if creds:
-            if channel == "whatsapp":
-                await omnichannel.send_whatsapp_message(creds, sender_id, ai_response.reply)
-                if handoff_alert_triggered:
-                    await omnichannel.send_whatsapp_message(creds, sender_id, "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
-            elif channel == "messenger":
-                await omnichannel.send_messenger_message(creds, sender_id, ai_response.reply)
-                if handoff_alert_triggered:
-                    await omnichannel.send_messenger_message(creds, sender_id, "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
-            elif channel == "telegram":
-                await omnichannel.send_telegram_message(creds, sender_id, ai_response.reply)
-                if handoff_alert_triggered:
-                    await omnichannel.send_telegram_message(creds, sender_id, "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
-            elif channel == "sms":
-                await omnichannel.send_sms_twilio(creds, sender_id, ai_response.reply)
-                if handoff_alert_triggered:
-                    await omnichannel.send_sms_twilio(creds, sender_id, "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
-            elif channel == "instagram":
-                await omnichannel.send_instagram_dm(creds, sender_id, ai_response.reply)
-                if handoff_alert_triggered:
-                    await omnichannel.send_instagram_dm(creds, sender_id, "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
-            else:
-                print(f"[DIRECT MOCK SEND] Channel: {channel} | To: {sender_id} | Msg: {ai_response.reply}")
-                if handoff_alert_triggered:
-                    print(f"[DIRECT MOCK SEND] Channel: {channel} | To: {sender_id} | Msg: Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.")
-
-    # 7. Update Thread History
-    history = thread.historial_chat_json or []
-    history.append({"role": "user", "content": message_text, "timestamp": str(datetime.datetime.utcnow())})
-    history.append({"role": "model", "content": ai_response.reply, "timestamp": str(datetime.datetime.utcnow())})
-    
-    if handoff_alert_triggered:
-        history.append({
-            "role": "system",
-            "content": "Derivación a agente humano: La IA solicitó asistencia o detectó un sentimiento que requiere atención.",
-            "timestamp": str(datetime.datetime.utcnow())
-        })
-        history.append({
-            "role": "model",
-            "content": "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.",
-            "timestamp": str(datetime.datetime.utcnow())
-        })
-        
-    thread.historial_chat_json = list(history)
-    flag_modified(thread, "historial_chat_json")
-    
-    thread.ultima_interaccion_timestamp = datetime.datetime.utcnow()
-    db.commit()
-
-    # Broadcast thread updates to Unified Inbox
-    await socket_manager.broadcast_to_tenant(
-        tenant_id,
-        {
-            "event": "message_sent",
-            "channel": channel,
-            "sender_id": sender_id,
-            "content": ai_response.reply,
-            "ai_active": thread.ai_active_status
-        }
-    )
-    if handoff_alert_triggered:
+        # Broadcast thread updates to Unified Inbox
         await socket_manager.broadcast_to_tenant(
             tenant_id,
             {
                 "event": "message_sent",
                 "channel": channel,
                 "sender_id": sender_id,
-                "content": "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.",
-                "ai_active": False
+                "content": ai_response.reply,
+                "ai_active": thread.ai_active_status
             }
         )
-    return ai_response
+        if handoff_alert_triggered:
+            await socket_manager.broadcast_to_tenant(
+                tenant_id,
+                {
+                    "event": "message_sent",
+                    "channel": channel,
+                    "sender_id": sender_id,
+                    "content": "Nuestra inteligencia artificial se ha pausado. Un agente humano continuará la conversación en breve.",
+                    "ai_active": False
+                }
+            )
+        return ai_response
+    finally:
+        if is_local_session:
+            db.close()
 
 
 # --- Webhooks Endpoints ---
@@ -463,7 +469,7 @@ async def receive_whatsapp(tenant_id: str, request: Request, background_tasks: B
             if text:
                 background_tasks.add_task(
                     process_incoming_message,
-                    tenant_id, "whatsapp", sender_id, text, db
+                    tenant_id, "whatsapp", sender_id, text, None
                 )
     except Exception as e:
         print(f"[WHATSAPP WEBHOOK PARSE ERROR] {str(e)}")
@@ -486,7 +492,7 @@ async def receive_telegram(tenant_id: str, request: Request, background_tasks: B
         if chat_id and text:
             background_tasks.add_task(
                 process_incoming_message,
-                tenant_id, "telegram", chat_id, text, db
+                tenant_id, "telegram", chat_id, text, None
             )
     except Exception as e:
         print(f"[TELEGRAM WEBHOOK PARSE ERROR] {str(e)}")
@@ -508,7 +514,7 @@ async def receive_sms(tenant_id: str, request: Request, background_tasks: Backgr
         if sender_id and text:
             background_tasks.add_task(
                 process_incoming_message,
-                tenant_id, "sms", sender_id, text, db
+                tenant_id, "sms", sender_id, text, None
             )
     except Exception as e:
         print(f"[SMS WEBHOOK PARSE ERROR] {str(e)}")
@@ -555,7 +561,7 @@ async def receive_instagram(tenant_id: str, request: Request, background_tasks: 
             if sender_id and text:
                 background_tasks.add_task(
                     process_incoming_message,
-                    tenant_id, "instagram", sender_id, text, db
+                    tenant_id, "instagram", sender_id, text, None
                 )
                 
         # Scenario B: Public Comment (Comment-to-DM Strategy)
@@ -578,7 +584,7 @@ async def receive_instagram(tenant_id: str, request: Request, background_tasks: 
                     if any(keyword in text.lower() for keyword in ["precio", "info", "costo", "detalles", "comprar", "interes", "quien", "?", "como"]):
                         background_tasks.add_task(
                             process_incoming_message,
-                            tenant_id, "instagram", sender_id, text, db, 
+                            tenant_id, "instagram", sender_id, text, None, 
                             is_public_comment=True, comment_id=comment_id
                         )
     except Exception as e:
@@ -596,7 +602,7 @@ async def receive_widget_message(
     """Processes message incoming from client website embed floating chat widget."""
     background_tasks.add_task(
         process_incoming_message,
-        tenant_id, "web_widget", payload.contacto_id, payload.mensaje, db
+        tenant_id, "web_widget", payload.contacto_id, payload.mensaje, None
     )
     return {"status": "queued"}
 
@@ -637,7 +643,7 @@ async def receive_messenger(tenant_id: str, request: Request, background_tasks: 
             if sender_id and text:
                 background_tasks.add_task(
                     process_incoming_message,
-                    tenant_id, "messenger", sender_id, text, db
+                    tenant_id, "messenger", sender_id, text, None
                 )
     except Exception as e:
         print(f"[MESSENGER WEBHOOK PARSE ERROR] {str(e)}")
@@ -684,7 +690,7 @@ async def receive_global_whatsapp(request: Request, background_tasks: Background
                     tenant_id = str(creds.tenant_id)
                     background_tasks.add_task(
                         process_incoming_message,
-                        tenant_id, "whatsapp", sender_id, text, db
+                        tenant_id, "whatsapp", sender_id, text, None
                     )
                 else:
                     print(f"[GLOBAL WHATSAPP WEBHOOK] No tenant found for phone_number_id: {phone_number_id}")
@@ -729,7 +735,7 @@ async def receive_global_messenger(request: Request, background_tasks: Backgroun
                     tenant_id = str(creds.tenant_id)
                     background_tasks.add_task(
                         process_incoming_message,
-                        tenant_id, "messenger", sender_id, text, db
+                        tenant_id, "messenger", sender_id, text, None
                     )
                 else:
                     print(f"[GLOBAL MESSENGER WEBHOOK] No tenant found for page_id: {page_id}")

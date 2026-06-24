@@ -1,0 +1,16 @@
+# Ruff configuration file
+target-version = "py312"
+line-length = 120
+
+[lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort (import sorting)
+]
+ignore = []
+
+[format]
+quote-style = "double"
+indent-style = "space"
