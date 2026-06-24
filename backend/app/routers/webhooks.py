@@ -14,9 +14,21 @@ import json
 import hmac
 import hashlib
 import time
+import redis
 
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 gemini_service = GeminiService()
+
+# Try connecting to Redis for production-grade rate limiting and deduplication
+redis_client = None
+try:
+    redis_client = redis.from_url(settings.REDIS_URL, socket_connect_timeout=1.0)
+    # Ping to check connection
+    redis_client.ping()
+    print("[REDIS] Webhooks: Connected successfully to Redis.")
+except Exception as e:
+    redis_client = None
+    print(f"[REDIS WARNING] Webhooks: Redis connection failed ({str(e)}). Falling back to local in-memory store.")
 
 def verify_meta_signature(body: bytes, signature_header: str, app_secret: str) -> bool:
     """Validates X-Hub-Signature-256 header sent by Meta to authenticate webhook requests."""
@@ -30,16 +42,32 @@ def verify_meta_signature(body: bytes, signature_header: str, app_secret: str) -
     ).hexdigest()
     return hmac.compare_digest(expected_sig, computed_sig)
 
-# In-memory stores for rate limiting and webhook message deduplication
+# Local in-memory fallback stores
 RATE_LIMIT_WINDOW = 60  # 1 minute
 RATE_LIMIT_MAX_REQUESTS = 30
 request_history = defaultdict(list)
 processed_message_ids = {}
 
 def is_rate_limited(key: str) -> bool:
-    """Checks if a key (IP address or contact identifier) has exceeded rate limits."""
+    """Checks if a key has exceeded rate limits, using Redis if available."""
+    if redis_client:
+        try:
+            rkey = f"ratelimit:{key}"
+            current = redis_client.get(rkey)
+            if current is None:
+                redis_client.set(rkey, 1, ex=RATE_LIMIT_WINDOW)
+                return False
+            else:
+                count = int(current)
+                if count >= RATE_LIMIT_MAX_REQUESTS:
+                    return True
+                redis_client.incr(rkey)
+                return False
+        except Exception as e:
+            print(f"[REDIS ERROR] Rate limiter fallback to local store: {str(e)}")
+            
+    # Local fallback
     current_time = time.time()
-    # Remove logs older than the time window
     request_history[key] = [t for t in request_history[key] if current_time - t < RATE_LIMIT_WINDOW]
     if len(request_history[key]) >= RATE_LIMIT_MAX_REQUESTS:
         return True
@@ -47,15 +75,22 @@ def is_rate_limited(key: str) -> bool:
     return False
 
 def is_duplicate_message(message_id: str) -> bool:
-    """Checks if a webhook message ID is duplicate, avoiding double-processing."""
+    """Checks if a message ID is duplicate, using Redis if available."""
     if not message_id:
         return False
+    if redis_client:
+        try:
+            rkey = f"dedup:{message_id}"
+            is_new = redis_client.set(rkey, "1", nx=True, ex=600)  # expires in 10 minutes
+            return not is_new
+        except Exception as e:
+            print(f"[REDIS ERROR] Deduplicator fallback to local store: {str(e)}")
+            
+    # Local fallback
     current_time = time.time()
-    # Clean up records older than 10 minutes
     for mid, t in list(processed_message_ids.items()):
         if current_time - t > 600:
             processed_message_ids.pop(mid, None)
-            
     if message_id in processed_message_ids:
         return True
     processed_message_ids[message_id] = current_time
@@ -72,6 +107,7 @@ async def process_incoming_message(
 ):
     """
     Core pipeline to process incoming omnichannel messages:
+    0. Rate limiting (Spam protection).
     1. Check/create thread.
     2. Read company knowledge base.
     3. Generate human-like reply using Gemini 3.5 Flash.
@@ -79,6 +115,33 @@ async def process_incoming_message(
     5. Perform action (Reply message / Comment-to-DM).
     6. Update chat history and trigger WebSocket human takeover alerts if paused.
     """
+    # 0. Rate limiting by sender_id to prevent spam
+    rate_limit_key = f"{tenant_id}:{channel}:{sender_id}"
+    if is_rate_limited(rate_limit_key):
+        print(f"[SPAM DETECTED] Throttling sender {sender_id} on {channel} for tenant {tenant_id}")
+        
+        # Turn off AI for this thread automatically
+        thread = db.query(ConversationsThread).filter(
+            ConversationsThread.tenant_id == tenant_id,
+            ConversationsThread.canal_origen == channel,
+            ConversationsThread.contacto_identificador_plataforma == sender_id
+        ).first()
+        if thread and thread.ai_active_status:
+            thread.ai_active_status = False
+            db.commit()
+            
+        # Broadcast spam alert WebSocket event to tenant dashboard
+        await socket_manager.broadcast_to_tenant(
+            tenant_id,
+            {
+                "event": "spam_alert",
+                "channel": channel,
+                "sender_id": sender_id,
+                "message": f"Alerta de Spam: El contacto {sender_id} ha enviado demasiados mensajes. La IA ha sido desactivada en esta conversación."
+            }
+        )
+        return None
+
     # 1. Fetch thread
     thread = db.query(ConversationsThread).filter(
         ConversationsThread.tenant_id == tenant_id,
@@ -225,11 +288,6 @@ async def verify_whatsapp(
 @router.post("/{tenant_id}/whatsapp")
 async def receive_whatsapp(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives WhatsApp Cloud API webhook JSON payload."""
-    client_ip = request.client.host if request.client else "unknown"
-    if is_rate_limited(client_ip):
-        print(f"[RATE LIMIT] Throttling WhatsApp request from IP: {client_ip}")
-        return {"status": "rate_limited"}
-        
     if settings.META_APP_SECRET:
         signature = request.headers.get("X-Hub-Signature-256")
         body_bytes = await request.body()
@@ -266,11 +324,6 @@ async def receive_whatsapp(tenant_id: str, request: Request, background_tasks: B
 @router.post("/{tenant_id}/telegram")
 async def receive_telegram(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives Telegram Bot API updates."""
-    client_ip = request.client.host if request.client else "unknown"
-    if is_rate_limited(client_ip):
-        print(f"[RATE LIMIT] Throttling Telegram request from IP: {client_ip}")
-        return {"status": "rate_limited"}
-        
     try:
         body = await request.json()
         update_id = str(body.get("update_id", ""))
@@ -294,11 +347,6 @@ async def receive_telegram(tenant_id: str, request: Request, background_tasks: B
 @router.post("/{tenant_id}/sms")
 async def receive_sms(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives Twilio SMS message webhook (Form URL Encoded)."""
-    client_ip = request.client.host if request.client else "unknown"
-    if is_rate_limited(client_ip):
-        print(f"[RATE LIMIT] Throttling Twilio request from IP: {client_ip}")
-        return Response(content="<Response></Response>", media_type="application/xml")
-        
     try:
         form_data = await request.form()
         msg_id = form_data.get("MessageSid", "")
@@ -326,11 +374,6 @@ async def verify_instagram(hub_challenge: str = Query(None, alias="hub.challenge
 @router.post("/{tenant_id}/instagram")
 async def receive_instagram(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Instagram Webhook supporting both DMs and public comment validation (Comment-to-DM)."""
-    client_ip = request.client.host if request.client else "unknown"
-    if is_rate_limited(client_ip):
-        print(f"[RATE LIMIT] Throttling Instagram request from IP: {client_ip}")
-        return {"status": "rate_limited"}
-        
     if settings.META_APP_SECRET:
         signature = request.headers.get("X-Hub-Signature-256")
         body_bytes = await request.body()
@@ -415,11 +458,6 @@ async def verify_messenger(
 @router.post("/{tenant_id}/messenger")
 async def receive_messenger(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives Messenger webhook JSON payload."""
-    client_ip = request.client.host if request.client else "unknown"
-    if is_rate_limited(client_ip):
-        print(f"[RATE LIMIT] Throttling Messenger request from IP: {client_ip}")
-        return {"status": "rate_limited"}
-        
     if settings.META_APP_SECRET:
         signature = request.headers.get("X-Hub-Signature-256")
         body_bytes = await request.body()
@@ -461,11 +499,6 @@ async def verify_global_whatsapp(
 @router.post("/whatsapp")
 async def receive_global_whatsapp(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives WhatsApp Cloud API webhook JSON payload and routes by phone_number_id."""
-    client_ip = request.client.host if request.client else "unknown"
-    if is_rate_limited(client_ip):
-        print(f"[RATE LIMIT] Throttling Global WhatsApp request from IP: {client_ip}")
-        return {"status": "rate_limited"}
-        
     if settings.META_APP_SECRET:
         signature = request.headers.get("X-Hub-Signature-256")
         body_bytes = await request.body()
@@ -520,11 +553,6 @@ async def verify_global_messenger(
 @router.post("/messenger")
 async def receive_global_messenger(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives Facebook Messenger webhook JSON payload and routes by page_id."""
-    client_ip = request.client.host if request.client else "unknown"
-    if is_rate_limited(client_ip):
-        print(f"[RATE LIMIT] Throttling Global Messenger request from IP: {client_ip}")
-        return {"status": "rate_limited"}
-        
     if settings.META_APP_SECRET:
         signature = request.headers.get("X-Hub-Signature-256")
         body_bytes = await request.body()

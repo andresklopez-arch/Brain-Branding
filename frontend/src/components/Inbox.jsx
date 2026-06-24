@@ -60,19 +60,32 @@ export default function Inbox({ tenantId }) {
       console.log("[WS RECEIVED]", data);
       
       // Reload list or update messages in real-time
-      if (data.event === "new_message" || data.event === "message_sent" || data.event === "human_handoff_alert") {
+      if (data.event === "new_message" || data.event === "message_sent" || data.event === "human_handoff_alert" || data.event === "spam_alert") {
         loadConversations();
         
         // If current open conversation matches the update, append to message list
         if (selectedThread && selectedThread.contacto_identificador_plataforma === data.sender_id) {
-          setMessages(prev => [
-            ...prev, 
-            {
-              role: data.event === "message_sent" ? "model" : "user",
-              content: data.content,
-              timestamp: new Date().toISOString()
-            }
-          ]);
+          if (data.event === "spam_alert") {
+            setMessages(prev => [
+              ...prev,
+              {
+                role: "system",
+                content: data.message,
+                timestamp: new Date().toISOString(),
+                is_alert: true
+              }
+            ]);
+            setSelectedThread(prev => ({ ...prev, ai_active_status: false }));
+          } else {
+            setMessages(prev => [
+              ...prev, 
+              {
+                role: data.event === "message_sent" ? "model" : "user",
+                content: data.content,
+                timestamp: new Date().toISOString()
+              }
+            ]);
+          }
           
           if (data.event === "human_handoff_alert") {
             setSelectedThread(prev => ({ ...prev, ai_active_status: false }));
@@ -231,8 +244,20 @@ export default function Inbox({ tenantId }) {
             {/* Chat Messages Log */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {messages.map((msg, index) => {
+                const isSystem = msg.role === 'system' || msg.is_alert;
                 const isAI = msg.role === 'model' && !msg.by_human;
                 const isHumanAgent = msg.role === 'model' && msg.by_human;
+                
+                if (isSystem) {
+                  return (
+                    <div key={index} className="flex justify-center my-2">
+                      <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-lg px-4 py-2 text-[10px] font-semibold flex items-center space-x-2 max-w-[90%]">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>{msg.content}</span>
+                      </div>
+                    </div>
+                  );
+                }
                 
                 return (
                   <div 
