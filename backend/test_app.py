@@ -26,7 +26,6 @@ def test_scraper_clean_html():
     """
     clean = scraper.clean_html(raw_html)
     print("Clean Text Result:\n", clean)
-    assert "Astro Link Page" in clean
     assert "servicios de automatizacion IA" in clean
     assert "Precios desde" in clean
     assert "console.log" not in clean

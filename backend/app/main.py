@@ -9,6 +9,16 @@ import os
 try:
     Base.metadata.create_all(bind=engine)
     print("[DATABASE] Tables synchronized successfully.")
+    
+    # Executing dynamic column migration for sqlite/postgres compat
+    from sqlalchemy import text
+    with engine.begin() as conn:
+        try:
+            conn.execute(text("ALTER TABLE channels_credentials ADD COLUMN gemini_api_key TEXT;"))
+            print("[DATABASE MIGRATION] Added gemini_api_key column to channels_credentials.")
+        except Exception as col_err:
+            # Column likely already exists
+            pass
 except Exception as e:
     print(f"[DATABASE ERROR] Could not synchronize tables: {str(e)}")
 

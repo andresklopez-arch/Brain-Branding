@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     JWT_SECRET: str = os.getenv("JWT_SECRET", "super-secret-key-astro-link-9988")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours
     META_APP_SECRET: str = os.getenv("META_APP_SECRET", "")
+    RATE_LIMIT_MAX_REQUESTS: int = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "30"))
+    RATE_LIMIT_WINDOW: int = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

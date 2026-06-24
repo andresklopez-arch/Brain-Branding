@@ -90,6 +90,7 @@ class ChannelsCredentials(Base):
     tiktok_business_access_token = Column(Text, nullable=True)
     youtube_api_key = Column(String(255), nullable=True)
     google_business_profile_id = Column(String(100), nullable=True)
+    gemini_api_key = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     tenant = relationship("Tenant", back_populates="credentials")

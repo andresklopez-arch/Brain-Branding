@@ -50,6 +50,7 @@ class CredentialsUpdate(BaseModel):
     tiktok_business_access_token: Optional[str] = None
     youtube_api_key: Optional[str] = None
     google_business_profile_id: Optional[str] = None
+    gemini_api_key: Optional[str] = None
 
 class CredentialsResponse(CredentialsUpdate):
     id: int

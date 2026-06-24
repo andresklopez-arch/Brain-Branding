@@ -1,7 +1,10 @@
 from fastapi import APIRouter, Depends, Query, Request, Response, BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 from typing import Optional
 from collections import defaultdict
+from email.mime.text import MIMEText
+from email.header import Header
 from ..database import get_db
 from ..models import Tenant, KnowledgeBase, ConversationsThread, LeadCRM, ChannelsCredentials
 from ..schemas import WidgetMessageInput
@@ -15,6 +18,7 @@ import hmac
 import hashlib
 import time
 import redis
+
 
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 gemini_service = GeminiService()
@@ -43,23 +47,24 @@ def verify_meta_signature(body: bytes, signature_header: str, app_secret: str) -
     return hmac.compare_digest(expected_sig, computed_sig)
 
 # Local in-memory fallback stores
-RATE_LIMIT_WINDOW = 60  # 1 minute
-RATE_LIMIT_MAX_REQUESTS = 30
 request_history = defaultdict(list)
 processed_message_ids = {}
 
 def is_rate_limited(key: str) -> bool:
     """Checks if a key has exceeded rate limits, using Redis if available."""
+    window = settings.RATE_LIMIT_WINDOW
+    max_reqs = settings.RATE_LIMIT_MAX_REQUESTS
+    
     if redis_client:
         try:
             rkey = f"ratelimit:{key}"
             current = redis_client.get(rkey)
             if current is None:
-                redis_client.set(rkey, 1, ex=RATE_LIMIT_WINDOW)
+                redis_client.set(rkey, 1, ex=window)
                 return False
             else:
                 count = int(current)
-                if count >= RATE_LIMIT_MAX_REQUESTS:
+                if count >= max_reqs:
                     return True
                 redis_client.incr(rkey)
                 return False
@@ -68,8 +73,8 @@ def is_rate_limited(key: str) -> bool:
             
     # Local fallback
     current_time = time.time()
-    request_history[key] = [t for t in request_history[key] if current_time - t < RATE_LIMIT_WINDOW]
-    if len(request_history[key]) >= RATE_LIMIT_MAX_REQUESTS:
+    request_history[key] = [t for t in request_history[key] if current_time - t < window]
+    if len(request_history[key]) >= max_reqs:
         return True
     request_history[key].append(current_time)
     return False
@@ -96,6 +101,48 @@ def is_duplicate_message(message_id: str) -> bool:
     processed_message_ids[message_id] = current_time
     return False
 
+async def send_spam_email_alert(tenant_id: str, channel: str, sender_id: str, db: Session):
+    """Sends email alert to the tenant if they have SMTP email credentials configured."""
+    creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
+    if not creds or not creds.email_imap_smtp_config_json:
+        return
+        
+    config = creds.email_imap_smtp_config_json
+    smtp_server = config.get("smtp_server")
+    smtp_port = config.get("smtp_port")
+    username = config.get("username") or config.get("smtp_user") or config.get("email_config_user")
+    password = config.get("password") or config.get("smtp_pass") or config.get("email_config_pass")
+    
+    if not smtp_server or not smtp_port or not username or not password:
+        return
+        
+    subject = "⚠️ Alerta de Spam en Astro Link"
+    body = f"""
+Se ha detectado posible SPAM del contacto '{sender_id}' en el canal '{channel}'.
+
+La IA ha sido desactivada automáticamente para esta conversación para proteger tu cuota y permitir atención humana.
+
+Inicia sesión en tu panel de Astro Link para gestionar este chat.
+"""
+    
+    msg = MIMEText(body, "plain", "utf-8")
+    msg["Subject"] = Header(subject, "utf-8")
+    msg["From"] = username
+    msg["To"] = username
+    
+    try:
+        import asyncio
+        import smtplib
+        def send():
+            with smtplib.SMTP(smtp_server, int(smtp_port)) as server:
+                server.starttls()
+                server.login(username, password)
+                server.sendmail(username, [username], msg.as_string())
+        await asyncio.get_event_loop().run_in_executor(None, send)
+        print(f"[SMTP EMAIL ALERT] Sent spam alert email successfully to {username}.")
+    except Exception as e:
+        print(f"[SMTP EMAIL ALERT ERROR] Failed to send email alert: {str(e)}")
+
 async def process_incoming_message(
     tenant_id: str,
     channel: str,
@@ -115,34 +162,7 @@ async def process_incoming_message(
     5. Perform action (Reply message / Comment-to-DM).
     6. Update chat history and trigger WebSocket human takeover alerts if paused.
     """
-    # 0. Rate limiting by sender_id to prevent spam
-    rate_limit_key = f"{tenant_id}:{channel}:{sender_id}"
-    if is_rate_limited(rate_limit_key):
-        print(f"[SPAM DETECTED] Throttling sender {sender_id} on {channel} for tenant {tenant_id}")
-        
-        # Turn off AI for this thread automatically
-        thread = db.query(ConversationsThread).filter(
-            ConversationsThread.tenant_id == tenant_id,
-            ConversationsThread.canal_origen == channel,
-            ConversationsThread.contacto_identificador_plataforma == sender_id
-        ).first()
-        if thread and thread.ai_active_status:
-            thread.ai_active_status = False
-            db.commit()
-            
-        # Broadcast spam alert WebSocket event to tenant dashboard
-        await socket_manager.broadcast_to_tenant(
-            tenant_id,
-            {
-                "event": "spam_alert",
-                "channel": channel,
-                "sender_id": sender_id,
-                "message": f"Alerta de Spam: El contacto {sender_id} ha enviado demasiados mensajes. La IA ha sido desactivada en esta conversación."
-            }
-        )
-        return None
-
-    # 1. Fetch thread
+    # 1. Fetch or create thread
     thread = db.query(ConversationsThread).filter(
         ConversationsThread.tenant_id == tenant_id,
         ConversationsThread.canal_origen == channel,
@@ -160,6 +180,64 @@ async def process_incoming_message(
         db.commit()
         db.refresh(thread)
 
+    # 0. Rate limiting by sender_id to prevent spam
+    rate_limit_key = f"{tenant_id}:{channel}:{sender_id}"
+    if is_rate_limited(rate_limit_key):
+        print(f"[SPAM DETECTED] Throttling sender {sender_id} on {channel} for tenant {tenant_id}")
+        
+        # Only notify/deactivate if AI is currently active.
+        # This prevents spam loops (repeated emails/websockets/system alerts).
+        if thread.ai_active_status:
+            thread.ai_active_status = False
+            spam_message = f"Alerta de Spam: El contacto {sender_id} ha enviado demasiados mensajes. La IA ha sido desactivada en esta conversación."
+            
+            history = thread.historial_chat_json or []
+            history.append({"role": "user", "content": message_text, "timestamp": str(datetime.datetime.utcnow())})
+            history.append({
+                "role": "system",
+                "content": spam_message,
+                "timestamp": str(datetime.datetime.utcnow())
+            })
+            thread.historial_chat_json = list(history)
+            flag_modified(thread, "historial_chat_json")
+            thread.ultima_interaccion_timestamp = datetime.datetime.utcnow()
+            db.commit()
+            
+            # Broadcast spam alert WebSocket event to tenant dashboard
+            await socket_manager.broadcast_to_tenant(
+                tenant_id,
+                {
+                    "event": "spam_alert",
+                    "channel": channel,
+                    "sender_id": sender_id,
+                    "message": spam_message
+                }
+            )
+            
+            # Try sending email notification in background
+            await send_spam_email_alert(tenant_id, channel, sender_id, db)
+        else:
+            # If already inactive, just record the user message in history
+            history = thread.historial_chat_json or []
+            history.append({"role": "user", "content": message_text, "timestamp": str(datetime.datetime.utcnow())})
+            thread.historial_chat_json = list(history)
+            flag_modified(thread, "historial_chat_json")
+            thread.ultima_interaccion_timestamp = datetime.datetime.utcnow()
+            db.commit()
+
+        # Broadcast incoming user message to WebSocket in real time even under rate limit
+        await socket_manager.broadcast_to_tenant(
+            tenant_id, 
+            {
+                "event": "new_message",
+                "channel": channel,
+                "sender_id": sender_id,
+                "content": message_text,
+                "ai_active": False
+            }
+        )
+        return None
+
     # Broadcast incoming user message to WebSocket in real time
     await socket_manager.broadcast_to_tenant(
         tenant_id, 
@@ -172,17 +250,26 @@ async def process_incoming_message(
         }
     )
 
-    # If human agent took over, do not reply automatically
+    # If human agent took over, save the incoming message to database history and do not reply automatically
     if not thread.ai_active_status:
+        history = thread.historial_chat_json or []
+        history.append({"role": "user", "content": message_text, "timestamp": str(datetime.datetime.utcnow())})
+        thread.historial_chat_json = list(history)
+        flag_modified(thread, "historial_chat_json")
+        thread.ultima_interaccion_timestamp = datetime.datetime.utcnow()
+        db.commit()
         return None
 
-    # 2. Get Knowledge Base
+    # 2. Get Knowledge Base and Credentials
     kb = db.query(KnowledgeBase).filter(KnowledgeBase.tenant_id == tenant_id).first()
     kb_text = kb.texto_scrapeado_limpio if kb else "No hay información adicional de la empresa."
 
+    creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
+    api_key = creds.gemini_api_key if creds else None
+
     # 3. Call Gemini
     history = thread.historial_chat_json
-    ai_response = await gemini_service.generate_response(kb_text, history, message_text)
+    ai_response = await gemini_service.generate_response(kb_text, history, message_text, api_key=api_key)
 
     # 4. CRM Leads Extraction
     if ai_response.extracted_name or ai_response.extracted_email or ai_response.extracted_phone:
@@ -203,9 +290,11 @@ async def process_incoming_message(
         )
 
     # 5. Check Human Handoff / Pause trigger
+    handoff_alert_triggered = False
     if not ai_response.ai_active_status:
         thread.ai_active_status = False
         db.commit()
+        handoff_alert_triggered = True
         # Trigger push/websocket alert to agent dashboard
         await socket_manager.broadcast_to_tenant(
             tenant_id,
@@ -248,11 +337,16 @@ async def process_incoming_message(
                 print(f"[DIRECT MOCK SEND] Channel: {channel} | To: {sender_id} | Msg: {ai_response.reply}")
 
     # 7. Update Thread History
+    history = thread.historial_chat_json or []
     history.append({"role": "user", "content": message_text, "timestamp": str(datetime.datetime.utcnow())})
+    if handoff_alert_triggered:
+        history.append({
+            "role": "system",
+            "content": "Derivación a agente humano: La IA solicitó asistencia o detectó un sentimiento que requiere atención.",
+            "timestamp": str(datetime.datetime.utcnow())
+        })
     history.append({"role": "model", "content": ai_response.reply, "timestamp": str(datetime.datetime.utcnow())})
     thread.historial_chat_json = list(history)
-    
-    from sqlalchemy.orm.attributes import flag_modified
     flag_modified(thread, "historial_chat_json")
     
     thread.ultima_interaccion_timestamp = datetime.datetime.utcnow()
@@ -270,6 +364,7 @@ async def process_incoming_message(
         }
     )
     return ai_response
+
 
 # --- Webhooks Endpoints ---
 

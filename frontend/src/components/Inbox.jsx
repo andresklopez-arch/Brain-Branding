@@ -21,8 +21,55 @@ export default function Inbox({ tenantId }) {
   const [replyText, setReplyText] = useState('');
   const [loading, setLoading] = useState(false);
   
+  // Sandbox state
+  const [sandboxContactId, setSandboxContactId] = useState('cliente-simulado-01');
+  const [sandboxMessage, setSandboxMessage] = useState('');
+  const [sendingSandbox, setSendingSandbox] = useState(false);
+  const [sandboxError, setSandboxError] = useState(null);
+  const [sandboxSuccess, setSandboxSuccess] = useState(false);
+  const [showInlineSimulator, setShowInlineSimulator] = useState(false);
+  const [inlineSimMessage, setInlineSimMessage] = useState('');
+  
   const wsRef = useRef(null);
   const chatBottomRef = useRef(null);
+
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+  const handleSendSandbox = async (e, customContactId = null, customMessage = null) => {
+    if (e) e.preventDefault();
+    const contactId = customContactId || sandboxContactId;
+    const msg = customMessage || sandboxMessage;
+    
+    if (!contactId.trim() || !msg.trim()) return;
+
+    setSendingSandbox(true);
+    setSandboxError(null);
+    setSandboxSuccess(false);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/webhooks/${tenantId}/widget`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contacto_id: contactId,
+          mensaje: msg
+        })
+      });
+
+      if (!res.ok) throw new Error('Error al enviar el mensaje simulado');
+      
+      setSandboxSuccess(true);
+      if (!customMessage) setSandboxMessage('');
+      
+      // Clear success notification after 3 seconds
+      setTimeout(() => setSandboxSuccess(false), 3000);
+    } catch (err) {
+      console.error(err);
+      setSandboxError(err.message || 'Error al conectar con el servidor');
+    } finally {
+      setSendingSandbox(false);
+    }
+  };
 
   useEffect(() => {
     if (tenantId) {
@@ -209,6 +256,19 @@ export default function Inbox({ tenantId }) {
               </div>
 
               <div className="flex items-center space-x-3">
+                {/* Simulated message button */}
+                <button
+                  onClick={() => setShowInlineSimulator(!showInlineSimulator)}
+                  className={`text-xs font-semibold py-1.5 px-3 rounded-lg border transition-all flex items-center space-x-1.5 ${
+                    showInlineSimulator 
+                      ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300' 
+                      : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:text-slate-300 hover:bg-slate-800'
+                  }`}
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Simular Mensaje</span>
+                </button>
+
                 {/* Human Takeover Toggle */}
                 <button
                   onClick={() => handleToggleAI(selectedThread.id, selectedThread.ai_active_status)}
@@ -232,6 +292,53 @@ export default function Inbox({ tenantId }) {
                 </button>
               </div>
             </div>
+
+            {/* Inline client simulator */}
+            {showInlineSimulator && (
+              <div className="bg-indigo-950/20 border-b border-indigo-500/20 px-4 py-2 flex items-center justify-between space-x-3 text-xs text-indigo-300">
+                <div className="flex items-center space-x-2 flex-1">
+                  <Bot className="w-4 h-4 text-indigo-400 animate-pulse" />
+                  <span className="font-bold text-[10px] uppercase tracking-wider">Simular Mensaje Cliente:</span>
+                  <input
+                    type="text"
+                    value={inlineSimMessage}
+                    onChange={(e) => setInlineSimMessage(e.target.value)}
+                    placeholder="Escribe un mensaje simulado..."
+                    className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-indigo-500"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleSendSandbox(null, selectedThread.contacto_identificador_plataforma, inlineSimMessage);
+                        setInlineSimMessage('');
+                        setShowInlineSimulator(false);
+                      }
+                    }}
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => {
+                      handleSendSandbox(null, selectedThread.contacto_identificador_plataforma, inlineSimMessage);
+                      setInlineSimMessage('');
+                      setShowInlineSimulator(false);
+                    }}
+                    disabled={!inlineSimMessage.trim()}
+                    className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer"
+                  >
+                    Enviar
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowInlineSimulator(false);
+                      setInlineSimMessage('');
+                    }}
+                    className="text-slate-500 hover:text-slate-300 text-[10px] font-semibold cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Warning Banner if AI is turned off */}
             {!selectedThread.ai_active_status && (
@@ -303,9 +410,102 @@ export default function Inbox({ tenantId }) {
             </form>
           </>
         ) : (
-          <div className="flex-1 flex flex-col justify-center items-center text-slate-500">
-            <MessageSquare className="w-12 h-12 mb-2 text-slate-700" />
-            <p className="text-xs">Selecciona un chat activo para comenzar</p>
+          <div className="flex-1 flex flex-col justify-center items-center p-8 bg-slate-950/40 overflow-y-auto">
+            <div className="max-w-md w-full bg-slate-900/60 border border-indigo-500/20 rounded-2xl p-6 shadow-2xl backdrop-blur-md">
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-xl text-indigo-400">
+                  <Bot className="w-6 h-6 animate-pulse" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white uppercase tracking-wider">Consola de Simulación</h4>
+                  <p className="text-[10px] text-indigo-300">Sandbox para pruebas de IA sin tokens reales</p>
+                </div>
+              </div>
+              
+              <p className="text-xs text-slate-400 leading-relaxed mb-6">
+                Simula mensajes entrantes desde el chat de tu sitio web. Esto permite verificar la respuesta del bot de IA entrenado con tu base de conocimientos scrapeada en tiempo real.
+              </p>
+
+              <form onSubmit={(e) => handleSendSandbox(e)} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Identificador de Contacto (Mock)
+                  </label>
+                  <input
+                    type="text"
+                    value={sandboxContactId}
+                    onChange={(e) => setSandboxContactId(e.target.value)}
+                    placeholder="Ej: cliente-anonimo-45"
+                    className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-3.5 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-indigo-500 transition-all font-mono"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Mensaje del Cliente
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={sandboxMessage}
+                    onChange={(e) => setSandboxMessage(e.target.value)}
+                    placeholder="Ej: Hola, ¿qué precio tiene el servicio de ferretería a domicilio?"
+                    className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-3.5 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-indigo-500 transition-all resize-none"
+                    required
+                  />
+                </div>
+
+                {sandboxError && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-center space-x-2 text-xs text-red-400">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>{sandboxError}</span>
+                  </div>
+                )}
+
+                {sandboxSuccess && (
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 flex items-center space-x-2 text-xs text-emerald-400">
+                    <ShieldCheck className="w-4 h-4 flex-shrink-0" />
+                    <span>¡Mensaje enviado! Observa la lista de chats activos.</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={sendingSandbox || !sandboxMessage.trim()}
+                  className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center space-x-2 transition-all shadow-lg shadow-indigo-600/10 cursor-pointer"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>{sendingSandbox ? 'Enviando...' : 'Enviar Mensaje de Prueba'}</span>
+                </button>
+              </form>
+
+              <div className="mt-6 pt-4 border-t border-slate-800/60">
+                <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Mensajes de prueba rápidos
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    "¿Cuáles son sus horarios?",
+                    "Necesito cotizar materiales",
+                    "Hola, ¿dónde están ubicados?"
+                  ].map((quickMsg, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleSendSandbox(null, sandboxContactId, quickMsg)}
+                      disabled={sendingSandbox}
+                      className="text-[10px] bg-slate-950 hover:bg-slate-800 text-indigo-300 hover:text-white border border-slate-800 rounded-lg px-2.5 py-1.5 transition-all text-left truncate max-w-full cursor-pointer"
+                    >
+                      {quickMsg}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-4 text-center text-slate-500 text-xs flex items-center space-x-1.5">
+              <MessageSquare className="w-4 h-4 text-slate-600" />
+              <span>O selecciona un chat activo de la izquierda para comenzar a interactuar manualmente.</span>
+            </div>
           </div>
         )}
       </div>

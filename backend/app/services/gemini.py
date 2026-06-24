@@ -44,7 +44,8 @@ REGLAS DE COMPORTAMIENTO:
         self, 
         knowledge_base: str, 
         chat_history: List[Dict[str, Any]], 
-        new_message: str
+        new_message: str,
+        api_key: Optional[str] = None
     ) -> GeminiOutput:
         """Calls Gemini 3.5 Flash using structured schema output."""
         system_instruction = self.get_system_prompt(knowledge_base)
@@ -59,13 +60,19 @@ REGLAS DE COMPORTAMIENTO:
         contents.append(f"user: {new_message}")
         prompt = "\n".join(contents)
 
-        if not self.client:
+        current_api_key = api_key or self.api_key
+        if not current_api_key:
             # Mock mode implementation for offline/keyless development
             return self._mock_response(new_message)
 
         try:
+            # Dynamically instantiate genai.Client if using tenant key, or reuse self.client
+            client = genai.Client(api_key=current_api_key) if api_key else self.client
+            if not client:
+                client = genai.Client(api_key=current_api_key)
+
             # We use gemini-2.5-flash as the default endpoint (Gemini 3.5 Flash alias or current stable flash)
-            response = self.client.models.generate_content(
+            response = client.models.generate_content(
                 model='gemini-2.5-flash',
                 contents=prompt,
                 config=types.GenerateContentConfig(

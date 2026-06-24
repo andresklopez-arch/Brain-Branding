@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
   MessageSquare, Smartphone, Instagram, Send, Mail, Twitter, 
-  Video, Youtube, MapPin, Code, ShieldCheck, ChevronRight, Save, ToggleLeft, ToggleRight
+  Video, Youtube, MapPin, Code, ShieldCheck, ChevronRight, Save, ToggleLeft, ToggleRight,
+  Bot
 } from 'lucide-react';
 import { api } from '../services/api';
 
 const CHANNELS_CONFIG = [
+  { key: 'gemini', name: 'Motor de IA (Gemini)', icon: Bot, color: 'border-indigo-500/30 text-indigo-400 hover:border-indigo-500/50 bg-indigo-500/5', fields: [{key: 'gemini_api_key', label: 'Gemini API Key', secret: true}] },
   { key: 'whatsapp', name: 'WhatsApp Business', icon: MessageSquare, color: 'border-emerald-500/20 text-emerald-400 hover:border-emerald-500/40 bg-emerald-500/5', fields: [{key: 'whatsapp_phone_id', label: 'Phone Number ID'}, {key: 'whatsapp_token', label: 'Access Token', secret: true}] },
   { key: 'telegram', name: 'Telegram Bot', icon: Send, color: 'border-sky-500/20 text-sky-400 hover:border-sky-500/40 bg-sky-500/5', fields: [{key: 'telegram_bot_token', label: 'Bot Token', secret: true}] },
   { key: 'sms', name: 'Twilio SMS', icon: Smartphone, color: 'border-red-500/20 text-red-400 hover:border-red-500/40 bg-red-500/5', fields: [{key: 'twilio_sms_sid', label: 'Account SID'}, {key: 'twilio_sms_auth', label: 'Auth Token', secret: true}] },
