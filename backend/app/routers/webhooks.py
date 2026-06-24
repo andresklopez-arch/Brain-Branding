@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, Request, Response, BackgroundTasks
+from fastapi import APIRouter, Depends, Query, Request, Response, BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
 from ..database import get_db
@@ -7,11 +7,26 @@ from ..schemas import WidgetMessageInput
 from ..services.gemini import GeminiService
 from ..services.channels import omnichannel
 from ..services.websocket import socket_manager
+from ..config import settings
 import datetime
 import json
+import hmac
+import hashlib
 
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 gemini_service = GeminiService()
+
+def verify_meta_signature(body: bytes, signature_header: str, app_secret: str) -> bool:
+    """Validates X-Hub-Signature-256 header sent by Meta to authenticate webhook requests."""
+    if not signature_header or not signature_header.startswith("sha256="):
+        return False
+    expected_sig = signature_header.split("sha256=")[1]
+    computed_sig = hmac.new(
+        app_secret.encode('utf-8'),
+        body,
+        hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected_sig, computed_sig)
 
 async def process_incoming_message(
     tenant_id: str,
@@ -177,6 +192,12 @@ async def verify_whatsapp(
 @router.post("/{tenant_id}/whatsapp")
 async def receive_whatsapp(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives WhatsApp Cloud API webhook JSON payload."""
+    if settings.META_APP_SECRET:
+        signature = request.headers.get("X-Hub-Signature-256")
+        body_bytes = await request.body()
+        if not verify_meta_signature(body_bytes, signature, settings.META_APP_SECRET):
+            print("[SECURITY WARNING] Invalid WhatsApp webhook signature! Rejecting request.")
+            raise HTTPException(status_code=403, detail="Invalid signature")
     try:
         body = await request.json()
         # Parse payload WhatsApp message structure
@@ -242,6 +263,12 @@ async def verify_instagram(hub_challenge: str = Query(None, alias="hub.challenge
 @router.post("/{tenant_id}/instagram")
 async def receive_instagram(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Instagram Webhook supporting both DMs and public comment validation (Comment-to-DM)."""
+    if settings.META_APP_SECRET:
+        signature = request.headers.get("X-Hub-Signature-256")
+        body_bytes = await request.body()
+        if not verify_meta_signature(body_bytes, signature, settings.META_APP_SECRET):
+            print("[SECURITY WARNING] Invalid Instagram webhook signature! Rejecting request.")
+            raise HTTPException(status_code=403, detail="Invalid signature")
     try:
         body = await request.json()
         entry = body.get("entry", [])[0]
@@ -310,6 +337,12 @@ async def verify_messenger(
 @router.post("/{tenant_id}/messenger")
 async def receive_messenger(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives Messenger webhook JSON payload."""
+    if settings.META_APP_SECRET:
+        signature = request.headers.get("X-Hub-Signature-256")
+        body_bytes = await request.body()
+        if not verify_meta_signature(body_bytes, signature, settings.META_APP_SECRET):
+            print("[SECURITY WARNING] Invalid Messenger webhook signature! Rejecting request.")
+            raise HTTPException(status_code=403, detail="Invalid signature")
     try:
         body = await request.json()
         entry = body.get("entry", [])[0]
@@ -340,6 +373,12 @@ async def verify_global_whatsapp(
 @router.post("/whatsapp")
 async def receive_global_whatsapp(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives WhatsApp Cloud API webhook JSON payload and routes by phone_number_id."""
+    if settings.META_APP_SECRET:
+        signature = request.headers.get("X-Hub-Signature-256")
+        body_bytes = await request.body()
+        if not verify_meta_signature(body_bytes, signature, settings.META_APP_SECRET):
+            print("[SECURITY WARNING] Invalid Global WhatsApp webhook signature! Rejecting request.")
+            raise HTTPException(status_code=403, detail="Invalid signature")
     try:
         body = await request.json()
         entry = body.get("entry", [])[0]
@@ -383,6 +422,12 @@ async def verify_global_messenger(
 @router.post("/messenger")
 async def receive_global_messenger(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives Facebook Messenger webhook JSON payload and routes by page_id."""
+    if settings.META_APP_SECRET:
+        signature = request.headers.get("X-Hub-Signature-256")
+        body_bytes = await request.body()
+        if not verify_meta_signature(body_bytes, signature, settings.META_APP_SECRET):
+            print("[SECURITY WARNING] Invalid Global Messenger webhook signature! Rejecting request.")
+            raise HTTPException(status_code=403, detail="Invalid signature")
     try:
         body = await request.json()
         entry = body.get("entry", [])[0]

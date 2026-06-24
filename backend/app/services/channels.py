@@ -1,4 +1,5 @@
 import httpx
+import asyncio
 from typing import Dict, Any, Optional
 from ..models import ChannelsCredentials
 import json
@@ -8,7 +9,7 @@ class OmnichannelService:
         self.client = httpx.AsyncClient()
 
     async def send_whatsapp_message(self, creds: ChannelsCredentials, phone_number: str, text: str):
-        """Sends WhatsApp message via Meta Cloud API."""
+        """Sends WhatsApp message via Meta Cloud API with retry logic."""
         if not creds.whatsapp_token or not creds.whatsapp_phone_id:
             print(f"[MOCK WHATSAPP] To: {phone_number} | Message: {text}")
             return True
@@ -24,15 +25,22 @@ class OmnichannelService:
             "type": "text",
             "text": {"body": text}
         }
-        try:
-            response = await self.client.post(url, headers=headers, json=payload, timeout=10.0)
-            return response.status_code in [200, 201]
-        except Exception as e:
-            print(f"[WHATSAPP ERROR] Failed to send: {str(e)}")
-            return False
+        
+        for attempt in range(1, 4):
+            try:
+                response = await self.client.post(url, headers=headers, json=payload, timeout=10.0)
+                if response.status_code in [200, 201]:
+                    return True
+                else:
+                    print(f"[WHATSAPP ERROR] Attempt {attempt} returned status: {response.status_code}")
+            except Exception as e:
+                print(f"[WHATSAPP ERROR] Attempt {attempt} failed: {str(e)}")
+            if attempt < 3:
+                await asyncio.sleep(1.0 * attempt)
+        return False
 
     async def send_messenger_message(self, creds: ChannelsCredentials, recipient_id: str, text: str):
-        """Sends Facebook Messenger message via Meta Graph API."""
+        """Sends Facebook Messenger message via Meta Graph API with retry logic."""
         if not creds.messenger_page_token or not creds.messenger_page_id:
             print(f"[MOCK MESSENGER] Recipient: {recipient_id} | Message: {text}")
             return True
@@ -44,12 +52,19 @@ class OmnichannelService:
             "recipient": {"id": recipient_id},
             "message": {"text": text}
         }
-        try:
-            response = await self.client.post(url, params=params, headers=headers, json=payload, timeout=10.0)
-            return response.status_code == 200
-        except Exception as e:
-            print(f"[MESSENGER ERROR] Failed to send DM: {str(e)}")
-            return False
+        
+        for attempt in range(1, 4):
+            try:
+                response = await self.client.post(url, params=params, headers=headers, json=payload, timeout=10.0)
+                if response.status_code == 200:
+                    return True
+                else:
+                    print(f"[MESSENGER ERROR] Attempt {attempt} returned status: {response.status_code}")
+            except Exception as e:
+                print(f"[MESSENGER ERROR] Attempt {attempt} failed: {str(e)}")
+            if attempt < 3:
+                await asyncio.sleep(1.0 * attempt)
+        return False
 
     async def send_telegram_message(self, creds: ChannelsCredentials, chat_id: str, text: str):
         """Sends Telegram message via Telegram Bot API."""

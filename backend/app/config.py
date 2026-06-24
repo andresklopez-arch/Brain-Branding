@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     JWT_SECRET: str = os.getenv("JWT_SECRET", "super-secret-key-astro-link-9988")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours
+    META_APP_SECRET: str = os.getenv("META_APP_SECRET", "")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
