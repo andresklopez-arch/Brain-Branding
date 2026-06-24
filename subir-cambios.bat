@@ -34,10 +34,11 @@ exit /b 1
 
 :COMMIT_FAILED
 git status | findstr /C:"nothing to commit" >nul
-if not errorlevel 1 (
-    echo [INFO] No hay cambios pendientes por confirmar.
-    goto CHECK_REMOTE
-)
+if errorlevel 1 goto REAL_COMMIT_ERROR
+echo [INFO] No hay cambios pendientes por confirmar.
+goto CHECK_REMOTE
+
+:REAL_COMMIT_ERROR
 echo [ERROR] Fallo al realizar el commit ('git commit').
 exit /b 1
 
