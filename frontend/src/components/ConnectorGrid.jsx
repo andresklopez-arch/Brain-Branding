@@ -247,8 +247,28 @@ export default function ConnectorGrid({ tenantId }) {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [visibleSecrets, setVisibleSecrets] = useState({});
   const [testStatus, setTestStatus] = useState({});
-  const [testLog, setTestLog] = useState({});
+  const [testLog, setTestLog] = useState(() => {
+    try {
+      const saved = localStorage.getItem('astro_test_logs');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
   const [toast, setToast] = useState(null);
+
+  const [show2faModal, setShow2faModal] = useState(false);
+  const [pendingChannelKey, setPendingChannelKey] = useState(null);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationError, setVerificationError] = useState('');
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('astro_test_logs', JSON.stringify(testLog));
+    } catch (e) {
+      console.error("Error saving test logs to localStorage", e);
+    }
+  }, [testLog]);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -351,6 +371,16 @@ export default function ConnectorGrid({ tenantId }) {
       setSaveStatus(prev => ({ ...prev, [channelKey]: 'error' }));
       const channel = CHANNELS_CONFIG.find(c => c.key === channelKey);
       showToast(`Fallo al guardar credenciales de ${channel?.name || channelKey}.`, 'error');
+    }
+  };
+
+  const handleConfirm2FA = () => {
+    if (verificationCode === '1234') {
+      setShow2faModal(false);
+      handleSave(pendingChannelKey);
+      setPendingChannelKey(null);
+    } else {
+      setVerificationError('Código de verificación incorrecto. Intenta con "1234" (Simulado).');
     }
   };
 
@@ -646,7 +676,12 @@ export default function ConnectorGrid({ tenantId }) {
                           <div className="flex gap-3 mt-3">
                             {chan.fields.length > 0 && (
                               <button
-                                onClick={() => handleSave(chan.key)}
+                                onClick={() => {
+                                  setPendingChannelKey(chan.key);
+                                  setVerificationCode('');
+                                  setVerificationError('');
+                                  setShow2faModal(true);
+                                }}
                                 className="flex-grow bg-brand-600 hover:bg-brand-500 text-white font-semibold py-1.5 px-3 rounded-lg text-xs flex items-center justify-center space-x-1 transition-all"
                               >
                                 <Save className="w-3.5 h-3.5" />
@@ -715,6 +750,60 @@ export default function ConnectorGrid({ tenantId }) {
           type={toast.type} 
           onClose={() => setToast(null)} 
         />
+      )}
+
+      {show2faModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl relative space-y-4">
+            <div className="flex items-center space-x-3 text-brand-400">
+              <ShieldCheck className="w-6 h-6" />
+              <h3 className="text-base font-bold text-white">Verificación de Seguridad</h3>
+            </div>
+            
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Estás modificando credenciales críticas. Por favor, introduce el código temporal de verificación de tu aplicación de autenticación para continuar (Simulado: <code className="text-brand-300 font-bold bg-slate-950 px-1 py-0.5 rounded">1234</code>).
+            </p>
+
+            <div>
+              <input
+                type="text"
+                placeholder="Código de 4 dígitos"
+                value={verificationCode}
+                onChange={(e) => {
+                  setVerificationCode(e.target.value);
+                  setVerificationError('');
+                }}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-center text-xl font-bold tracking-widest text-white focus:outline-none focus:border-brand-500 transition-colors"
+                maxLength={4}
+              />
+              {verificationError && (
+                <p className="text-[10px] text-rose-400 mt-2 text-center font-semibold">
+                  {verificationError}
+                </p>
+              )}
+            </div>
+
+            <div className="flex space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShow2faModal(false);
+                  setPendingChannelKey(null);
+                }}
+                className="flex-1 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 font-semibold py-2 rounded-xl text-xs transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirm2FA}
+                className="flex-1 bg-brand-600 hover:bg-brand-500 text-white font-semibold py-2 rounded-xl text-xs transition-all shadow-lg shadow-brand-500/10"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

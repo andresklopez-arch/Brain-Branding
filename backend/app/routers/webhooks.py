@@ -12,7 +12,7 @@ from ..services.gemini import GeminiService
 from ..services.channels import omnichannel
 from ..services.websocket import socket_manager
 from ..config import settings
-from ..utils import decrypt_val
+from ..utils import decrypt_val, scrub_sensitive_data
 import datetime
 import json
 import hmac
@@ -184,6 +184,9 @@ async def process_incoming_message(
     is_local_session = db is None
     db = db if db is not None else SessionLocal()
     try:
+        # Scrub sensitive PII data like credit cards
+        message_text = scrub_sensitive_data(message_text)
+
         # 1. Fetch or create thread
         thread = db.query(ConversationsThread).filter(
             ConversationsThread.tenant_id == tenant_id,
@@ -207,6 +210,23 @@ async def process_incoming_message(
         if is_rate_limited(rate_limit_key):
             print(f"[SPAM DETECTED] Throttling sender {sender_id} on {channel} for tenant {tenant_id}")
             
+            # Send friendly warning message back to sender
+            creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
+            if creds:
+                warning_msg = "Has enviado demasiados mensajes. Por favor espera un momento antes de continuar."
+                if channel == "whatsapp":
+                    await omnichannel.send_whatsapp_message(creds, sender_id, warning_msg)
+                elif channel == "messenger":
+                    await omnichannel.send_messenger_message(creds, sender_id, warning_msg)
+                elif channel == "telegram":
+                    await omnichannel.send_telegram_message(creds, sender_id, warning_msg)
+                elif channel == "sms":
+                    await omnichannel.send_sms_twilio(creds, sender_id, warning_msg)
+                elif channel == "instagram":
+                    await omnichannel.send_instagram_dm(creds, sender_id, warning_msg)
+                else:
+                    print(f"[RATE LIMIT MOCK SEND] Channel: {channel} | To: {sender_id} | Msg: {warning_msg}")
+
             # Only notify/deactivate if AI is currently active.
             # This prevents spam loops (repeated emails/websockets/system alerts).
             if thread.ai_active_status:

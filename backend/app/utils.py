@@ -129,3 +129,21 @@ def is_safe_url(url: str) -> bool:
     except Exception:
         return False
 
+
+def scrub_sensitive_data(text: str) -> str:
+    """Scrubs sensitive PII like credit cards from messages before sending to APIs."""
+    import re
+    if not text:
+        return ""
+    # Regex to match 13-19 digit sequences with optional hyphens/spaces
+    cc_pattern = re.compile(r'\b(?:\d[ -]*?){13,19}\b')
+    
+    def cc_repl(match):
+        val = match.group(0)
+        digits = [c for c in val if c.isdigit()]
+        if 13 <= len(digits) <= 19:
+            return "[TARJETA REDACTADA]"
+        return val
+        
+    return cc_pattern.sub(cc_repl, text)
+
