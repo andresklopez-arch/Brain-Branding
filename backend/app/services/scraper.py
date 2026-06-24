@@ -65,6 +65,10 @@ class WebScraper:
 
     async def scrape_site(self, start_url: str) -> str:
         """Crawls up to max_pages belonging to the same domain and returns consolidated text."""
+        import time
+        start_time = time.time()
+        max_duration = 30.0  # seconds
+        
         if not start_url.startswith(("http://", "https://")):
             start_url = "https://" + start_url
             
@@ -74,6 +78,9 @@ class WebScraper:
         
         async with httpx.AsyncClient() as client:
             while to_visit and len(visited_urls) < self.max_pages:
+                if time.time() - start_time > max_duration:
+                    print(f"[SCRAPER WARNING] Scraping reached max duration of {max_duration}s. Stopping.")
+                    break
                 current_url = to_visit.pop(0)
                 if current_url in visited_urls:
                     continue

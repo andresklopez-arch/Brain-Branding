@@ -82,3 +82,35 @@ def check_redis_connection(redis_url: str, timeout: float = 1.0) -> bool:
     except Exception:
         return False
 
+
+def is_safe_url(url: str) -> bool:
+    """Validates that a URL uses http/https, has a valid hostname, and does not resolve to private/loopback IPs."""
+    import urllib.parse
+    import socket
+    import ipaddress
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        
+        # Immediate blocklist for localhost/loopback representations
+        hostname_lower = hostname.lower()
+        if hostname_lower in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+            return False
+            
+        # Resolve hostname to check IP ranges
+        try:
+            ip = socket.gethostbyname(hostname)
+            ip_obj = ipaddress.ip_address(ip)
+            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_multicast:
+                return False
+        except Exception:
+            # If resolution fails, we proceed with caution but do not block
+            pass
+        return True
+    except Exception:
+        return False
+

@@ -5,7 +5,7 @@ from ..models import Tenant, ChannelsCredentials, KnowledgeBase
 from ..schemas import TenantResponse, CredentialsResponse, CredentialsUpdate, ScraperCallbackInput
 from ..services.websocket import socket_manager
 from ..tasks import run_scraper_celery
-from ..utils import encrypt_val, decrypt_val, check_redis_connection
+from ..utils import encrypt_val, decrypt_val, check_redis_connection, is_safe_url
 from ..config import settings
 import uuid
 
@@ -67,6 +67,25 @@ def setup_tenant(
     2. Initialize credentials mapping.
     3. Trigger Celery scraper (or fallback to local background task if Redis is offline).
     """
+    # 0. SSRF URL safety check
+    if not is_safe_url(website_url):
+        raise HTTPException(
+            status_code=400,
+            detail="La URL del sitio web no es segura o es inválida."
+        )
+
+    # 0.5. Double submission / spam check
+    from datetime import datetime, timedelta
+    time_threshold = datetime.utcnow() - timedelta(seconds=15)
+    recent_tenant = db.query(Tenant).filter(
+        Tenant.nombre_empresa == nombre_empresa,
+        Tenant.created_at >= time_threshold
+    ).first()
+    if recent_tenant:
+        raise HTTPException(
+            status_code=409,
+            detail="Se detectó una solicitud de creación duplicada en progreso. Por favor espera."
+        )
     # 1. Create Tenant
     tenant = Tenant(
         nombre_empresa=nombre_empresa,
