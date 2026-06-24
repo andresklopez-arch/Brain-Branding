@@ -127,3 +127,31 @@ class LeadCRM(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     tenant = relationship("Tenant", back_populates="leads")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(GUID, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    usuario_origen = Column(String(255), nullable=False)
+    accion_realizada = Column(String(255), nullable=False)
+    detalles = Column(Text, nullable=True)
+    ip_address = Column(String(50), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    tenant = relationship("Tenant")
+
+
+class AsyncTaskQueue(Base):
+    __tablename__ = "async_task_queue"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_type = Column(String(100), nullable=False)
+    payload_json = Column(JSON, nullable=False)
+    status = Column(String(50), nullable=False, default="pending")
+    retries = Column(Integer, nullable=False, default=0)
+    max_retries = Column(Integer, nullable=False, default=3)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    run_at = Column(DateTime(timezone=True), server_default=func.now())

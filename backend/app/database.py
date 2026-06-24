@@ -13,11 +13,20 @@ try:
 except Exception as e:
     print(f"[DATABASE WARNING] PostgreSQL is not reachable: {str(e)}")
     print("[DATABASE INFO] Falling back to SQLite for local development: sqlite:///./astro_db.sqlite")
-    # Fallback to SQLite (check_same_thread is needed for multi-threaded SQLite usage in FastAPI)
     engine = create_engine(
         "sqlite:///./astro_db.sqlite", 
         connect_args={"check_same_thread": False}
     )
+    from sqlalchemy import event
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.close()
+        except Exception:
+            pass
 
 # Configure session maker
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

@@ -24,6 +24,30 @@ import redis
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 gemini_service = GeminiService()
 
+def queue_incoming_message(
+    db: Session,
+    tenant_id: str,
+    channel: str,
+    sender_id: str,
+    text: str,
+    is_public_comment: bool = False,
+    comment_id: Optional[str] = None
+):
+    """Sanitizes text and queues the message processing in AsyncTaskQueue."""
+    from ..utils import sanitize_input
+    from ..tasks import queue_async_task
+    
+    clean_text = sanitize_input(text)
+    payload = {
+        "tenant_id": tenant_id,
+        "channel": channel,
+        "sender_id": sender_id,
+        "message_text": clean_text,
+        "is_public_comment": is_public_comment,
+        "comment_id": comment_id
+    }
+    queue_async_task(db, "incoming_message", payload)
+
 # Try connecting to Redis for production-grade rate limiting and deduplication
 redis_client = None
 try:
@@ -318,22 +342,50 @@ async def process_incoming_message(
 
         # 3. Call Gemini
         history = thread.historial_chat_json
-        ai_response = await gemini_service.generate_response(
-            kb_text, history, message_text, 
-            api_key=api_key, model_name=model_name, temperature=temperature
-        )
+        try:
+            ai_response = await gemini_service.generate_response(
+                kb_text, history, message_text, 
+                api_key=api_key, model_name=model_name, temperature=temperature
+            )
+        except Exception as e:
+            print(f"[GEMINI FALLBACK] Error calling model {model_name}: {str(e)}. Falling back to gemini-2.5-flash.")
+            ai_response = await gemini_service.generate_response(
+                kb_text, history, message_text, 
+                api_key=api_key, model_name="gemini-2.5-flash", temperature=temperature
+            )
+            
+        # Scrub sensitive data from generated reply too (Sugerencia 8 / PII Scrubbing)
+        if ai_response.reply:
+            ai_response.reply = scrub_sensitive_data(ai_response.reply)
 
         # 4. CRM Leads Extraction
         if ai_response.extracted_name or ai_response.extracted_email or ai_response.extracted_phone:
+            # Validate email format (Sugerencia 16)
+            email = ai_response.extracted_email
+            if email:
+                import re
+                if not re.match(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", email):
+                    email = None
+                    
             lead = LeadCRM(
                 tenant_id=tenant_id,
                 nombre_extraido=ai_response.extracted_name,
-                email=ai_response.extracted_email,
+                email=email,
                 telefono=ai_response.extracted_phone,
                 red_social_origen=channel,
                 notas_interes_ia=f"Interés detectado en el chat. Respuesta IA: {ai_response.reply}"
             )
+            
+            # Write Audit Log (Sugerencia 18)
+            from ..models import AuditLog
+            audit = AuditLog(
+                tenant_id=tenant_id,
+                usuario_origen="system_ia",
+                accion_realizada="lead_creation",
+                detalles=f"Lead creado automáticamente para el contacto {sender_id}."
+            )
             db.add(lead)
+            db.add(audit)
             db.commit()
             # Notify CRM updates in real time
             await socket_manager.broadcast_to_tenant(
@@ -477,7 +529,7 @@ async def verify_whatsapp(
     return Response(content=hub_challenge, media_type="text/plain")
 
 @router.post("/{tenant_id}/whatsapp")
-async def receive_whatsapp(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+async def receive_whatsapp(tenant_id: str, request: Request, db: Session = Depends(get_db)):
     """Receives WhatsApp Cloud API webhook JSON payload."""
     await enforce_signature(request)
     try:
@@ -498,9 +550,8 @@ async def receive_whatsapp(tenant_id: str, request: Request, background_tasks: B
             sender_id = msg.get("from")
             text = msg.get("text", {}).get("body", "")
             if text:
-                background_tasks.add_task(
-                    process_incoming_message,
-                    tenant_id, "whatsapp", sender_id, text, None
+                queue_incoming_message(
+                    db, tenant_id, "whatsapp", sender_id, text, False, None
                 )
     except Exception as e:
         print(f"[WHATSAPP WEBHOOK PARSE ERROR] {str(e)}")
@@ -508,7 +559,7 @@ async def receive_whatsapp(tenant_id: str, request: Request, background_tasks: B
 
 # 2. Telegram Webhook
 @router.post("/{tenant_id}/telegram")
-async def receive_telegram(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+async def receive_telegram(tenant_id: str, request: Request, db: Session = Depends(get_db)):
     """Receives Telegram Bot API updates."""
     try:
         body = await request.json()
@@ -521,9 +572,8 @@ async def receive_telegram(tenant_id: str, request: Request, background_tasks: B
         chat_id = str(message.get("chat", {}).get("id", ""))
         text = message.get("text", "")
         if chat_id and text:
-            background_tasks.add_task(
-                process_incoming_message,
-                tenant_id, "telegram", chat_id, text, None
+            queue_incoming_message(
+                db, tenant_id, "telegram", chat_id, text, False, None
             )
     except Exception as e:
         print(f"[TELEGRAM WEBHOOK PARSE ERROR] {str(e)}")
@@ -531,7 +581,7 @@ async def receive_telegram(tenant_id: str, request: Request, background_tasks: B
 
 # 3. Twilio SMS Webhook
 @router.post("/{tenant_id}/sms")
-async def receive_sms(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+async def receive_sms(tenant_id: str, request: Request, db: Session = Depends(get_db)):
     """Receives Twilio SMS message webhook (Form URL Encoded)."""
     try:
         form_data = await request.form()
@@ -543,9 +593,8 @@ async def receive_sms(tenant_id: str, request: Request, background_tasks: Backgr
         sender_id = form_data.get("From", "")
         text = form_data.get("Body", "")
         if sender_id and text:
-            background_tasks.add_task(
-                process_incoming_message,
-                tenant_id, "sms", sender_id, text, None
+            queue_incoming_message(
+                db, tenant_id, "sms", sender_id, text, False, None
             )
     except Exception as e:
         print(f"[SMS WEBHOOK PARSE ERROR] {str(e)}")
@@ -576,7 +625,7 @@ async def verify_instagram(
     return Response(content=hub_challenge, media_type="text/plain")
 
 @router.post("/{tenant_id}/instagram")
-async def receive_instagram(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+async def receive_instagram(tenant_id: str, request: Request, db: Session = Depends(get_db)):
     """Instagram Webhook supporting both DMs and public comment validation (Comment-to-DM)."""
     await enforce_signature(request)
     try:
@@ -596,9 +645,8 @@ async def receive_instagram(tenant_id: str, request: Request, background_tasks: 
             sender_id = msg_event.get("sender", {}).get("id")
             text = msg_event.get("message", {}).get("text", "")
             if sender_id and text:
-                background_tasks.add_task(
-                    process_incoming_message,
-                    tenant_id, "instagram", sender_id, text, None
+                queue_incoming_message(
+                    db, tenant_id, "instagram", sender_id, text, False, None
                 )
                 
         # Scenario B: Public Comment (Comment-to-DM Strategy)
@@ -619,9 +667,8 @@ async def receive_instagram(tenant_id: str, request: Request, background_tasks: 
                 if sender_id and text and comment_id:
                     # Filter questions/interest words
                     if any(keyword in text.lower() for keyword in ["precio", "info", "costo", "detalles", "comprar", "interes", "quien", "?", "como"]):
-                        background_tasks.add_task(
-                            process_incoming_message,
-                            tenant_id, "instagram", sender_id, text, None, 
+                        queue_incoming_message(
+                            db, tenant_id, "instagram", sender_id, text, 
                             is_public_comment=True, comment_id=comment_id
                         )
     except Exception as e:
@@ -633,13 +680,11 @@ async def receive_instagram(tenant_id: str, request: Request, background_tasks: 
 async def receive_widget_message(
     tenant_id: str, 
     payload: WidgetMessageInput, 
-    background_tasks: BackgroundTasks, 
     db: Session = Depends(get_db)
 ):
     """Processes message incoming from client website embed floating chat widget."""
-    background_tasks.add_task(
-        process_incoming_message,
-        tenant_id, "web_widget", payload.contacto_id, payload.mensaje, None
+    queue_incoming_message(
+        db, tenant_id, "web_widget", payload.contacto_id, payload.mensaje, False, None
     )
     return {"status": "queued"}
 
@@ -667,7 +712,7 @@ async def verify_messenger(
     return Response(content=hub_challenge, media_type="text/plain")
 
 @router.post("/{tenant_id}/messenger")
-async def receive_messenger(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+async def receive_messenger(tenant_id: str, request: Request, db: Session = Depends(get_db)):
     """Receives Messenger webhook JSON payload."""
     await enforce_signature(request)
     try:
@@ -684,9 +729,8 @@ async def receive_messenger(tenant_id: str, request: Request, background_tasks: 
             sender_id = msg_event.get("sender", {}).get("id")
             text = msg_event.get("message", {}).get("text", "")
             if sender_id and text:
-                background_tasks.add_task(
-                    process_incoming_message,
-                    tenant_id, "messenger", sender_id, text, None
+                queue_incoming_message(
+                    db, tenant_id, "messenger", sender_id, text, False, None
                 )
     except Exception as e:
         print(f"[MESSENGER WEBHOOK PARSE ERROR] {str(e)}")
@@ -708,7 +752,7 @@ async def verify_global_whatsapp(
     return Response(content=hub_challenge, media_type="text/plain")
 
 @router.post("/whatsapp")
-async def receive_global_whatsapp(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+async def receive_global_whatsapp(request: Request, db: Session = Depends(get_db)):
     """Receives WhatsApp Cloud API webhook JSON payload and routes by phone_number_id."""
     await enforce_signature(request)
     try:
@@ -736,9 +780,8 @@ async def receive_global_whatsapp(request: Request, background_tasks: Background
                 ).first()
                 if creds:
                     tenant_id = str(creds.tenant_id)
-                    background_tasks.add_task(
-                        process_incoming_message,
-                        tenant_id, "whatsapp", sender_id, text, None
+                    queue_incoming_message(
+                        db, tenant_id, "whatsapp", sender_id, text, False, None
                     )
                 else:
                     print(f"[GLOBAL WHATSAPP WEBHOOK] No tenant found for phone_number_id: {phone_number_id}")
@@ -762,7 +805,7 @@ async def verify_global_messenger(
     return Response(content=hub_challenge, media_type="text/plain")
 
 @router.post("/messenger")
-async def receive_global_messenger(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+async def receive_global_messenger(request: Request, db: Session = Depends(get_db)):
     """Receives Facebook Messenger webhook JSON payload and routes by page_id."""
     await enforce_signature(request)
     try:
@@ -786,9 +829,8 @@ async def receive_global_messenger(request: Request, background_tasks: Backgroun
                 ).first()
                 if creds:
                     tenant_id = str(creds.tenant_id)
-                    background_tasks.add_task(
-                        process_incoming_message,
-                        tenant_id, "messenger", sender_id, text, None
+                    queue_incoming_message(
+                        db, tenant_id, "messenger", sender_id, text, False, None
                     )
                 else:
                     print(f"[GLOBAL MESSENGER WEBHOOK] No tenant found for page_id: {page_id}")

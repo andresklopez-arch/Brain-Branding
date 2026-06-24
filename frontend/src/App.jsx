@@ -6,6 +6,8 @@ import SetupForm from './components/SetupForm';
 import ConnectorGrid from './components/ConnectorGrid';
 import Inbox from './components/Inbox';
 import LeadsCRM from './components/LeadsCRM';
+import SimulatedInbox from './components/SimulatedInbox';
+import GeminiUsageChart from './components/GeminiUsageChart';
 import { api } from './services/api';
 
 export default function App() {
@@ -289,27 +291,41 @@ export default function App() {
         </div>
 
         {/* Section Tabs */}
-        <div className="border-b border-slate-800 flex space-x-6 text-sm font-semibold">
+        <div className="border-b border-slate-800 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold mb-2">
           <button
             onClick={() => setActiveTab('connectors')}
-            className={`pb-3 relative transition-all ${activeTab === 'connectors' ? 'text-brand-400' : 'text-slate-400 hover:text-white'}`}
+            className={`pb-3 relative transition-all ${activeTab === 'connectors' ? 'text-brand-400 font-bold' : 'text-slate-400 hover:text-white'}`}
           >
             <span>Conectores Omnicanal</span>
             {activeTab === 'connectors' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-500"></div>}
           </button>
           <button
             onClick={() => setActiveTab('inbox')}
-            className={`pb-3 relative transition-all ${activeTab === 'inbox' ? 'text-brand-400' : 'text-slate-400 hover:text-white'}`}
+            className={`pb-3 relative transition-all ${activeTab === 'inbox' ? 'text-brand-400 font-bold' : 'text-slate-400 hover:text-white'}`}
           >
-            <span>Bandeja Entrada Unificada</span>
+            <span>Bandeja Entrada</span>
             {activeTab === 'inbox' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-500"></div>}
           </button>
           <button
+            onClick={() => setActiveTab('simulated_inbox')}
+            className={`pb-3 relative transition-all ${activeTab === 'simulated_inbox' ? 'text-brand-400 font-bold' : 'text-slate-400 hover:text-white'}`}
+          >
+            <span>Simulador de Chats</span>
+            {activeTab === 'simulated_inbox' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-500"></div>}
+          </button>
+          <button
             onClick={() => setActiveTab('crm')}
-            className={`pb-3 relative transition-all ${activeTab === 'crm' ? 'text-brand-400' : 'text-slate-400 hover:text-white'}`}
+            className={`pb-3 relative transition-all ${activeTab === 'crm' ? 'text-brand-400 font-bold' : 'text-slate-400 hover:text-white'}`}
           >
             <span>Prospectos CRM (Leads)</span>
             {activeTab === 'crm' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-500"></div>}
+          </button>
+          <button
+            onClick={() => setActiveTab('usage_chart')}
+            className={`pb-3 relative transition-all ${activeTab === 'usage_chart' ? 'text-brand-400 font-bold' : 'text-slate-400 hover:text-white'}`}
+          >
+            <span>Consumo de IA</span>
+            {activeTab === 'usage_chart' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-500"></div>}
           </button>
         </div>
 
@@ -317,7 +333,9 @@ export default function App() {
         <div className="min-h-[400px]">
           {activeTab === 'connectors' && <ConnectorGrid tenantId={tenant.id} />}
           {activeTab === 'inbox' && <Inbox tenantId={tenant.id} />}
+          {activeTab === 'simulated_inbox' && <SimulatedInbox tenantId={tenant.id} />}
           {activeTab === 'crm' && <LeadsCRM tenantId={tenant.id} />}
+          {activeTab === 'usage_chart' && <GeminiUsageChart />}
         </div>
       </main>
     </div>

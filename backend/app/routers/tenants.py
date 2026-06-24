@@ -202,6 +202,16 @@ def update_credentials(tenant_id: str, payload: CredentialsUpdate, db: Session =
             value = encrypt_val(value, salt_str=creds.encryption_salt)
         setattr(creds, key, value)
         
+    # Write Audit Log (Sugerencia 18)
+    from ..models import AuditLog
+    modified_fields = [k for k, v in update_data.items()]
+    audit = AuditLog(
+        tenant_id=tenant_id,
+        usuario_origen="admin",
+        accion_realizada="update_credentials",
+        detalles=f"Modificó credenciales. Campos alterados: {', '.join(modified_fields)}"
+    )
+    db.add(audit)
     db.commit()
     db.refresh(creds)
     

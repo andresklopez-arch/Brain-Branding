@@ -43,13 +43,32 @@ app = FastAPI(
 )
 
 # CORS middleware configuration for frontend dashboard
+allowed_origins = [
+    o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,https://brain-branding.web.app").split(",") 
+    if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Custom middleware to inject CSP and other security headers
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    # Content-Security-Policy setting (supports self, widgets and fonts)
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self' http: https: data: 'unsafe-inline' 'unsafe-eval'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://brain-branding.web.app http://localhost:5173; "
+        "connect-src 'self' http: https: ws: wss:;"
+    )
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    return response
 
 # Include API routers
 app.include_router(auth.router)
@@ -57,6 +76,11 @@ app.include_router(tenants.router)
 app.include_router(webhooks.router)
 app.include_router(inbox.router)
 app.include_router(crm.router)
+
+@app.on_event("startup")
+def startup_event():
+    from .tasks import start_async_task_processor
+    start_async_task_processor()
 
 @app.get("/health")
 def health_check():

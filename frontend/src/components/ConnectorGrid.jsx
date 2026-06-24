@@ -262,6 +262,44 @@ export default function ConnectorGrid({ tenantId }) {
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationError, setVerificationError] = useState('');
 
+  const [attempts2fa, setAttempts2fa] = useState(0);
+  const [lockout2faUntil, setLockout2faUntil] = useState(null);
+  const [unlocked2fa, setUnlocked2fa] = useState(false);
+  const [unlock2faTime, setUnlock2faTime] = useState(null);
+
+  // Keyboard shortcut Ctrl+S (Sugerencia 28)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (expandedChannel) {
+          const chan = CHANNELS_CONFIG.find(c => c.key === expandedChannel);
+          if (chan && chan.fields.length > 0) {
+            // Trigger 2FA
+            if (lockout2faUntil && Date.now() < lockout2faUntil) {
+              const minsLeft = Math.ceil((lockout2faUntil - Date.now()) / 60000);
+              showToast(`Acceso bloqueado. Intenta de nuevo en ${minsLeft} minutos.`, 'error');
+              return;
+            }
+            const isSessionValid = unlocked2fa && unlock2faTime && (Date.now() - unlock2faTime < 300000);
+            if (isSessionValid) {
+              handleSave(expandedChannel);
+            } else {
+              setPendingChannelKey(expandedChannel);
+              setVerificationCode('');
+              setVerificationError('');
+              setShow2faModal(true);
+            }
+          }
+        } else {
+          showToast("Expande un conector configurador antes de guardar con Ctrl+S.", "info");
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [expandedChannel, unlocked2fa, unlock2faTime, lockout2faUntil]);
+
   useEffect(() => {
     try {
       localStorage.setItem('astro_test_logs', JSON.stringify(testLog));
@@ -375,13 +413,79 @@ export default function ConnectorGrid({ tenantId }) {
   };
 
   const handleConfirm2FA = () => {
+    if (lockout2faUntil && Date.now() < lockout2faUntil) {
+      const minsLeft = Math.ceil((lockout2faUntil - Date.now()) / 60000);
+      setVerificationError(`Acceso bloqueado por fuerza bruta. Espera ${minsLeft} minutos.`);
+      return;
+    }
+
     if (verificationCode === '1234') {
       setShow2faModal(false);
+      setAttempts2fa(0);
+      setUnlocked2fa(true);
+      setUnlock2faTime(Date.now());
       handleSave(pendingChannelKey);
       setPendingChannelKey(null);
     } else {
-      setVerificationError('Código de verificación incorrecto. Intenta con "1234" (Simulado).');
+      const nextAttempts = attempts2fa + 1;
+      setAttempts2fa(nextAttempts);
+      if (nextAttempts >= 3) {
+        const lockoutTime = Date.now() + 15 * 60 * 1000; // 15 mins
+        setLockout2faUntil(lockoutTime);
+        setVerificationError('Código de verificación incorrecto. Has superado el límite de 3 intentos. Guardado bloqueado por 15 minutos.');
+      } else {
+        setVerificationError(`Código incorrecto. Intento ${nextAttempts}/3. Intenta con "1234".`);
+      }
     }
+  };
+
+  const handleExportConfig = () => {
+    try {
+      const dataStr = JSON.stringify({
+        version: "1.0",
+        timestamp: new Date().toISOString(),
+        formState
+      });
+      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+      const exportFileDefaultName = 'astrolink_config.json';
+      
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
+      showToast("Configuración exportada con éxito", "success");
+    } catch (e) {
+      showToast("Error al exportar configuración", "error");
+    }
+  };
+
+  const handleImportConfig = (event) => {
+    const fileReader = new FileReader();
+    if (event.target.files && event.target.files[0]) {
+      fileReader.readAsText(event.target.files[0], "UTF-8");
+      fileReader.onload = e => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (parsed && parsed.formState) {
+            setFormState(prev => ({ ...prev, ...parsed.formState }));
+            showToast("Configuración importada. Guarda cada canal para confirmar.", "success");
+          } else {
+            showToast("Formato de archivo de importación inválido", "error");
+          }
+        } catch (err) {
+          showToast("Error al leer el archivo de configuración", "error");
+        }
+      };
+    }
+  };
+
+  const handleClearLogs = (channelKey) => {
+    setTestLog(prev => {
+      const nextLogs = { ...prev };
+      delete nextLogs[channelKey];
+      return nextLogs;
+    });
+    showToast("Historial de logs limpiado", "success");
   };
 
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -415,7 +519,7 @@ export default function ConnectorGrid({ tenantId }) {
       <style>{svgAnimationStyles}</style>
 
       {/* Search & Filter Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-slate-950/40 border border-slate-900/60 rounded-2xl backdrop-blur-sm">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 p-4 bg-slate-950/40 border border-slate-900/60 rounded-2xl backdrop-blur-sm">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
           <input
@@ -426,20 +530,42 @@ export default function ConnectorGrid({ tenantId }) {
             className="w-full bg-slate-950/80 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-brand-500 transition-colors"
           />
         </div>
-        <div className="flex bg-slate-950/80 border border-slate-800 rounded-xl p-1 self-start sm:self-auto">
-          {['all', 'active', 'inactive'].map((filter) => (
+        <div className="flex flex-wrap items-center gap-3 self-start lg:self-auto">
+          <div className="flex bg-slate-950/80 border border-slate-800 rounded-xl p-1">
+            {['all', 'active', 'inactive'].map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setStatusFilter(filter)}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all duration-200 ${
+                  statusFilter === filter 
+                    ? 'bg-brand-650 text-white shadow-lg font-bold' 
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {filter === 'all' ? 'Todos' : filter === 'active' ? 'Activos' : 'Inactivos'}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center space-x-2">
             <button
-              key={filter}
-              onClick={() => setStatusFilter(filter)}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all duration-200 ${
-                statusFilter === filter 
-                  ? 'bg-brand-650 text-white shadow-lg font-bold' 
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
+              onClick={handleExportConfig}
+              className="px-3 py-1.5 bg-slate-950/80 border border-slate-800 hover:border-slate-700 hover:bg-slate-900 rounded-xl text-[10px] font-bold text-slate-355 hover:text-white transition-all uppercase tracking-wider"
             >
-              {filter === 'all' ? 'Todos' : filter === 'active' ? 'Activos' : 'Inactivos'}
+              Exportar
             </button>
-          ))}
+            <label
+              className="px-3 py-1.5 bg-slate-950/80 border border-slate-800 hover:border-slate-700 hover:bg-slate-900 rounded-xl text-[10px] font-bold text-slate-355 hover:text-white transition-all uppercase tracking-wider cursor-pointer"
+            >
+              Importar
+              <input
+                type="file"
+                accept=".json"
+                onChange={handleImportConfig}
+                className="hidden"
+              />
+            </label>
+          </div>
         </div>
       </div>
 
@@ -721,8 +847,17 @@ export default function ConnectorGrid({ tenantId }) {
                                 ? 'bg-emerald-950/20 border-emerald-500/20 text-emerald-400'
                                 : 'bg-rose-950/20 border-rose-500/20 text-rose-400'
                             }`}>
-                              <span>{testLog[chan.key].message}</span>
-                              <span className="opacity-60">{testLog[chan.key].time}</span>
+                              <div className="flex items-center space-x-2">
+                                <span>{testLog[chan.key].message}</span>
+                                <span className="opacity-60">({testLog[chan.key].time})</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleClearLogs(chan.key)}
+                                className="text-slate-400 hover:text-slate-200 transition-colors uppercase tracking-wider text-[8px] font-bold"
+                              >
+                                Limpiar
+                              </button>
                             </div>
                           )}
                         </div>
