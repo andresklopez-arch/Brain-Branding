@@ -1,0 +1,25 @@
+# Node / React
+node_modules/
+dist/
+.eslintcache
+*.log
+
+# Python / FastAPI
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# Database Fallbacks
+*.sqlite
+*.db
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
