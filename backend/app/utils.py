@@ -67,3 +67,18 @@ def decrypt_val(encrypted: str, salt_str: Optional[str] = None) -> str:
         # Layer 3: Fallback to plain text
         return encrypted
 
+
+def check_redis_connection(redis_url: str, timeout: float = 1.0) -> bool:
+    """Attempts a quick socket connection to the Redis host/port to check availability."""
+    import socket
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(redis_url)
+        host = parsed.hostname or "localhost"
+        port = parsed.port or 6379
+        # Try to connect with a short timeout
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
+

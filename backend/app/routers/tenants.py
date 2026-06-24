@@ -5,7 +5,8 @@ from ..models import Tenant, ChannelsCredentials, KnowledgeBase
 from ..schemas import TenantResponse, CredentialsResponse, CredentialsUpdate, ScraperCallbackInput
 from ..services.websocket import socket_manager
 from ..tasks import run_scraper_celery
-from ..utils import encrypt_val, decrypt_val
+from ..utils import encrypt_val, decrypt_val, check_redis_connection
+from ..config import settings
 import uuid
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
@@ -82,11 +83,23 @@ def setup_tenant(
     db.commit()
     
     # 3. Trigger Celery task, fallback to local background task if Redis is offline
-    try:
-        run_scraper_celery.delay(str(tenant.id), website_url)
-        print("[CELERY] Task successfully enqueued.")
-    except Exception as e:
-        print(f"[CELERY WARNING] Redis is offline. Running scraper locally via BackgroundTasks: {str(e)}")
+    use_celery = False
+    if settings.REQUIRE_REDIS:
+        use_celery = True
+    else:
+        # Check connection to avoid blocking request thread if Redis is offline
+        use_celery = check_redis_connection(settings.REDIS_URL, timeout=1.0)
+
+    if use_celery:
+        try:
+            run_scraper_celery.delay(str(tenant.id), website_url)
+            print("[CELERY] Task successfully enqueued.")
+        except Exception as e:
+            print(f"[CELERY WARNING] Failed to enqueue Celery task: {str(e)}")
+            use_celery = False
+
+    if not use_celery:
+        print("[FALLBACK SCRAPER] Running scraper locally via BackgroundTasks...")
         from ..database import SessionLocal
         background_tasks.add_task(
             local_scraper_fallback,
