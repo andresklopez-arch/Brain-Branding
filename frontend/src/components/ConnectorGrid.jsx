@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { 
   MessageSquare, Smartphone, Instagram, Send, Mail, Twitter, 
   Video, Youtube, MapPin, Code, ShieldCheck, ChevronRight, Save, ToggleLeft, ToggleRight,
-  Bot
+  Bot, ExternalLink
 } from 'lucide-react';
 import { api } from '../services/api';
+import { EXTERNAL_PORTALS } from '../config/externalPortals';
 
 const CHANNELS_CONFIG = [
   { 
@@ -22,7 +23,7 @@ const CHANNELS_CONFIG = [
     ],
     instructions: [
       "Configura tu API Key de Gemini para activar la inteligencia artificial de tu negocio.",
-      "Puedes obtener una clave gratuita o de pago ingresando a [Google AI Studio](https://aistudio.google.com/app/apikey)."
+      `Puedes obtener una clave gratuita o de pago ingresando a [Google AI Studio](${EXTERNAL_PORTALS.gemini}).`
     ]
   },
   { 
@@ -35,7 +36,7 @@ const CHANNELS_CONFIG = [
       {key: 'whatsapp_token', label: 'Access Token', secret: true}
     ],
     instructions: [
-      "1. Crea una app de tipo Negocio en [Meta for Developers](https://developers.facebook.com/).",
+      `1. Crea una app de tipo Negocio en [Meta for Developers](${EXTERNAL_PORTALS.meta}).`,
       "2. Agrega el producto 'WhatsApp' a tu app.",
       "3. En 'Configuración de la API', copia el Phone Number ID y el Access Token (No tu número de teléfono).",
       "4. En Meta, configura el Webhook usando la URL provista abajo y usa tu Access Token o tu Tenant ID como Verification Token."
@@ -50,7 +51,7 @@ const CHANNELS_CONFIG = [
       {key: 'telegram_bot_token', label: 'Bot Token', secret: true}
     ],
     instructions: [
-      "1. Habla con [@BotFather](https://t.me/BotFather) en Telegram y envía el comando /newbot.",
+      `1. Habla con [@BotFather](${EXTERNAL_PORTALS.telegram}) en Telegram y envía el comando /newbot.`,
       "2. Sigue los pasos para elegir un nombre y un usuario para tu bot.",
       "3. Copia el token HTTP API que te proporciona y pégalo arriba."
     ]
@@ -65,8 +66,8 @@ const CHANNELS_CONFIG = [
       {key: 'twilio_sms_auth', label: 'Auth Token', secret: true}
     ],
     instructions: [
-      "1. Crea una cuenta en [Twilio](https://console.twilio.com/) y adquiere un número de teléfono habilitado para SMS.",
-      "2. Copia tu Account SID y Auth Token desde el [panel principal de Twilio](https://console.twilio.com/).",
+      `1. Crea una cuenta en [Twilio](${EXTERNAL_PORTALS.twilio}) y adquiere un número de teléfono habilitado para SMS.`,
+      `2. Copia tu Account SID y Auth Token desde el [panel principal de Twilio](${EXTERNAL_PORTALS.twilio}).`,
       "3. Configura la URL de Webhook de abajo en la configuración de tu número en Twilio."
     ]
   },
@@ -80,7 +81,7 @@ const CHANNELS_CONFIG = [
     ],
     instructions: [
       "1. Conecta tu cuenta de Instagram Business a una página de Facebook de tu propiedad.",
-      "2. Crea una App en [Meta Developers](https://developers.facebook.com/) y añade 'Instagram Graph API'.",
+      `2. Crea una App en [Meta Developers](${EXTERNAL_PORTALS.meta}) y añade 'Instagram Graph API'.`,
       "3. Genera un Token de Acceso de Página de Facebook vinculada y pégalo arriba."
     ]
   },
@@ -94,7 +95,7 @@ const CHANNELS_CONFIG = [
       {key: 'messenger_page_token', label: 'Page Access Token', secret: true}
     ],
     instructions: [
-      "1. Ve a [Meta Developers](https://developers.facebook.com/), crea una App de tipo Negocio y agrega el producto 'Messenger'.",
+      `1. Ve a [Meta Developers](${EXTERNAL_PORTALS.meta}), crea una App de tipo Negocio y agrega el producto 'Messenger'.`,
       "2. Vincula tu página de Facebook, obtén su Page ID y genera un Page Access Token."
     ]
   },
@@ -107,7 +108,7 @@ const CHANNELS_CONFIG = [
       {key: 'twitter_x_bearer_token', label: 'Bearer Token', secret: true}
     ],
     instructions: [
-      "1. Crea un portal de desarrollador en [Twitter/X Developers](https://developer.x.com/).",
+      `1. Crea un portal de desarrollador en [Twitter/X Developers](${EXTERNAL_PORTALS.twitter}).`,
       "2. Genera un Bearer Token en las llaves de tu proyecto y pégalo arriba."
     ]
   },
@@ -120,7 +121,7 @@ const CHANNELS_CONFIG = [
       {key: 'tiktok_business_access_token', label: 'Business Access Token', secret: true}
     ],
     instructions: [
-      "1. Regístrate en [TikTok Developer Portal](https://developers.tiktok.com/) y crea una app comercial.",
+      `1. Regístrate en [TikTok Developer Portal](${EXTERNAL_PORTALS.tiktok}) y crea una app comercial.`,
       "2. Obtén el Access Token de producción y pégalo arriba."
     ]
   },
@@ -133,7 +134,7 @@ const CHANNELS_CONFIG = [
       {key: 'youtube_api_key', label: 'Data API Key', secret: true}
     ],
     instructions: [
-      "1. Crea un proyecto en [Google Cloud Console](https://console.cloud.google.com/).",
+      `1. Crea un proyecto en [Google Cloud Console](${EXTERNAL_PORTALS.googleCloud}).`,
       "2. Habilita 'YouTube Data API v3'.",
       "3. Genera una API Key en la sección Credenciales y pégala arriba."
     ]
@@ -147,7 +148,7 @@ const CHANNELS_CONFIG = [
       {key: 'google_business_profile_id', label: 'Profile ID'}
     ],
     instructions: [
-      "1. Ingresa a [Google Business Profile Manager](https://business.google.com/).",
+      `1. Ingresa a [Google Business Profile Manager](${EXTERNAL_PORTALS.googleBusiness}).`,
       "2. Busca el ID de perfil en la sección Ajustes de tu ficha de negocio y pégalo arriba."
     ]
   },
@@ -162,7 +163,7 @@ const CHANNELS_CONFIG = [
     ],
     instructions: [
       "1. Configura tu correo IMAP/SMTP (Gmail, Outlook, etc.).",
-      "2. Si usas Gmail, debes generar una 'Contraseña de Aplicación' en la [seguridad de tu cuenta de Google](https://myaccount.google.com/apppasswords)."
+      `2. Si usas Gmail, debes generar una 'Contraseña de Aplicación' en la [seguridad de tu cuenta de Google](${EXTERNAL_PORTALS.googlePasswords}).`
     ]
   },
   { 
@@ -192,17 +193,25 @@ const parseMarkdownLinks = (text) => {
       parts.push(text.substring(lastIndex, index));
     }
 
-    parts.push(
-      <a 
-        key={index} 
-        href={url} 
-        target="_blank" 
-        rel="noopener noreferrer" 
-        className="text-brand-400 hover:text-brand-300 underline font-semibold transition-colors"
-      >
-        {linkText}
-      </a>
-    );
+    // Security check: Only allow HTTPS protocol
+    const isHttps = url.startsWith('https://');
+
+    if (isHttps) {
+      parts.push(
+        <a 
+          key={index} 
+          href={url} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="inline-flex items-center text-brand-400 hover:text-brand-300 underline font-semibold transition-colors gap-0.5"
+        >
+          <span>{linkText}</span>
+          <ExternalLink className="w-2.5 h-2.5 inline-block opacity-80" />
+        </a>
+      );
+    } else {
+      parts.push(linkText);
+    }
 
     lastIndex = regex.lastIndex;
   }
