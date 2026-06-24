@@ -99,3 +99,8 @@ class LeadCRMResponse(BaseModel):
 class WidgetMessageInput(BaseModel):
     contacto_id: str
     mensaje: str
+
+class ScraperCallbackInput(BaseModel):
+    tenant_id: str
+    url: str
+    text: str

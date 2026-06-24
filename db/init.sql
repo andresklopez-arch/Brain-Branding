@@ -75,3 +75,31 @@ CREATE TABLE IF NOT EXISTS Leads_CRM (
 
 -- Index for tenant leads
 CREATE INDEX IF NOT EXISTS idx_leads_tenant ON Leads_CRM(tenant_id);
+
+-- --- PostgreSQL Row-Level Security (RLS) Configuration ---
+-- Ensures strict database layer tenant isolation
+
+ALTER TABLE Knowledge_Base ENABLE ROW LEVEL SECURITY;
+ALTER TABLE Channels_Credentials ENABLE ROW LEVEL SECURITY;
+ALTER TABLE Conversations_Threads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE Leads_CRM ENABLE ROW LEVEL SECURITY;
+
+-- 1. Knowledge Base RLS Policy
+CREATE POLICY kb_tenant_isolation ON Knowledge_Base
+    FOR ALL
+    USING (tenant_id::text = current_setting('app.current_tenant_id', true));
+
+-- 2. Credentials RLS Policy
+CREATE POLICY creds_tenant_isolation ON Channels_Credentials
+    FOR ALL
+    USING (tenant_id::text = current_setting('app.current_tenant_id', true));
+
+-- 3. Conversation Threads RLS Policy
+CREATE POLICY threads_tenant_isolation ON Conversations_Threads
+    FOR ALL
+    USING (tenant_id::text = current_setting('app.current_tenant_id', true));
+
+-- 4. Leads CRM RLS Policy
+CREATE POLICY leads_tenant_isolation ON Leads_CRM
+    FOR ALL
+    USING (tenant_id::text = current_setting('app.current_tenant_id', true));

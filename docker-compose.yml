@@ -40,6 +40,21 @@ services:
     volumes:
       - ./backend:/app
 
+  celery_worker:
+    build:
+      context: ./backend
+    container_name: astrolink_celery
+    command: celery -A app.tasks.celery_app worker --loglevel=info
+    restart: always
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - INTERNAL_BACKEND_URL=http://backend:8000
+    depends_on:
+      - redis
+      - db
+    volumes:
+      - ./backend:/app
+
   frontend:
     build:
       context: ./frontend
