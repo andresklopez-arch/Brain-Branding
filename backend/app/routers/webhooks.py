@@ -339,19 +339,22 @@ async def process_incoming_message(
         api_key = decrypt_val(creds.gemini_api_key, salt_str=creds.encryption_salt) if (creds and creds.gemini_api_key) else None
         model_name = creds.gemini_model_name if (creds and creds.gemini_model_name) else None
         temperature = creds.gemini_temperature if (creds and creds.gemini_temperature is not None) else None
+        custom_fields = creds.custom_lead_fields_json if creds else None
 
         # 3. Call Gemini
         history = thread.historial_chat_json
         try:
             ai_response = await gemini_service.generate_response(
                 kb_text, history, message_text, 
-                api_key=api_key, model_name=model_name, temperature=temperature
+                api_key=api_key, model_name=model_name, temperature=temperature,
+                custom_fields=custom_fields
             )
         except Exception as e:
             print(f"[GEMINI FALLBACK] Error calling model {model_name}: {str(e)}. Falling back to gemini-2.5-flash.")
             ai_response = await gemini_service.generate_response(
                 kb_text, history, message_text, 
-                api_key=api_key, model_name="gemini-2.5-flash", temperature=temperature
+                api_key=api_key, model_name="gemini-2.5-flash", temperature=temperature,
+                custom_fields=custom_fields
             )
             
         # Scrub sensitive data from generated reply too (Sugerencia 8 / PII Scrubbing)
@@ -359,7 +362,12 @@ async def process_incoming_message(
             ai_response.reply = scrub_sensitive_data(ai_response.reply)
 
         # 4. CRM Leads Extraction
-        if ai_response.extracted_name or ai_response.extracted_email or ai_response.extracted_phone:
+        has_custom_fields = False
+        custom_fields_val = getattr(ai_response, 'extracted_custom_fields', None)
+        if custom_fields_val:
+            has_custom_fields = any(v is not None for v in custom_fields_val.values())
+
+        if ai_response.extracted_name or ai_response.extracted_email or ai_response.extracted_phone or has_custom_fields:
             # Validate email format (Sugerencia 16)
             email = ai_response.extracted_email
             if email:
@@ -373,7 +381,8 @@ async def process_incoming_message(
                 email=email,
                 telefono=ai_response.extracted_phone,
                 red_social_origen=channel,
-                notas_interes_ia=f"Interés detectado en el chat. Respuesta IA: {ai_response.reply}"
+                notas_interes_ia=f"Interés detectado en el chat. Respuesta IA: {ai_response.reply}",
+                campos_personalizados_json=custom_fields_val or {}
             )
             
             # Write Audit Log (Sugerencia 18)
