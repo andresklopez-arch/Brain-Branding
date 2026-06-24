@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query, Request, Response, BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
+from collections import defaultdict
 from ..database import get_db
 from ..models import Tenant, KnowledgeBase, ConversationsThread, LeadCRM, ChannelsCredentials
 from ..schemas import WidgetMessageInput
@@ -12,6 +13,7 @@ import datetime
 import json
 import hmac
 import hashlib
+import time
 
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 gemini_service = GeminiService()
@@ -27,6 +29,37 @@ def verify_meta_signature(body: bytes, signature_header: str, app_secret: str) -
         hashlib.sha256
     ).hexdigest()
     return hmac.compare_digest(expected_sig, computed_sig)
+
+# In-memory stores for rate limiting and webhook message deduplication
+RATE_LIMIT_WINDOW = 60  # 1 minute
+RATE_LIMIT_MAX_REQUESTS = 30
+request_history = defaultdict(list)
+processed_message_ids = {}
+
+def is_rate_limited(key: str) -> bool:
+    """Checks if a key (IP address or contact identifier) has exceeded rate limits."""
+    current_time = time.time()
+    # Remove logs older than the time window
+    request_history[key] = [t for t in request_history[key] if current_time - t < RATE_LIMIT_WINDOW]
+    if len(request_history[key]) >= RATE_LIMIT_MAX_REQUESTS:
+        return True
+    request_history[key].append(current_time)
+    return False
+
+def is_duplicate_message(message_id: str) -> bool:
+    """Checks if a webhook message ID is duplicate, avoiding double-processing."""
+    if not message_id:
+        return False
+    current_time = time.time()
+    # Clean up records older than 10 minutes
+    for mid, t in list(processed_message_ids.items()):
+        if current_time - t > 600:
+            processed_message_ids.pop(mid, None)
+            
+    if message_id in processed_message_ids:
+        return True
+    processed_message_ids[message_id] = current_time
+    return False
 
 async def process_incoming_message(
     tenant_id: str,
@@ -192,6 +225,11 @@ async def verify_whatsapp(
 @router.post("/{tenant_id}/whatsapp")
 async def receive_whatsapp(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives WhatsApp Cloud API webhook JSON payload."""
+    client_ip = request.client.host if request.client else "unknown"
+    if is_rate_limited(client_ip):
+        print(f"[RATE LIMIT] Throttling WhatsApp request from IP: {client_ip}")
+        return {"status": "rate_limited"}
+        
     if settings.META_APP_SECRET:
         signature = request.headers.get("X-Hub-Signature-256")
         body_bytes = await request.body()
@@ -208,6 +246,11 @@ async def receive_whatsapp(tenant_id: str, request: Request, background_tasks: B
         
         if messages:
             msg = messages[0]
+            msg_id = msg.get("id")
+            if is_duplicate_message(msg_id):
+                print(f"[DEDUPLICATION] Ignoring duplicate WhatsApp message ID: {msg_id}")
+                return {"status": "duplicate"}
+                
             sender_id = msg.get("from")
             text = msg.get("text", {}).get("body", "")
             if text:
@@ -223,8 +266,18 @@ async def receive_whatsapp(tenant_id: str, request: Request, background_tasks: B
 @router.post("/{tenant_id}/telegram")
 async def receive_telegram(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives Telegram Bot API updates."""
+    client_ip = request.client.host if request.client else "unknown"
+    if is_rate_limited(client_ip):
+        print(f"[RATE LIMIT] Throttling Telegram request from IP: {client_ip}")
+        return {"status": "rate_limited"}
+        
     try:
         body = await request.json()
+        update_id = str(body.get("update_id", ""))
+        if update_id and is_duplicate_message(update_id):
+            print(f"[DEDUPLICATION] Ignoring duplicate Telegram update ID: {update_id}")
+            return {"status": "duplicate"}
+            
         message = body.get("message", {})
         chat_id = str(message.get("chat", {}).get("id", ""))
         text = message.get("text", "")
@@ -241,8 +294,18 @@ async def receive_telegram(tenant_id: str, request: Request, background_tasks: B
 @router.post("/{tenant_id}/sms")
 async def receive_sms(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives Twilio SMS message webhook (Form URL Encoded)."""
+    client_ip = request.client.host if request.client else "unknown"
+    if is_rate_limited(client_ip):
+        print(f"[RATE LIMIT] Throttling Twilio request from IP: {client_ip}")
+        return Response(content="<Response></Response>", media_type="application/xml")
+        
     try:
         form_data = await request.form()
+        msg_id = form_data.get("MessageSid", "")
+        if msg_id and is_duplicate_message(msg_id):
+            print(f"[DEDUPLICATION] Ignoring duplicate SMS MessageSid: {msg_id}")
+            return Response(content="<Response></Response>", media_type="application/xml")
+            
         sender_id = form_data.get("From", "")
         text = form_data.get("Body", "")
         if sender_id and text:
@@ -263,6 +326,11 @@ async def verify_instagram(hub_challenge: str = Query(None, alias="hub.challenge
 @router.post("/{tenant_id}/instagram")
 async def receive_instagram(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Instagram Webhook supporting both DMs and public comment validation (Comment-to-DM)."""
+    client_ip = request.client.host if request.client else "unknown"
+    if is_rate_limited(client_ip):
+        print(f"[RATE LIMIT] Throttling Instagram request from IP: {client_ip}")
+        return {"status": "rate_limited"}
+        
     if settings.META_APP_SECRET:
         signature = request.headers.get("X-Hub-Signature-256")
         body_bytes = await request.body()
@@ -278,6 +346,11 @@ async def receive_instagram(tenant_id: str, request: Request, background_tasks: 
         # Scenario A: Direct Message (DM)
         if messaging:
             msg_event = messaging[0]
+            msg_id = msg_event.get("message", {}).get("mid")
+            if is_duplicate_message(msg_id):
+                print(f"[DEDUPLICATION] Ignoring duplicate Instagram message ID: {msg_id}")
+                return {"status": "duplicate"}
+                
             sender_id = msg_event.get("sender", {}).get("id")
             text = msg_event.get("message", {}).get("text", "")
             if sender_id and text:
@@ -293,6 +366,11 @@ async def receive_instagram(tenant_id: str, request: Request, background_tasks: 
             value = change.get("value", {})
             if field == "comments":
                 comment_id = value.get("id")
+                # Deduplicate comments too if necessary
+                if comment_id and is_duplicate_message(comment_id):
+                    print(f"[DEDUPLICATION] Ignoring duplicate comment ID: {comment_id}")
+                    return {"status": "duplicate"}
+                    
                 sender_id = value.get("from", {}).get("id")
                 text = value.get("text", "")
                 # If comment has a question mark or keywords of interest
@@ -337,6 +415,11 @@ async def verify_messenger(
 @router.post("/{tenant_id}/messenger")
 async def receive_messenger(tenant_id: str, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives Messenger webhook JSON payload."""
+    client_ip = request.client.host if request.client else "unknown"
+    if is_rate_limited(client_ip):
+        print(f"[RATE LIMIT] Throttling Messenger request from IP: {client_ip}")
+        return {"status": "rate_limited"}
+        
     if settings.META_APP_SECRET:
         signature = request.headers.get("X-Hub-Signature-256")
         body_bytes = await request.body()
@@ -349,6 +432,11 @@ async def receive_messenger(tenant_id: str, request: Request, background_tasks: 
         messaging = entry.get("messaging", [])
         if messaging:
             msg_event = messaging[0]
+            msg_id = msg_event.get("message", {}).get("mid")
+            if is_duplicate_message(msg_id):
+                print(f"[DEDUPLICATION] Ignoring duplicate Messenger message ID: {msg_id}")
+                return {"status": "duplicate"}
+                
             sender_id = msg_event.get("sender", {}).get("id")
             text = msg_event.get("message", {}).get("text", "")
             if sender_id and text:
@@ -373,6 +461,11 @@ async def verify_global_whatsapp(
 @router.post("/whatsapp")
 async def receive_global_whatsapp(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives WhatsApp Cloud API webhook JSON payload and routes by phone_number_id."""
+    client_ip = request.client.host if request.client else "unknown"
+    if is_rate_limited(client_ip):
+        print(f"[RATE LIMIT] Throttling Global WhatsApp request from IP: {client_ip}")
+        return {"status": "rate_limited"}
+        
     if settings.META_APP_SECRET:
         signature = request.headers.get("X-Hub-Signature-256")
         body_bytes = await request.body()
@@ -390,6 +483,11 @@ async def receive_global_whatsapp(request: Request, background_tasks: Background
         
         if messages and phone_number_id:
             msg = messages[0]
+            msg_id = msg.get("id")
+            if is_duplicate_message(msg_id):
+                print(f"[DEDUPLICATION] Ignoring duplicate WhatsApp message ID: {msg_id}")
+                return {"status": "duplicate"}
+                
             sender_id = msg.get("from")
             text = msg.get("text", {}).get("body", "")
             if text:
@@ -422,6 +520,11 @@ async def verify_global_messenger(
 @router.post("/messenger")
 async def receive_global_messenger(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Receives Facebook Messenger webhook JSON payload and routes by page_id."""
+    client_ip = request.client.host if request.client else "unknown"
+    if is_rate_limited(client_ip):
+        print(f"[RATE LIMIT] Throttling Global Messenger request from IP: {client_ip}")
+        return {"status": "rate_limited"}
+        
     if settings.META_APP_SECRET:
         signature = request.headers.get("X-Hub-Signature-256")
         body_bytes = await request.body()
@@ -435,6 +538,11 @@ async def receive_global_messenger(request: Request, background_tasks: Backgroun
         messaging = entry.get("messaging", [])
         if messaging and page_id:
             msg_event = messaging[0]
+            msg_id = msg_event.get("message", {}).get("mid")
+            if is_duplicate_message(msg_id):
+                print(f"[DEDUPLICATION] Ignoring duplicate Messenger message ID: {msg_id}")
+                return {"status": "duplicate"}
+                
             sender_id = msg_event.get("sender", {}).get("id")
             text = msg_event.get("message", {}).get("text", "")
             if sender_id and text:
