@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { 
   MessageSquare, Smartphone, Instagram, Send, Mail, Twitter, 
   Video, Youtube, MapPin, Code, ShieldCheck, ChevronRight, Save, ToggleLeft, ToggleRight,
-  Bot, ExternalLink
+  Bot, ExternalLink, Eye, EyeOff, Search, Activity, Check
 } from 'lucide-react';
 import { api } from '../services/api';
 import { EXTERNAL_PORTALS } from '../config/externalPortals';
+import Toast from './Toast';
 
 const CHANNELS_CONFIG = [
   { 
@@ -229,6 +230,35 @@ export default function ConnectorGrid({ tenantId }) {
   const [expandedChannel, setExpandedChannel] = useState(null);
   const [formState, setFormState] = useState({});
   const [saveStatus, setSaveStatus] = useState({});
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [visibleSecrets, setVisibleSecrets] = useState({});
+  const [testStatus, setTestStatus] = useState({});
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+  };
+
+  const handleTestConnection = (channelKey) => {
+    setTestStatus(prev => ({ ...prev, [channelKey]: 'checking' }));
+    setTimeout(() => {
+      const channel = CHANNELS_CONFIG.find(c => c.key === channelKey);
+      const allFilled = channel.fields.every(f => !!formState[f.key]);
+      
+      if (allFilled || channel.key === 'web_widget') {
+        setTestStatus(prev => ({ ...prev, [channelKey]: 'success' }));
+        showToast(`¡Conexión de ${channel.name} establecida con éxito!`, 'success');
+      } else {
+        setTestStatus(prev => ({ ...prev, [channelKey]: 'error' }));
+        showToast(`Error de conexión en ${channel.name}: faltan credenciales.`, 'error');
+      }
+      
+      setTimeout(() => {
+        setTestStatus(prev => ({ ...prev, [channelKey]: 'idle' }));
+      }, 3000);
+    }, 1500);
+  };
 
   useEffect(() => {
     if (tenantId) {
@@ -295,181 +325,304 @@ export default function ConnectorGrid({ tenantId }) {
 
       await api.updateCredentials(tenantId, payload);
       setSaveStatus(prev => ({ ...prev, [channelKey]: 'saved' }));
+      showToast(`¡Credenciales de ${channel.name} guardadas con éxito!`, 'success');
       setTimeout(() => {
         setSaveStatus(prev => ({ ...prev, [channelKey]: null }));
       }, 1500);
     } catch (err) {
       console.error(err);
       setSaveStatus(prev => ({ ...prev, [channelKey]: 'error' }));
+      const channel = CHANNELS_CONFIG.find(c => c.key === channelKey);
+      showToast(`Fallo al guardar credenciales de ${channel?.name || channelKey}.`, 'error');
     }
   };
 
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-  const embedCode = `<script src="${API_BASE_URL}/widget.js?tenant_id=${tenantId}"></script>`;
+  const embedCode = `<script src="${API_BASE_URL}/widget.js?tenant_  const filteredChannels = CHANNELS_CONFIG.filter(chan => {
+    const matchesSearch = chan.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          chan.key.toLowerCase().includes(searchTerm.toLowerCase());
+    const isActive = activeChannels[chan.key];
+    const matchesFilter = statusFilter === 'all' || 
+                          (statusFilter === 'active' && isActive) || 
+                          (statusFilter === 'inactive' && !isActive);
+    return matchesSearch && matchesFilter;
+  });
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {CHANNELS_CONFIG.map((chan) => {
-        const IconComponent = chan.icon;
-        const isExpanded = expandedChannel === chan.key;
-        const isActive = activeChannels[chan.key];
-        const status = saveStatus[chan.key];
+    <div className="space-y-6">
+      {/* Search & Filter Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-slate-950/40 border border-slate-900/60 rounded-2xl backdrop-blur-sm">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          <input
+            type="text"
+            placeholder="Buscar conectores..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-slate-950/80 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-650 focus:outline-none focus:border-brand-500 transition-colors"
+          />
+        </div>
+        <div className="flex bg-slate-950/80 border border-slate-800 rounded-xl p-1 self-start sm:self-auto">
+          {['all', 'active', 'inactive'].map((filter) => (
+            <button
+              key={filter}
+              onClick={() => setStatusFilter(filter)}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all duration-200 ${
+                statusFilter === filter 
+                  ? 'bg-brand-650 text-white shadow-lg font-bold' 
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {filter === 'all' ? 'Todos' : filter === 'active' ? 'Activos' : 'Inactivos'}
+            </button>
+          ))}
+        </div>
+      </div>
 
-        return (
-          <div 
-            key={chan.key}
-            className={`border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 ${chan.color} ${isExpanded ? 'lg:col-span-2' : ''}`}
-          >
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-slate-950/40 border border-slate-800 rounded-lg">
-                    <IconComponent className="w-6 h-6" />
+      {filteredChannels.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 border border-dashed border-slate-800 rounded-2xl bg-slate-950/20 text-slate-500 space-y-2">
+          <Bot className="w-8 h-8 opacity-40 animate-pulse" />
+          <p className="text-xs font-semibold">No se encontraron conectores que coincidan con tu búsqueda.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredChannels.map((chan) => {
+            const IconComponent = chan.icon;
+            const isExpanded = expandedChannel === chan.key;
+            const isActive = activeChannels[chan.key];
+            const status = saveStatus[chan.key];
+            const checkStatus = testStatus[chan.key] || 'idle';
+
+            return (
+              <div 
+                key={chan.key}
+                className={`border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 ${chan.color} ${isExpanded ? 'lg:col-span-2' : ''}`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-slate-950/40 border border-slate-800 rounded-lg">
+                        <IconComponent className="w-6 h-6" />
+                      </div>
+                      <h3 className="text-base font-bold text-white">{chan.name}</h3>
+                    </div>
+                    
+                    <button 
+                      onClick={() => handleToggle(chan.key)}
+                      className="focus:outline-none transition-transform active:scale-95"
+                    >
+                      {isActive ? (
+                        <ToggleRight className="w-9 h-9 text-brand-500" />
+                      ) : (
+                        <ToggleLeft className="w-9 h-9 text-slate-600" />
+                      )}
+                    </button>
                   </div>
-                  <h3 className="text-base font-bold text-white">{chan.name}</h3>
-                </div>
-                
-                <button 
-                  onClick={() => handleToggle(chan.key)}
-                  className="focus:outline-none transition-transform active:scale-95"
-                >
-                  {isActive ? (
-                    <ToggleRight className="w-9 h-9 text-brand-500" />
-                  ) : (
-                    <ToggleLeft className="w-9 h-9 text-slate-600" />
-                  )}
-                </button>
-              </div>
 
-              {isActive && (
-                <div className="mt-3">
-                  <button 
-                    onClick={() => setExpandedChannel(isExpanded ? null : chan.key)}
-                    className="flex items-center text-xs font-semibold text-brand-400 hover:text-brand-300 space-x-1"
-                  >
-                    <span>{isExpanded ? 'Ocultar Configuración' : 'Configurar Conector'}</span>
-                    <ChevronRight className={`w-4 h-4 transform transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                  </button>
+                  {isActive && (
+                    <div className="mt-3">
+                      <button 
+                        onClick={() => setExpandedChannel(isExpanded ? null : chan.key)}
+                        className="flex items-center text-xs font-semibold text-brand-400 hover:text-brand-300 space-x-1"
+                      >
+                        <span>{isExpanded ? 'Ocultar Configuración' : 'Configurar Conector'}</span>
+                        <ChevronRight className={`w-4 h-4 transform transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                      </button>
 
-                  {isExpanded && (
-                    <div className="mt-4 space-y-3 pt-3 border-t border-slate-800/50">
-                      {chan.instructions && (
-                        <div className="p-3 bg-slate-950/40 border border-slate-800/60 rounded-xl text-[10px] text-slate-400 space-y-1">
-                          <p className="font-bold text-slate-300 uppercase tracking-wider mb-1">Guía de Configuración:</p>
-                          <ul className="space-y-1.5 leading-relaxed">
-                            {chan.instructions.map((inst, idx) => (
-                              <li key={idx} className="flex items-start space-x-1">
-                                <span className="text-brand-400 flex-shrink-0">•</span>
-                                <span>{parseMarkdownLinks(inst)}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {chan.fields.map((field) => (
-                        <div key={field.key}>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                            {field.label}
-                          </label>
-                          {field.type === 'select' ? (
-                            <select
-                              value={formState[field.key] || 'gemini-2.5-flash'}
-                              onChange={(e) => handleInputChange(field.key, e.target.value)}
-                              className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
-                            >
-                              {field.options.map(opt => (
-                                <option key={opt.value} value={opt.value} className="bg-slate-950 text-white">
-                                  {opt.label}
-                                </option>
-                              ))}
-                            </select>
-                          ) : field.type === 'number' ? (
-                            <input
-                              type="number"
-                              step={field.step || 'any'}
-                              min={field.min}
-                              max={field.max}
-                              value={formState[field.key] === undefined || formState[field.key] === null ? '' : formState[field.key]}
-                              onChange={(e) => {
-                                const val = e.target.value === '' ? '' : parseFloat(e.target.value);
-                                handleInputChange(field.key, val);
-                              }}
-                              placeholder={`Ingresa ${field.label.toLowerCase()}`}
-                              className="w-full bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-brand-500"
-                            />
-                          ) : (
-                            <input
-                              type={field.secret || field.type === 'password' ? "password" : "text"}
-                              value={formState[field.key] || ''}
-                              onChange={(e) => handleInputChange(field.key, e.target.value)}
-                              placeholder={`Ingresa ${field.label.toLowerCase()}`}
-                              className="w-full bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-brand-500"
-                            />
+                      {isExpanded && (
+                        <div className="mt-4 space-y-3 pt-3 border-t border-slate-800/50">
+                          {chan.instructions && (
+                            <div className="p-3 bg-slate-950/40 border border-slate-800/60 rounded-xl text-[10px] text-slate-400 space-y-1">
+                              <p className="font-bold text-slate-300 uppercase tracking-wider mb-1">Guía de Configuración:</p>
+                              <ul className="space-y-1.5 leading-relaxed">
+                                {chan.instructions.map((inst, idx) => (
+                                  <li key={idx} className="flex items-start space-x-1">
+                                    <span className="text-brand-400 flex-shrink-0">•</span>
+                                    <span>{parseMarkdownLinks(inst)}</span>
+                                  </li>
+                                ))}
+                              </ul>
+
+                              {/* Interactive SVG Integration Flow Diagram */}
+                              {chan.key !== 'web_widget' && (
+                                <div className="mt-3 pt-3 border-t border-slate-800/40 flex flex-col items-center">
+                                  <p className="text-[8px] font-bold text-slate-500 uppercase tracking-wider mb-2">Flujo de Datos del Canal</p>
+                                  <svg className="w-full max-w-[280px] h-10" viewBox="0 0 280 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <rect x="5" y="5" width="65" height="30" rx="6" fill="#020617" stroke="#1e293b" strokeWidth="1"/>
+                                    <text x="37.5" y="23" fill="#94a3b8" fontSize="8" fontWeight="bold" textAnchor="middle">{chan.name.split(' ')[0]}</text>
+                                    
+                                    <rect x="110" y="5" width="60" height="30" rx="6" fill="#020617" stroke="#4f46e5" strokeWidth="1.2"/>
+                                    <text x="140" y="23" fill="#818cf8" fontSize="8" fontWeight="bold" textAnchor="middle">Astro Link</text>
+                                    
+                                    <rect x="210" y="5" width="65" height="30" rx="6" fill="#020617" stroke="#6366f1" strokeWidth="1"/>
+                                    <text x="242.5" y="23" fill="#a5b4fc" fontSize="8" fontWeight="bold" textAnchor="middle">Gemini AI</text>
+                                    
+                                    <path d="M70 20 H109" stroke="#334155" strokeWidth="1.2" strokeDasharray="3 3"/>
+                                    <polygon points="109,20 104,17 104,23" fill="#334155"/>
+                                    
+                                    <path d="M170 20 H209" stroke="#4f46e5" strokeWidth="1.2"/>
+                                    <polygon points="209,20 204,17 204,23" fill="#4f46e5"/>
+                                  </svg>
+                                </div>
+                              )}
+                            </div>
                           )}
-                        </div>
-                      ))}
+                          {chan.fields.map((field) => (
+                            <div key={field.key}>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                                {field.label}
+                              </label>
+                              {field.type === 'select' ? (
+                                <select
+                                  value={formState[field.key] || 'gemini-2.5-flash'}
+                                  onChange={(e) => handleInputChange(field.key, e.target.value)}
+                                  className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
+                                >
+                                  {field.options.map(opt => (
+                                    <option key={opt.value} value={opt.value} className="bg-slate-950 text-white">
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : field.type === 'number' ? (
+                                <input
+                                  type="number"
+                                  step={field.step || 'any'}
+                                  min={field.min}
+                                  max={field.max}
+                                  value={formState[field.key] === undefined || formState[field.key] === null ? '' : formState[field.key]}
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? '' : parseFloat(e.target.value);
+                                    handleInputChange(field.key, val);
+                                  }}
+                                  placeholder={`Ej. 0.7`}
+                                  className="w-full bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-brand-500"
+                                />
+                              ) : (
+                                <div className="relative">
+                                  <input
+                                    type={(field.secret || field.type === 'password') && !visibleSecrets[field.key] ? "password" : "text"}
+                                    value={formState[field.key] || ''}
+                                    onChange={(e) => handleInputChange(field.key, e.target.value)}
+                                    placeholder={field.secret ? "••••••••••••••••" : `Ingresa ${field.label.toLowerCase()}`}
+                                    className={`w-full bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-700 focus:outline-none focus:border-brand-500 ${(field.secret || field.type === 'password') ? 'pr-9' : ''}`}
+                                  />
+                                  {(field.secret || field.type === 'password') && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setVisibleSecrets(prev => ({ ...prev, [field.key]: !prev[field.key] }))}
+                                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors focus:outline-none"
+                                    >
+                                      {visibleSecrets[field.key] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
 
-                      {chan.widgetEmbed && (
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                            Código Embed (JS)
-                          </label>
-                          <textarea
-                            readOnly
-                            rows={3}
-                            value={embedCode}
-                            onClick={(e) => { e.target.select(); document.execCommand('copy'); alert('Código copiado al portapapeles'); }}
-                            className="w-full bg-slate-950/80 border border-slate-800 rounded-lg p-2 text-[10px] text-emerald-400 font-mono focus:outline-none cursor-pointer"
-                          />
-                          <p className="text-[9px] text-slate-500 mt-1">Copia y pega este script en el cuerpo de tu HTML para renderizar el chat flotante.</p>
-                        </div>
-                      )}
+                          {chan.widgetEmbed && (
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                                Código Embed (JS)
+                              </label>
+                              <textarea
+                                readOnly
+                                rows={3}
+                                value={embedCode}
+                                onClick={(e) => { 
+                                  e.target.select(); 
+                                  document.execCommand('copy'); 
+                                  showToast('¡Código Embed copiado al portapapeles!', 'success');
+                                }}
+                                className="w-full bg-slate-950/80 border border-slate-800 rounded-lg p-2 text-[10px] text-emerald-400 font-mono focus:outline-none cursor-pointer"
+                              />
+                              <p className="text-[9px] text-slate-500 mt-1">Copia y pega este script en el cuerpo de tu HTML para renderizar el chat flotante.</p>
+                            </div>
+                          )}
 
-                      {['whatsapp', 'telegram', 'sms', 'instagram', 'messenger'].includes(chan.key) && (
-                        <div className="mt-3 p-2 bg-slate-950/80 border border-slate-800 rounded-lg">
-                          <label className="block text-[9px] font-bold text-indigo-400 uppercase tracking-wider mb-1">
-                            URL de Webhook para Configurar
-                          </label>
-                          <div 
-                            onClick={() => {
-                              navigator.clipboard.writeText(`${API_BASE_URL}/webhooks/${tenantId}/${chan.key}`);
-                              alert('URL de Webhook copiada al portapapeles');
-                            }}
-                            className="text-[10px] text-slate-300 font-mono break-all cursor-pointer hover:text-white select-all"
-                          >
-                            {`${API_BASE_URL}/webhooks/${tenantId}/${chan.key}`}
+                          {['whatsapp', 'telegram', 'sms', 'instagram', 'messenger'].includes(chan.key) && (
+                            <div className="mt-3 p-2 bg-slate-950/80 border border-slate-800 rounded-lg">
+                              <label className="block text-[9px] font-bold text-indigo-400 uppercase tracking-wider mb-1">
+                                URL de Webhook para Configurar
+                              </label>
+                              <div 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(`${API_BASE_URL}/webhooks/${tenantId}/${chan.key}`);
+                                  showToast('¡URL de Webhook copiada al portapapeles!', 'success');
+                                }}
+                                className="text-[10px] text-slate-300 font-mono break-all cursor-pointer hover:text-white select-all"
+                              >
+                                {`${API_BASE_URL}/webhooks/${tenantId}/${chan.key}`}
+                              </div>
+                              <p className="text-[8px] text-slate-500 mt-1">
+                                Haz clic para copiar esta URL en la consola de desarrollador del canal.
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="flex gap-3 mt-3">
+                            {chan.fields.length > 0 && (
+                              <button
+                                onClick={() => handleSave(chan.key)}
+                                className="flex-grow bg-brand-600 hover:bg-brand-500 text-white font-semibold py-1.5 px-3 rounded-lg text-xs flex items-center justify-center space-x-1 transition-all"
+                              >
+                                <Save className="w-3.5 h-3.5" />
+                                <span>{status === 'saving' ? 'Guardando...' : status === 'saved' ? '¡Guardado!' : 'Guardar'}</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleTestConnection(chan.key)}
+                              className={`flex-grow border font-semibold py-1.5 px-3 rounded-lg text-xs flex items-center justify-center space-x-1.5 transition-all focus:outline-none ${
+                                checkStatus === 'checking' 
+                                  ? 'bg-slate-900 border-slate-700 text-slate-400 cursor-not-allowed'
+                                  : checkStatus === 'success'
+                                  ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-400 font-bold'
+                                  : checkStatus === 'error'
+                                  ? 'bg-rose-950/50 border-rose-500/40 text-rose-400 font-bold'
+                                  : 'bg-slate-950/40 border-slate-800 text-slate-300 hover:bg-slate-900 hover:border-slate-700'
+                              }`}
+                              disabled={checkStatus === 'checking'}
+                            >
+                              {checkStatus === 'checking' ? (
+                                <Activity className="w-3.5 h-3.5 animate-spin" />
+                              ) : checkStatus === 'success' ? (
+                                <Check className="w-3.5 h-3.5" />
+                              ) : (
+                                <Activity className="w-3.5 h-3.5" />
+                              )}
+                              <span>
+                                {checkStatus === 'checking' ? 'Probando...' : checkStatus === 'success' ? '¡Conectado!' : checkStatus === 'error' ? 'Fallo' : 'Probar'}
+                              </span>
+                            </button>
                           </div>
-                          <p className="text-[8px] text-slate-500 mt-1">
-                            Haz clic para copiar esta URL en la consola de desarrollador del canal.
-                          </p>
                         </div>
-                      )}
-
-                      {chan.fields.length > 0 && (
-                        <button
-                          onClick={() => handleSave(chan.key)}
-                          className="mt-3 w-full bg-brand-600 hover:bg-brand-500 text-white font-semibold py-1.5 px-3 rounded-lg text-xs flex items-center justify-center space-x-1 transition-all"
-                        >
-                          <Save className="w-4 h-4" />
-                          <span>{status === 'saving' ? 'Guardando...' : status === 'saved' ? '¡Guardado!' : 'Guardar Credenciales'}</span>
-                        </button>
                       )}
                     </div>
                   )}
                 </div>
-              )}
-            </div>
 
-            <div className="mt-4 pt-3 border-t border-slate-800/10 flex items-center justify-between text-xs text-slate-500">
-              <span className="flex items-center space-x-1">
-                <ShieldCheck className={`w-4 h-4 ${isActive ? 'text-emerald-500' : 'text-slate-600'}`} />
-                <span>{isActive ? 'Activo' : 'Inactivo'}</span>
-              </span>
-              <span>v1.0</span>
-            </div>
-          </div>
-        );
-      })}
+                <div className="mt-4 pt-3 border-t border-slate-800/10 flex items-center justify-between text-xs text-slate-500">
+                  <span className="flex items-center space-x-1">
+                    <ShieldCheck className={`w-4 h-4 ${isActive ? 'text-emerald-500' : 'text-slate-600'}`} />
+                    <span>{isActive ? 'Activo' : 'Inactivo'}</span>
+                  </span>
+                  <span>v1.0</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {toast && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={() => setToast(null)} 
+        />
+      )}
     </div>
   );
 }
