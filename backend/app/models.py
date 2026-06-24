@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Boolean, Text, DateTime, ForeignKey, Integer, JSON
+from sqlalchemy import Column, String, Boolean, Text, DateTime, ForeignKey, Integer, JSON, Float
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator, CHAR
