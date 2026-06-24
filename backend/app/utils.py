@@ -105,8 +105,23 @@ def is_safe_url(url: str) -> bool:
         try:
             ip = socket.gethostbyname(hostname)
             ip_obj = ipaddress.ip_address(ip)
-            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_multicast:
+            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_multicast or ip_obj.is_unspecified:
                 return False
+                
+            # Additional explicit network blocklists (SSRF protection)
+            blocked_networks = [
+                ipaddress.ip_network("0.0.0.0/8"),
+                ipaddress.ip_network("100.64.0.0/10"),
+                ipaddress.ip_network("192.0.0.0/24"),
+                ipaddress.ip_network("192.0.2.0/24"),    # TEST-NET-1
+                ipaddress.ip_network("198.18.0.0/15"),   # Benchmarking
+                ipaddress.ip_network("198.51.100.0/24"), # TEST-NET-2
+                ipaddress.ip_network("203.0.113.0/24"),  # TEST-NET-3
+                ipaddress.ip_network("240.0.0.0/4")      # Reserved
+            ]
+            for net in blocked_networks:
+                if ip_obj in net:
+                    return False
         except Exception:
             # If resolution fails, we proceed with caution but do not block
             pass

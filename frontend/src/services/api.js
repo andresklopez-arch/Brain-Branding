@@ -5,7 +5,10 @@ export const api = {
   async setupTenant(nombreEmpresa, websiteUrl) {
     const url = `${API_BASE_URL}/tenants/setup?nombre_empresa=${encodeURIComponent(nombreEmpresa)}&website_url=${encodeURIComponent(websiteUrl)}`;
     const res = await fetch(url, { method: 'POST' });
-    if (!res.ok) throw new Error('Error al configurar la empresa');
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || 'Error al configurar la empresa');
+    }
     return res.json();
   },
 

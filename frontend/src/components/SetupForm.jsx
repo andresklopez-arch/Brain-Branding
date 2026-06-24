@@ -25,7 +25,7 @@ export default function SetupForm({ onSetupComplete }) {
       }, 1500);
     } catch (err) {
       console.error(err);
-      setStatusMessage('Error al configurar la cuenta. Reintenta.');
+      setStatusMessage(err.message || 'Error al configurar la cuenta. Reintenta.');
       setLoading(false);
     }
   };

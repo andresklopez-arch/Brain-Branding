@@ -25,6 +25,13 @@ def test_url_safety():
     assert is_safe_url("ftp://somehost") == False
     assert is_safe_url("http://169.254.169.254/latest/meta-data") == False
     
+    # Advanced SSRF Ranges (Documentation and Benchmarking blocklists)
+    assert is_safe_url("http://192.0.2.1") == False
+    assert is_safe_url("http://198.51.100.5") == False
+    assert is_safe_url("http://203.0.113.10") == False
+    assert is_safe_url("http://198.18.1.1") == False
+    assert is_safe_url("http://100.64.0.1") == False
+    
     print("[SUCCESS] All URL safety validations passed.")
 
 

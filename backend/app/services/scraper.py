@@ -30,13 +30,26 @@ class WebScraper:
         return "\n".join(clean_lines)
 
     async def fetch_page(self, client: httpx.AsyncClient, url: str) -> str:
-        """Asynchronously fetches a URL page and returns the cleaned text."""
-        try:
-            response = await client.get(url, headers=self.headers, timeout=10.0, follow_redirects=True)
-            if response.status_code == 200:
-                return response.text
-        except Exception as e:
-            print(f"[SCRAPE ERROR] Failed to fetch {url}: {str(e)}")
+        """Asynchronously fetches a URL page with exponential backoff retries on failure."""
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                response = await client.get(url, headers=self.headers, timeout=10.0, follow_redirects=True)
+                if response.status_code == 200:
+                    return response.text
+                
+                # Check for rate limit or temp service unavailable status codes
+                if response.status_code in (429, 503):
+                    print(f"[SCRAPE WARNING] Received {response.status_code} for {url}. Attempt {attempt + 1}/{max_attempts}.")
+                    if attempt < max_attempts - 1:
+                        await asyncio.sleep(2 ** attempt)
+                        continue
+                break  # Don't retry other non-retryable codes (e.g. 404, 403)
+            except Exception as e:
+                print(f"[SCRAPE WARNING] Failed to fetch {url} (Attempt {attempt + 1}/{max_attempts}): {str(e)}")
+                if attempt < max_attempts - 1:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
         return ""
 
     def extract_links(self, html_content: str, base_url: str) -> Set[str]:
