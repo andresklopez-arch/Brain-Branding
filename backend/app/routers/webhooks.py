@@ -6,7 +6,7 @@ from collections import defaultdict
 from email.mime.text import MIMEText
 from email.header import Header
 from ..database import get_db
-from ..models import Tenant, KnowledgeBase, ConversationsThread, LeadCRM, ChannelsCredentials
+from ..models import KnowledgeBase, ConversationsThread, LeadCRM, ChannelsCredentials
 from ..schemas import WidgetMessageInput
 from ..services.gemini import GeminiService
 from ..services.channels import omnichannel
