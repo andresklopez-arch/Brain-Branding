@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Tenant, ChannelsCredentials, KnowledgeBase
@@ -9,17 +9,61 @@ import uuid
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
 
+async def local_scraper_fallback(tenant_id: str, url: str, db_session_maker):
+    """Fallback scraping runner that runs locally if Redis/Celery is offline."""
+    print(f"[FALLBACK SCRAPER] Running local BS4 scraper task for {tenant_id}...")
+    from ..services.scraper import WebScraper
+    scraper = WebScraper(max_pages=5)
+    try:
+        clean_text = await scraper.scrape_site(url)
+        db = db_session_maker()
+        kb = db.query(KnowledgeBase).filter(KnowledgeBase.tenant_id == tenant_id).first()
+        if not kb:
+            kb = KnowledgeBase(
+                tenant_id=tenant_id,
+                url_origen=url,
+                texto_scrapeado_limpio=clean_text
+            )
+            db.add(kb)
+        else:
+            kb.url_origen = url
+            kb.texto_scrapeado_limpio = clean_text
+        db.commit()
+        db.close()
+        
+        print(f"[FALLBACK SCRAPER] Finished local scraping for {tenant_id}.")
+        await socket_manager.broadcast_to_tenant(
+            tenant_id,
+            {
+                "event": "scraper_finished",
+                "status": "success",
+                "message": "Indexación web completada. Tu IA está lista para responder.",
+                "url": url
+            }
+        )
+    except Exception as e:
+        print(f"[FALLBACK SCRAPER ERROR] {str(e)}")
+        await socket_manager.broadcast_to_tenant(
+            tenant_id,
+            {
+                "event": "scraper_finished",
+                "status": "error",
+                "message": f"Error indexando tu sitio: {str(e)}"
+            }
+        )
+
 @router.post("/setup", response_model=TenantResponse)
 def setup_tenant(
     nombre_empresa: str,
     website_url: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
     SaaS One-Click Setup Pipeline:
     1. Create tenant.
     2. Initialize credentials mapping.
-    3. Trigger async Celery site scraper task.
+    3. Trigger Celery scraper (or fallback to local background task if Redis is offline).
     """
     # 1. Create Tenant
     tenant = Tenant(
@@ -36,8 +80,19 @@ def setup_tenant(
     db.add(creds)
     db.commit()
     
-    # 3. Trigger Celery scraper task in background
-    run_scraper_celery.delay(str(tenant.id), website_url)
+    # 3. Trigger Celery task, fallback to local background task if Redis is offline
+    try:
+        run_scraper_celery.delay(str(tenant.id), website_url)
+        print("[CELERY] Task successfully enqueued.")
+    except Exception as e:
+        print(f"[CELERY WARNING] Redis is offline. Running scraper locally via BackgroundTasks: {str(e)}")
+        from ..database import SessionLocal
+        background_tasks.add_task(
+            local_scraper_fallback,
+            str(tenant.id),
+            website_url,
+            SessionLocal
+        )
     
     return tenant
 
