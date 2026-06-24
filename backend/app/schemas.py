@@ -53,6 +53,7 @@ class CredentialsUpdate(BaseModel):
     gemini_api_key: Optional[str] = None
     gemini_model_name: Optional[str] = None
     gemini_temperature: Optional[float] = None
+    encryption_salt: Optional[str] = None
 
 class CredentialsResponse(CredentialsUpdate):
     id: int

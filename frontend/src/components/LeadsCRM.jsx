@@ -78,7 +78,7 @@ export default function LeadsCRM({ tenantId }) {
                       )}
                       {lead.telefono && (
                         <a 
-                          href={`https://wa.me/${lead.telefono.replace(/[^0-9]/g, '')}`} 
+                          href={`https://wa.me/${lead.telefono.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hola ${lead.nombre_extraido || ''}, te contacto de la empresa en relación a tu consulta en nuestros canales de atención.`)}`} 
                           target="_blank" 
                           rel="noopener noreferrer" 
                           className="flex items-center space-x-1.5 text-brand-400 hover:text-brand-300 hover:underline transition-all"

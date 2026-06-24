@@ -28,6 +28,11 @@ try:
             print("[DATABASE MIGRATION] Added gemini_temperature column to channels_credentials.")
         except Exception as col_err:
             pass
+        try:
+            conn.execute(text("ALTER TABLE channels_credentials ADD COLUMN encryption_salt VARCHAR(100);"))
+            print("[DATABASE MIGRATION] Added encryption_salt column to channels_credentials.")
+        except Exception as col_err:
+            pass
 except Exception as e:
     print(f"[DATABASE ERROR] Could not synchronize tables: {str(e)}")
 

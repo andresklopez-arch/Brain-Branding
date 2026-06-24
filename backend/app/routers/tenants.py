@@ -142,7 +142,7 @@ def get_credentials(tenant_id: str, db: Session = Depends(get_db)):
     # Decrypt key for API response serialization
     resp = CredentialsResponse.model_validate(creds)
     if resp.gemini_api_key:
-        resp.gemini_api_key = decrypt_val(resp.gemini_api_key)
+        resp.gemini_api_key = decrypt_val(resp.gemini_api_key, salt_str=creds.encryption_salt)
     return resp
 
 @router.put("/{tenant_id}/credentials", response_model=CredentialsResponse)
@@ -151,11 +151,19 @@ def update_credentials(tenant_id: str, payload: CredentialsUpdate, db: Session =
     if not creds:
         raise HTTPException(status_code=404, detail="Credentials record not found for tenant.")
         
+    # Generate dynamic salt if not already present
+    if not creds.encryption_salt:
+        import base64
+        import os
+        creds.encryption_salt = base64.b64encode(os.urandom(16)).decode('utf-8')
+        db.commit()
+        db.refresh(creds)
+
     # Update fields
     update_data = payload.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         if key == "gemini_api_key" and value:
-            value = encrypt_val(value)
+            value = encrypt_val(value, salt_str=creds.encryption_salt)
         setattr(creds, key, value)
         
     db.commit()
@@ -164,5 +172,5 @@ def update_credentials(tenant_id: str, payload: CredentialsUpdate, db: Session =
     # Decrypt key for API response serialization
     resp = CredentialsResponse.model_validate(creds)
     if resp.gemini_api_key:
-        resp.gemini_api_key = decrypt_val(resp.gemini_api_key)
+        resp.gemini_api_key = decrypt_val(resp.gemini_api_key, salt_str=creds.encryption_salt)
     return resp

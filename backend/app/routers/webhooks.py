@@ -266,7 +266,7 @@ async def process_incoming_message(
     kb_text = kb.texto_scrapeado_limpio if kb else "No hay información adicional de la empresa."
 
     creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
-    api_key = decrypt_val(creds.gemini_api_key) if (creds and creds.gemini_api_key) else None
+    api_key = decrypt_val(creds.gemini_api_key, salt_str=creds.encryption_salt) if (creds and creds.gemini_api_key) else None
     model_name = creds.gemini_model_name if (creds and creds.gemini_model_name) else None
     temperature = creds.gemini_temperature if (creds and creds.gemini_temperature is not None) else None
 
@@ -380,10 +380,15 @@ async def verify_whatsapp(
     tenant_id: str,
     hub_mode: str = Query(None, alias="hub.mode"),
     hub_challenge: str = Query(None, alias="hub.challenge"),
-    hub_verify_token: str = Query(None, alias="hub.verify_token")
+    hub_verify_token: str = Query(None, alias="hub.verify_token"),
+    db: Session = Depends(get_db)
 ):
     """WhatsApp verification token webhook."""
-    # Simple verification logic, in production match with ChannelsCredentials
+    creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
+    if creds and creds.whatsapp_token:
+        expected_token = decrypt_val(creds.whatsapp_token, salt_str=creds.encryption_salt)
+        if expected_token and hub_verify_token != expected_token:
+            raise HTTPException(status_code=403, detail="Verification token mismatch")
     return Response(content=hub_challenge, media_type="text/plain")
 
 @router.post("/{tenant_id}/whatsapp")
@@ -469,7 +474,19 @@ async def receive_sms(tenant_id: str, request: Request, background_tasks: Backgr
 
 # 4. Instagram Webhook
 @router.get("/{tenant_id}/instagram")
-async def verify_instagram(hub_challenge: str = Query(None, alias="hub.challenge")):
+async def verify_instagram(
+    tenant_id: str,
+    hub_mode: str = Query(None, alias="hub.mode"),
+    hub_challenge: str = Query(None, alias="hub.challenge"),
+    hub_verify_token: str = Query(None, alias="hub.verify_token"),
+    db: Session = Depends(get_db)
+):
+    """Instagram verification token webhook."""
+    creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
+    if creds and creds.instagram_page_token:
+        expected_token = decrypt_val(creds.instagram_page_token, salt_str=creds.encryption_salt)
+        if expected_token and hub_verify_token != expected_token:
+            raise HTTPException(status_code=403, detail="Verification token mismatch")
     return Response(content=hub_challenge, media_type="text/plain")
 
 @router.post("/{tenant_id}/instagram")
@@ -551,9 +568,15 @@ async def verify_messenger(
     tenant_id: str,
     hub_mode: str = Query(None, alias="hub.mode"),
     hub_challenge: str = Query(None, alias="hub.challenge"),
-    hub_verify_token: str = Query(None, alias="hub.verify_token")
+    hub_verify_token: str = Query(None, alias="hub.verify_token"),
+    db: Session = Depends(get_db)
 ):
     """Messenger verification token webhook."""
+    creds = db.query(ChannelsCredentials).filter(ChannelsCredentials.tenant_id == tenant_id).first()
+    if creds and creds.messenger_page_token:
+        expected_token = decrypt_val(creds.messenger_page_token, salt_str=creds.encryption_salt)
+        if expected_token and hub_verify_token != expected_token:
+            raise HTTPException(status_code=403, detail="Verification token mismatch")
     return Response(content=hub_challenge, media_type="text/plain")
 
 @router.post("/{tenant_id}/messenger")
