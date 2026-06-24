@@ -1,6 +1,6 @@
 import uuid
-from sqlalchemy import Column, String, Boolean, Text, DateTime, ForeignKey, Integer
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, String, Boolean, Text, DateTime, ForeignKey, Integer, JSON
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from .database import Base
@@ -44,7 +44,7 @@ class ChannelsCredentials(Base):
     twilio_sms_auth = Column(String(100), nullable=True)
     instagram_page_token = Column(Text, nullable=True)
     telegram_bot_token = Column(String(255), nullable=True)
-    email_imap_smtp_config_json = Column(JSONB, nullable=True)
+    email_imap_smtp_config_json = Column(JSON, nullable=True)
     twitter_x_bearer_token = Column(Text, nullable=True)
     tiktok_business_access_token = Column(Text, nullable=True)
     youtube_api_key = Column(String(255), nullable=True)
@@ -61,7 +61,7 @@ class ConversationsThread(Base):
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     canal_origen = Column(String(50), nullable=False)
     contacto_identificador_plataforma = Column(String(255), nullable=False)
-    historial_chat_json = Column(JSONB, nullable=False, default=list) # [{role: "user"|"model", content: "...", timestamp: "..."}]
+    historial_chat_json = Column(JSON, nullable=False, default=list) # [{role: "user"|"model", content: "...", timestamp: "..."}]
     ai_active_status = Column(Boolean, nullable=False, default=True)
     ultima_interaccion_timestamp = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
