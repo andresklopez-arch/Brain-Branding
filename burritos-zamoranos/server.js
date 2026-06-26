@@ -209,6 +209,17 @@ app.get('/api/shift/history', (req, res) => {
   res.json(db.getShifts());
 });
 
+// Info de WebSocket para proxy en la nube (Vercel/Render)
+app.get('/api/ws-info', (req, res) => {
+  const externalUrl = process.env.RENDER_EXTERNAL_URL;
+  if (externalUrl) {
+    const wsUrl = externalUrl.replace(/^http/, 'ws');
+    return res.json({ wsUrl });
+  }
+  const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'wss' : 'ws';
+  res.json({ wsUrl: `${protocol}://${req.get('host')}` });
+});
+
 // Configuración general
 app.get('/api/config', (req, res) => {
   res.json(db.getConfig());

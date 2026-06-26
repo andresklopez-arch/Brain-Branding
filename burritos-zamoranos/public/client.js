@@ -1,3 +1,17 @@
+// Intercept and patch window.fetch to support proxy routing on Vercel
+(function() {
+  const originalFetch = window.fetch;
+  window.fetch = function(input, init) {
+    let url = input;
+    if (typeof url === 'string' && url.startsWith('/api/')) {
+      if (window.location.pathname.includes('/zamoranos')) {
+        url = '/zamoranos' + url;
+      }
+    }
+    return originalFetch(url, init);
+  };
+})();
+
 // === Cliente WebSocket y Estado Compartido ===
 
 let socket = null;
@@ -158,10 +172,26 @@ function showConnectionStatus(status) {
 }
 
 // Inicializar conexión WebSocket
-function connectWebSocket(onMessageCallback) {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = `${protocol}//${window.location.host}`;
+async function connectWebSocket(onMessageCallback) {
+  let wsUrl;
   
+  // Si estamos en Vercel, obtener la dirección del WebSocket directamente del Backend
+  if (window.location.hostname.includes('vercel.app') || window.location.hostname.includes('brain-branding')) {
+    try {
+      const response = await fetch('/api/ws-info');
+      const data = await response.json();
+      wsUrl = data.wsUrl;
+    } catch (err) {
+      console.error('Error al obtener URL del WebSocket de Render:', err);
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      wsUrl = `${protocol}//${window.location.host}`;
+    }
+  } else {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    wsUrl = `${protocol}//${window.location.host}`;
+  }
+  
+  console.log('[WS] Conectando a:', wsUrl);
   socket = new WebSocket(wsUrl);
 
   socket.onopen = () => {
