@@ -1,0 +1,16 @@
+{
+  "name": "burritos-zamoranos-pos",
+  "version": "1.0.0",
+  "description": "Sistema de gestión integral y POS para Burritos Zamoranos Hermanos Gómez",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.17.1"
+  },
+  "author": "Antigravity Pair Programming",
+  "license": "ISC"
+}

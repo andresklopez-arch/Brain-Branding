@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Burritos Zamoranos Hermanos Gómez</title>
+  <script>
+    // Redirección inteligente basada en sesión o mesa
+    window.onload = () => {
+      const params = new URLSearchParams(window.location.search);
+      const mesa = params.get('mesa');
+      
+      if (mesa) {
+        // Si escanea código QR con número de mesa, redirigir al menú cliente
+        window.location.href = `cliente.html?mesa=${mesa}`;
+        return;
+      }
+      
+      const sessionStr = localStorage.getItem('zamoranos_session');
+      if (sessionStr) {
+        try {
+          const session = JSON.parse(sessionStr);
+          if (session && !session.mustChangePassword) {
+            // Redirigir al panel correspondiente si hay sesión activa
+            if (session.role === 'Administrador' || session.role === 'Gerente' || session.role === 'Cajero') {
+              window.location.href = 'caja.html';
+            } else if (session.role === 'Cocina') {
+              window.location.href = 'cocina.html';
+            } else if (session.role === 'Mesero') {
+              window.location.href = 'mesero.html';
+            }
+            return;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      
+      // Por defecto, ir a login
+      window.location.href = 'login.html';
+    };
+  </script>
+</head>
+<body style="background-color: #12141c; color: white; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif;">
+  <p>Cargando Burritos Zamoranos Hermanos Gómez POS...</p>
+</body>
+</html>

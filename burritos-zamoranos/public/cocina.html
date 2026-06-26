@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cocina KDS - Burritos Zamoranos Hermanos Gómez</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Asegurar que use la paleta oscura de KDS */
+    body {
+      background-color: #0b0c10;
+      color: #f3f4f6;
+    }
+    @keyframes flashOrange {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body class="kds-layout">
+  <!-- Cabecera de KDS -->
+  <header class="app-header" style="background-color: #12141c; border-bottom: 2px solid #202433; padding: 12px 24px;">
+    <div class="brand-section">
+      <img src="logo.png" alt="Burritos Zamoranos" class="brand-logo" style="height: 40px;" onerror="this.src='https://placehold.co/100x100/f25c05/ffffff?text=BZ'">
+      <div class="brand-name">
+        <h1 style="font-size: 1.3rem;">KDS - Pantalla de Cocina</h1>
+        <p style="color: var(--accent-orange);">Burritos Zamoranos Hnos. Gómez</p>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 20px;">
+      <div class="user-badge" style="background-color: #1a1d29; border-color: #202433;">
+        <span style="font-weight: 800; color: var(--accent-orange);" id="pending-count">Comandas: 0</span>
+      </div>
+      <div id="clock" style="font-family: monospace; font-size: 1.2rem; font-weight: 600; color: var(--text-muted);">
+        00:00:00
+      </div>
+    </div>
+  </header>
+
+  <!-- Rejilla de Comandas -->
+  <main class="kds-grid" id="kds-orders-container">
+    <div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 80px; font-size: 1.3rem;">
+      Esperando comandas desde las mesas...
+    </div>
+  </main>
+
+  <script src="client.js"></script>
+  <script>
+    // Validar sesión y rol
+    const currentSession = loadUserSession();
+    if (!currentSession) {
+      window.location.href = 'login.html';
+    } else {
+      const role = currentSession.role;
+      if (role !== 'Administrador' && role !== 'Gerente' && role !== 'Cocina') {
+        window.location.href = 'login.html';
+      }
+    }
+
+    let ordersList = [];
+
+    // Reloj digital en cabecera
+    setInterval(() => {
+      document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+    }, 1000);
+
+    // Conectar WebSocket
+    connectWebSocket((type, data) => {
+      if (type === 'INIT') {
+        ordersList = data.orders;
+        updateKdsUI();
+      } 
+      else if (type === 'NEW_ORDER') {
+        ordersList.push(data);
+        updateKdsUI();
+        // Alerta sonora en cocina (Beep fuerte)
+        playNotificationSound('success');
+        
+        // Alerta de voz sintetizada si hay alérgenos (Sugerencia 1)
+        checkAndSpeakAllergy(data);
+      } 
+      else if (type === 'ORDER_UPDATED') {
+        const idx = ordersList.findIndex(o => o.id === data.id);
+        if (idx !== -1) {
+          ordersList[idx] = data;
+        } else {
+          ordersList.push(data);
+        }
+        updateKdsUI();
+      }
+    });
+
+    function checkAndSpeakAllergy(order) {
+      if (!order.items || !window.speechSynthesis) return;
+      
+      let allergyItems = [];
+      order.items.forEach(item => {
+        if (item.note) {
+          const isAllergy = /alerg|allergy|sin nuez|sin gluten|sin lacteo|peligro|intoleran/i.test(item.note) || item.note.includes('⚠️');
+          if (isAllergy) {
+            allergyItems.push(`${item.name} modificado como ${item.note}`);
+          }
+        }
+      });
+      
+      if (allergyItems.length > 0) {
+        const text = `Atención cocina, alerta de alergia en comanda para ${order.table}. Detalle: ${allergyItems.join('. ')}`;
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'es-MX';
+        utterance.rate = 0.85;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    // Actualizar UI del Kitchen Display System
+    function updateKdsUI() {
+      // Filtrar órdenes que están "Pendiente" o "En Cocina" o "Por Aprobar"
+      const cookingOrders = ordersList.filter(o => o.status === 'Pendiente' || o.status === 'En Cocina' || o.status === 'Por Aprobar');
+      
+      document.getElementById('pending-count').textContent = `Comandas: ${cookingOrders.length}`;
+
+      const container = document.getElementById('kds-orders-container');
+      container.innerHTML = '';
+
+      if (cookingOrders.length === 0) {
+        container.innerHTML = `
+          <div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 80px; font-size: 1.3rem;">
+            🍳 Cocina limpia. Sin comandas pendientes.
+          </div>
+        `;
+        return;
+      }
+
+      cookingOrders.forEach(o => {
+        const card = document.createElement('div');
+        card.className = 'kds-card';
+        card.id = `kds-card-${o.id}`;
+
+        const isPendingApproval = o.status === 'Por Aprobar';
+        if (isPendingApproval) {
+          card.style.opacity = '0.85';
+          card.style.border = '2px dashed var(--accent-orange)';
+          card.style.backgroundColor = 'rgba(30, 20, 10, 0.4)';
+        }
+
+        // Generar items
+        let itemsHtml = '';
+        o.items.forEach((item, index) => {
+          let noteHtml = '';
+          if (item.note) {
+            const isAllergy = /alerg|allergy|sin nuez|sin gluten|sin lacteo|peligro|intoleran/i.test(item.note) || item.note.includes('⚠️');
+            if (isAllergy) {
+              noteHtml = `
+                <div class="kds-allergy-alert" style="color: #ff3333; font-size: 0.95rem; font-weight: 800; margin-left: 28px; background-color: rgba(255,51,51,0.15); border: 1px solid #ff3333; border-radius: 6px; padding: 4px 8px; margin-top: 4px; display: inline-flex; align-items: center; gap: 6px; animation: flashRed 1.5s infinite;">
+                  ⚠️ ALERGIA: ${item.note}
+                </div>
+              `;
+            } else {
+              noteHtml = `<div style="color: #ff9f43; font-size: 0.95rem; font-weight: 600; margin-left: 28px; font-style: italic; margin-top: 2px;">👉 ${item.note}</div>`;
+            }
+          }
+          itemsHtml += `
+            <li id="kds-item-${o.id}-${index}" ${isPendingApproval ? '' : `onclick="toggleItemStrike('${o.id}', ${index})"`} style="display: block; ${isPendingApproval ? 'cursor: default;' : 'cursor: pointer;'} padding: 6px 0; border-bottom: 1px dashed #202433;">
+              <div style="display: flex; align-items: center;">
+                <span style="color: var(--accent-orange); font-size: 1.25rem; font-weight: 800; margin-right: 8px;">${item.qty}x</span>
+                <span style="font-size: 1.15rem; font-weight: 600;">${item.name}</span>
+              </div>
+              ${noteHtml}
+            </li>
+          `;
+        });
+
+        // Calcular tiempo transcurrido
+        const secondsElapsed = Math.floor((Date.now() - new Date(o.timestamp).getTime()) / 1000);
+        
+        let headerBannerHtml = '';
+        if (isPendingApproval) {
+          headerBannerHtml = `<div style="background-color: var(--accent-orange); color: white; text-align: center; font-size: 0.8rem; font-weight: 800; padding: 4px; border-radius: 4px; margin-bottom: 8px; letter-spacing: 0.5px; animation: flashOrange 2s infinite;">⚠️ POR APROBAR</div>`;
+        }
+
+        let buttonHtml = '';
+        if (isPendingApproval) {
+          buttonHtml = `
+            <button class="btn" onclick="approveOrderFromKds('${o.id}')" style="width: 100%; padding: 18px 0; font-size: 1.2rem; font-weight: 800; text-transform: uppercase; background-color: var(--accent-orange); border: none; color: white; border-radius: var(--border-radius); cursor: pointer;">
+              Aprobar ✔
+            </button>
+          `;
+        } else {
+          buttonHtml = `
+            <button class="btn btn-success" onclick="markReady('${o.id}')" style="width: 100%; padding: 18px 0; font-size: 1.2rem; font-weight: 800; text-transform: uppercase;">
+              Listo ✔
+            </button>
+          `;
+        }
+
+        card.innerHTML = `
+          ${headerBannerHtml}
+          <div class="order-card-header" style="border-bottom: 2px solid #202433; padding-bottom: 8px;">
+            <span style="font-size: 1.4rem; font-weight: 800; color: #ffffff;">${o.table}</span>
+            <span class="kds-timer" id="timer-${o.id}" data-timestamp="${o.timestamp}">00:00</span>
+          </div>
+          <ul class="kds-items-list">
+            ${itemsHtml}
+          </ul>
+          ${buttonHtml}
+        `;
+        container.appendChild(card);
+      });
+
+      // Forzar primer ciclo de actualización de temporizadores
+      updateTimers();
+    }
+
+    // Tachar items en KDS (táctil)
+    function toggleItemStrike(orderId, index) {
+      const el = document.getElementById(`kds-item-${orderId}-${index}`);
+      if (el) {
+        el.classList.toggle('completed');
+      }
+    }
+
+    // Marcar como "Listo" en cocina
+    function markReady(orderId) {
+      // Mandar socket
+      sendWsEvent('UPDATE_STATUS', { orderId, status: 'Listo' });
+    }
+
+    // Aprobar orden desde cocina
+    function approveOrderFromKds(orderId) {
+      sendWsEvent('UPDATE_STATUS', { orderId, status: 'En Cocina' });
+    }
+
+    // Actualizar temporizadores de KDS en tiempo real
+    function updateTimers() {
+      document.querySelectorAll('.kds-timer').forEach(el => {
+        const openedAt = new Date(el.getAttribute('data-timestamp')).getTime();
+        const elapsedSecs = Math.floor((Date.now() - openedAt) / 1000);
+        
+        const mins = Math.floor(elapsedSecs / 60);
+        const secs = elapsedSecs % 60;
+        
+        const formatted = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        el.textContent = formatted;
+
+        // Si excede 15 minutos (900 seg), parpadear en rojo
+        if (elapsedSecs >= 900) {
+          el.className = 'kds-timer warning';
+        } else {
+          el.className = 'kds-timer';
+        }
+      });
+    }
+
+    // Actualizar temporizadores cada segundo
+    setInterval(updateTimers, 1000);
+  </script>
+</body>
+</html>

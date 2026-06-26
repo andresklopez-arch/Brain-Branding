@@ -7,7 +7,8 @@ export function middleware(request) {
   if (
     url.pathname.startsWith('/_next') ||
     url.pathname.includes('.') ||
-    url.pathname.startsWith('/api')
+    url.pathname.startsWith('/api') ||
+    url.pathname.startsWith('/zamoranos')
   ) {
     return NextResponse.next();
   }

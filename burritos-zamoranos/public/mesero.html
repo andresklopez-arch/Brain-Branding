@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel de Mesero - Burritos Zamoranos Hermanos Gómez</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- QRious CDN for client-side QR generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+  <!-- jsPDF CDN for client-side PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="brand-section">
+      <img src="logo.png" alt="Burritos Zamoranos" class="brand-logo" onerror="this.src='https://placehold.co/100x100/f25c05/ffffff?text=BZ'">
+      <div class="brand-name">
+        <h1>Meseros</h1>
+        <p>Entregas y Códigos QR</p>
+      </div>
+    </div>
+    <div class="user-badge">
+      <span class="role-tag" style="background-color: rgba(139, 92, 246, 0.15); color: #8b5cf6;">Mesero</span>
+      <span id="user-display">Cargando...</span>
+    </div>
+  </header>
+
+  <div class="main-content" style="max-width: 800px; margin: 0 auto; padding: 24px 16px;">
+    <!-- Botonera de Acciones Rápidas -->
+    <div style="display: flex; gap: 12px; margin-bottom: 28px; justify-content: flex-end;">
+      <button class="btn btn-primary" id="btn-qr-badge" onclick="openQrPendingModal()" style="width: auto; padding: 10px 16px; background-color: #8b5cf6; border-color: #8b5cf6; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+        📱 Pedidos QR <span id="qr-pending-count" style="background-color: white; color: #8b5cf6; border-radius: 50px; padding: 2px 8px; font-size: 0.8rem; font-weight: 800;">0</span>
+      </button>
+      <button class="btn btn-success" onclick="openPosCaptureModal()" style="width: auto; padding: 10px 16px; background-color: var(--accent-green); border-color: var(--accent-green); font-weight: 800;">
+        📝 Capturar Pedido
+      </button>
+    </div>
+
+    <!-- Alertas en Tiempo Real -->
+    <section style="margin-bottom: 32px;">
+      <h2 style="font-family: var(--font-serif); font-size: 1.6rem; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+        <span>🔔 Entregas Pendientes</span>
+        <span id="ready-badge" style="background-color: var(--accent-green); color: white; padding: 4px 10px; border-radius: 50px; font-size: 0.85rem; font-weight: 800;">0</span>
+      </h2>
+      
+      <div id="alerts-container" style="display: flex; flex-direction: column; gap: 16px;">
+        <!-- Tarjetas de órdenes listas -->
+        <div style="text-align: center; color: var(--text-muted); padding: 40px; background-color: var(--bg-secondary); border-radius: var(--border-radius); border: 1px dashed var(--border-color);">
+          Sin platillos listos para entrega en este momento.
+        </div>
+      </div>
+    </section>
+
+    <!-- Generador de Menú QR -->
+    <section style="background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 24px; box-shadow: var(--shadow-sm);">
+      <h2 style="font-family: var(--font-serif); font-size: 1.6rem; margin-bottom: 8px;">🖨 Imprimir Menú QR</h2>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 24px;">Elige el número de mesa (dejar vacío para un Menú QR General) para imprimir el ticket de autoservicio.</p>
+      
+      <div style="display: flex; gap: 12px; margin-bottom: 24px;">
+        <input type="number" id="qr-table-num" class="form-control" placeholder="Mesa (Opcional - General)" min="1" style="max-width: 200px;">
+        <button class="btn btn-primary" onclick="generateQrTicket()" style="width: auto;">Generar Ticket QR</button>
+      </div>
+
+      <!-- Ticket QR Pre-visualizable -->
+      <div id="qr-ticket-container" style="display: none; animation: fadeIn 0.3s ease;">
+        <div class="ticket-preview" style="background-color: #ffffff; color: #000000;">
+          <div class="ticket-header">
+            <span class="ticket-brand">BURRITOS ZAMORANOS</span>
+            <p>HERMANOS GÓMEZ</p>
+            <p>Mesa: <strong id="ticket-table-id">-</strong></p>
+          </div>
+          <div class="ticket-divider"></div>
+          <div style="text-align: center; margin: 16px 0;">
+            <canvas id="qr-canvas" style="max-width: 160px; height: auto;"></canvas>
+          </div>
+          <div class="ticket-divider"></div>
+          <p style="font-size: 0.75rem; text-align: center; font-weight: bold; line-height: 1.4;">Escanee este código con su celular para ver nuestro catálogo y ordenar directamente de cocina.</p>
+        </div>
+        <div style="display: flex; justify-content: center; gap: 12px; margin-top: 16px;">
+          <button class="btn btn-success" onclick="window.print()" style="max-width: 180px;">Imprimir Código</button>
+          <button class="btn btn-primary" onclick="downloadQrPdf()" style="max-width: 180px; background-color: var(--accent-orange); border-color: var(--accent-orange); font-weight: 800;">Descargar PDF 📥</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Modal de Captura de Pedido (POS Táctil) -->
+  <div class="modal-overlay" id="pos-capture-modal" style="display: none;">
+    <div class="modal-card" style="max-width: 900px; width: 95%; border: 2px solid var(--accent-orange);">
+      <div class="modal-header-ia" style="background: linear-gradient(135deg, var(--accent-orange) 0%, #a83d03 100%); display: flex; justify-content: space-between; align-items: center; padding: 16px 24px;">
+        <h3 style="margin: 0; color: white; font-family: var(--font-serif);">Capturar Pedido - Mesero</h3>
+        <span class="role-tag" style="background-color: rgba(255,255,255,0.2); color: white; font-size: 0.85rem;" id="pos-table-badge">Mesa: Llevar</span>
+      </div>
+      
+      <div class="modal-body" style="padding: 20px; display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; text-align: left; height: 60vh; max-height: 60vh; overflow: hidden;">
+        <!-- Lado Izquierdo: Selección de Productos -->
+        <div style="display: flex; flex-direction: column; gap: 16px; overflow: hidden; min-height: 0;">
+          <!-- Barra de Categorías -->
+          <div id="pos-categories-container" style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; scrollbar-width: none;">
+            <!-- Cargado dinámicamente -->
+          </div>
+          <!-- Cuadrícula de Artículos -->
+          <div id="pos-products-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; overflow-y: auto; flex-grow: 1; padding: 4px; align-content: start;">
+            <!-- Cargado dinámicamente -->
+          </div>
+        </div>
+        
+        <!-- Lado Derecho: Carrito y Acciones -->
+        <div style="background-color: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 16px; display: flex; flex-direction: column; overflow: hidden; min-height: 0;">
+          <h4 style="margin: 0 0 12px 0; font-size: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">Detalle del Pedido</h4>
+          
+          <!-- Lista de Items en Carrito -->
+          <ul id="pos-cart-list" style="list-style: none; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; flex-grow: 1; margin: 0; padding: 0 4px 0 0;">
+            <!-- Renderizado dinámicamente -->
+          </ul>
+          
+          <div class="ticket-divider" style="margin: 12px 0;"></div>
+          
+          <!-- Selector de Mesa y Total -->
+          <div style="display: flex; flex-direction: column; gap: 12px; flex-shrink: 0;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <label for="pos-table-select" style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">Ubicación / Mesa</label>
+              <select id="pos-table-select" class="form-control" style="max-width: 140px; padding: 6px 12px; font-size: 0.85rem; appearance: auto;" onchange="updatePosTableBadge()">
+                <option value="Llevar">Para Llevar</option>
+                <option value="Mesa 1">Mesa 1</option>
+                <option value="Mesa 2">Mesa 2</option>
+                <option value="Mesa 3">Mesa 3</option>
+                <option value="Mesa 4">Mesa 4</option>
+                <option value="Mesa 5">Mesa 5</option>
+                <option value="Mesa 6">Mesa 6</option>
+                <option value="Mesa 7">Mesa 7</option>
+                <option value="Mesa 8">Mesa 8</option>
+                <option value="Mesa 9">Mesa 9</option>
+                <option value="Mesa 10">Mesa 10</option>
+              </select>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 1.25rem;">
+              <span>Total:</span>
+              <strong id="pos-cart-total" style="color: var(--accent-orange);">$0.00</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="modal-footer" style="padding: 16px; background-color: var(--bg-tertiary); display: flex; gap: 12px; margin-top: auto;">
+        <button type="button" class="btn btn-secondary" onclick="closePosCaptureModal()" style="flex: 1; padding: 10px;">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="submitPosOrder('Pendiente')" style="flex: 1.5; padding: 10px;">🍳 Mandar a Cocina</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para Editar Nota de Artículo (POS) -->
+  <div class="modal-overlay" id="pos-note-modal" style="display: none; z-index: 1100;">
+    <div class="modal-card" style="max-width: 400px; border: 2px solid var(--accent-orange);">
+      <div class="modal-header-ia" style="background: linear-gradient(135deg, var(--accent-orange) 0%, #a83d03 100%); padding: 16px 20px;">
+        <h3 style="margin: 0; color: white; font-family: var(--font-serif); font-size: 1.25rem;">Especificaciones</h3>
+      </div>
+      <div class="modal-body" style="padding: 20px; text-align: left;">
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px; font-weight: bold;" id="pos-note-item-name">-</p>
+        
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label for="pos-note-input" style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">Comentario o Modificación</label>
+          <input type="text" id="pos-note-input" class="form-control" placeholder="Ej. Sin cebolla, extra salsa" style="font-size: 0.9rem;">
+        </div>
+
+        <div style="margin-bottom: 8px;">
+          <label style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Etiquetas Rápidas</label>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px;" id="pos-note-quick-tags">
+            <!-- Botones de etiquetas rápidas -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="padding: 16px; background-color: var(--bg-tertiary);">
+        <button type="button" class="btn btn-secondary" onclick="closePosNoteModal()" style="flex: 1; padding: 8px;">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="savePosCartItemNote()" style="flex: 1; padding: 8px;">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Pedidos QR de Clientes (Aprobación del Mesero) -->
+  <div class="modal-overlay" id="qr-pending-modal" style="display: none;">
+    <div class="modal-card" style="max-width: 650px; width: 90%; border: 2px solid #8b5cf6;">
+      <div class="modal-header-ia" style="background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; color: white;">
+        <h3 style="margin: 0; font-family: var(--font-serif);">Pedidos QR de Clientes</h3>
+        <span class="role-tag" style="background-color: rgba(255,255,255,0.25); color: white; font-size: 0.85rem;" id="qr-modal-count-tag">0 Pedidos</span>
+      </div>
+      <div class="modal-body" style="padding: 20px; max-height: 55vh; overflow-y: auto; text-align: left;">
+        <div id="qr-pending-list" style="display: flex; flex-direction: column; gap: 16px;">
+          <!-- Cargado dinámicamente -->
+        </div>
+      </div>
+      <div class="modal-footer" style="padding: 16px; background-color: var(--bg-tertiary);">
+        <button type="button" class="btn btn-secondary" onclick="closeQrPendingModal()" style="width: 100%;">Cerrar Ventana</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="client.js"></script>
+  <script>
+    // Validar sesión y rol
+    const currentSession = loadUserSession();
+    if (!currentSession) {
+      window.location.href = 'login.html';
+    } else {
+      const role = currentSession.role;
+      if (role !== 'Administrador' && role !== 'Gerente' && role !== 'Mesero') {
+        window.location.href = 'login.html';
+      }
+    }
+    document.getElementById('user-display').textContent = currentSession.username;
+
+    let ordersList = [];
+
+    // Conectar WebSocket
+    connectWebSocket((type, data) => {
+      if (type === 'INIT') {
+        ordersList = data.orders;
+        updateWaiterUI();
+        updateQrBadgeCount();
+      }
+      else if (type === 'NEW_ORDER' || type === 'ORDER_UPDATED') {
+        const idx = ordersList.findIndex(o => o.id === data.id);
+        if (idx !== -1) {
+          ordersList[idx] = data;
+        } else {
+          ordersList.push(data);
+        }
+        updateWaiterUI();
+        updateQrBadgeCount();
+        if (document.getElementById('qr-pending-modal').style.display === 'flex') {
+          renderQrPendingList();
+        }
+      }
+      else if (type === 'ALERTA_LISTO') {
+        // Alerta al mesero de comida lista
+        playNotificationSound('alert');
+        triggerDeviceVibration([150, 50, 150, 50, 300]);
+        alert(`🔔 ¡Comanda de la ${data.table} está LISTA en barra!`);
+      }
+    });
+
+    // Actualizar UI
+    function updateWaiterUI() {
+      // Filtrar comandas con estado "Listo"
+      const readyOrders = ordersList.filter(o => o.status === 'Listo');
+      
+      document.getElementById('ready-badge').textContent = readyOrders.length;
+      
+      const container = document.getElementById('alerts-container');
+      container.innerHTML = '';
+
+      if (readyOrders.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; color: var(--text-muted); padding: 40px; background-color: var(--bg-secondary); border-radius: var(--border-radius); border: 1px dashed var(--border-color);">
+            👍 Todos los pedidos han sido entregados.
+          </div>
+        `;
+        return;
+      }
+
+      readyOrders.forEach(o => {
+        const card = document.createElement('div');
+        card.className = 'order-card';
+        card.style.borderColor = 'var(--accent-green)';
+        
+        let itemsHtml = '';
+        o.items.forEach(i => {
+          itemsHtml += `<li><span>${i.qty}x ${i.name}</span></li>`;
+        });
+
+        card.innerHTML = `
+          <div class="order-card-header">
+            <span class="order-card-table" style="color: var(--accent-green); font-size: 1.3rem;">¡LISTO PARA ENTREGAR!</span>
+            <span class="role-tag" style="background-color: rgba(27,135,67,0.15); color: var(--accent-green);">${o.table}</span>
+          </div>
+          <ul class="order-card-items" style="font-weight: 600;">
+            ${itemsHtml}
+          </ul>
+          <button class="btn btn-success" onclick="markAsDelivered('${o.id}')" style="margin-top: 10px; font-weight: 800;">
+            Entregar a Cliente ✔
+          </button>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    // Marcar comanda como entregada
+    function markAsDelivered(orderId) {
+      sendWsEvent('UPDATE_STATUS', { orderId, status: 'Entregado' });
+    }
+
+    // Generar código QR para mesa
+    function generateQrTicket() {
+      const tableVal = document.getElementById('qr-table-num').value.trim();
+      
+      let host = window.location.host;
+      if ((host.startsWith('localhost') || host.startsWith('127.0.0.1')) && typeof serverNetworkIp !== 'undefined' && serverNetworkIp !== 'localhost') {
+        host = `${serverNetworkIp}:${window.location.port || '3000'}`;
+      }
+      
+      let clientUrl = `${window.location.protocol}//${host}/cliente.html`;
+      if (tableVal && Number(tableVal) > 0) {
+        document.getElementById('ticket-table-id').textContent = `Mesa ${tableVal}`;
+        clientUrl += `?mesa=${tableVal}`;
+      } else {
+        document.getElementById('ticket-table-id').textContent = `General`;
+      }
+
+      // Inicializar QRious
+      const qr = new QRious({
+        element: document.getElementById('qr-canvas'),
+        value: clientUrl,
+        size: 200,
+        background: '#ffffff',
+        foreground: '#000000',
+        level: 'H'
+      });
+
+      document.getElementById('qr-ticket-container').style.display = 'block';
+    }
+
+    // Descargar PDF del código QR
+    function downloadQrPdf() {
+      const { jsPDF } = window.jspdf;
+      const canvas = document.getElementById('qr-canvas');
+      const tableVal = document.getElementById('qr-table-num').value.trim();
+      const labelText = (tableVal && Number(tableVal) > 0) ? `MESA: ${tableVal}` : 'MENÚ GENERAL';
+      const fileName = (tableVal && Number(tableVal) > 0) ? `Ticket_QR_Mesa_${tableVal}.pdf` : 'Ticket_QR_Menu_General.pdf';
+      
+      // Crear un PDF de tamaño compacto (ticket)
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [80, 140]
+      });
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text("BURRITOS ZAMORANOS", 40, 15, { align: "center" });
+      
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text("HERMANOS GOMEZ", 40, 20, { align: "center" });
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text(labelText, 40, 27, { align: "center" });
+      
+      // QR Code
+      const qrImgData = canvas.toDataURL("image/jpeg");
+      doc.addImage(qrImgData, "JPEG", 15, 33, 50, 50);
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.text("Escanee este codigo para ver", 40, 90, { align: "center" });
+      doc.text("nuestro catalogo y ordenar", 40, 94, { align: "center" });
+      doc.text("directo a Cocina.", 40, 98, { align: "center" });
+      
+      doc.save(fileName);
+    }
+
+    // --- Captura de Pedidos POS Táctil ---
+    let posCatalog = { categories: [], products: [] };
+    let posCart = [];
+    let posCartItemEditingId = null;
+    let POS_QUICK_TAGS = ['Sin cebolla', 'Sin cilantro', 'Sin picante', 'Extra queso', 'Salsa aparte', '⚠️ ALERGIA'];
+    let configData = null;
+    let serverNetworkIp = 'localhost';
+
+    async function loadConfig() {
+      try {
+        const response = await fetch('/api/config');
+        configData = await response.json();
+        if (configData && configData.quickTags) {
+          POS_QUICK_TAGS = [...configData.quickTags, '⚠️ ALERGIA'];
+        }
+      } catch (err) {
+        console.error('Error al cargar config:', err);
+      }
+      try {
+        const responseIp = await fetch('/api/network-ip');
+        const dataIp = await responseIp.json();
+        if (dataIp.ip) {
+          serverNetworkIp = dataIp.ip;
+        }
+      } catch (err) {
+        console.error('Error al cargar la IP de red:', err);
+      }
+    }
+
+    async function openPosCaptureModal() {
+      try {
+        const response = await fetch('/api/catalog');
+        posCatalog = await response.json();
+        posCart = [];
+        
+        // Resetear mesa
+        document.getElementById('pos-table-select').value = 'Llevar';
+        updatePosTableBadge();
+
+        renderPosCategories();
+        renderPosProductsGrid('todos');
+        updatePosCartUI();
+
+        document.getElementById('pos-capture-modal').style.display = 'flex';
+      } catch (err) {
+        console.error('Error al cargar catálogo en POS:', err);
+      }
+    }
+
+    function closePosCaptureModal() {
+      document.getElementById('pos-capture-modal').style.display = 'none';
+    }
+
+    function renderPosCategories() {
+      const container = document.getElementById('pos-categories-container');
+      container.innerHTML = `<button class="modifier-btn active" id="btn-pos-cat-todos" onclick="filterPosCategory('todos')">Todos</button>`;
+      
+      posCatalog.categories.forEach(cat => {
+        const btn = document.createElement('button');
+        btn.className = 'modifier-btn';
+        btn.id = `btn-pos-cat-${cat.id}`;
+        btn.textContent = cat.name;
+        btn.onclick = () => filterPosCategory(cat.id);
+        container.appendChild(btn);
+      });
+    }
+
+    function filterPosCategory(catId) {
+      document.querySelectorAll('#pos-categories-container .modifier-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      const activeBtn = document.getElementById(`btn-pos-cat-${catId}`) || document.getElementById('btn-pos-cat-todos');
+      if (activeBtn) activeBtn.classList.add('active');
+
+      renderPosProductsGrid(catId);
+    }
+
+    function renderPosProductsGrid(catId) {
+      const grid = document.getElementById('pos-products-grid');
+      grid.innerHTML = '';
+
+      const list = catId === 'todos' 
+        ? posCatalog.products 
+        : posCatalog.products.filter(p => p.category === catId);
+
+      if (list.length === 0) {
+        grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 20px;">No hay artículos.</div>';
+        return;
+      }
+
+      list.forEach(p => {
+        const btn = document.createElement('button');
+        
+        btn.style.backgroundColor = 'var(--bg-tertiary)';
+        btn.style.border = '1px solid var(--border-color)';
+        btn.style.borderRadius = '12px';
+        btn.style.padding = '12px 8px';
+        btn.style.color = 'var(--text-main)';
+        btn.style.cursor = 'pointer';
+        btn.style.display = 'flex';
+        btn.style.flexDirection = 'column';
+        btn.style.justifyContent = 'space-between';
+        btn.style.alignItems = 'center';
+        btn.style.textAlign = 'center';
+        btn.style.minHeight = '90px';
+        btn.style.transition = 'all 0.15s ease';
+        
+        btn.onmouseover = () => btn.style.borderColor = 'var(--accent-orange)';
+        btn.onmouseout = () => btn.style.borderColor = 'var(--border-color)';
+        btn.onclick = () => addProductToPosCart(p.id);
+
+        btn.innerHTML = `
+          <span style="font-size: 0.85rem; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.2;">${p.name}</span>
+          <strong style="color: var(--accent-orange); font-size: 0.9rem; margin-top: 6px;">$${p.price.toFixed(2)}</strong>
+        `;
+        grid.appendChild(btn);
+      });
+    }
+
+    function addProductToPosCart(productId) {
+      const p = posCatalog.products.find(x => x.id === productId);
+      if (!p) return;
+
+      const existing = posCart.find(item => item.id === productId);
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        posCart.push({
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          qty: 1
+        });
+      }
+      updatePosCartUI();
+      playNotificationSound('success');
+    }
+
+    function changePosCartQty(productId, delta) {
+      const idx = posCart.findIndex(item => item.id === productId);
+      if (idx === -1) return;
+
+      posCart[idx].qty += delta;
+      if (posCart[idx].qty <= 0) {
+        posCart.splice(idx, 1);
+      }
+      updatePosCartUI();
+    }
+
+    function updatePosCartUI() {
+      const container = document.getElementById('pos-cart-list');
+      container.innerHTML = '';
+
+      if (posCart.length === 0) {
+        container.innerHTML = '<li style="color: var(--text-muted); text-align: center; margin-top: 40px; font-size: 0.9rem;">El pedido está vacío.</li>';
+        document.getElementById('pos-cart-total').textContent = '$0.00';
+        return;
+      }
+
+      let total = 0;
+      posCart.forEach(item => {
+        const itemTotal = item.price * item.qty;
+        total += itemTotal;
+
+        const li = document.createElement('li');
+        li.style.display = 'flex';
+        li.style.justifyContent = 'space-between';
+        li.style.alignItems = 'center';
+        li.style.padding = '8px 0';
+        li.style.borderBottom = '1px solid var(--border-color)';
+        
+        const noteText = item.note ? `<span style="font-size:0.75rem; color: var(--accent-orange); font-weight: 600; font-style: italic; margin-top: 2px;">Nota: ${item.note}</span>` : '';
+        
+        li.innerHTML = `
+          <div style="display:flex; flex-direction:column; max-width: 140px;">
+            <div style="display:flex; align-items: center; gap: 6px;">
+              <strong style="font-size:0.85rem; line-height: 1.2;">${item.name}</strong>
+              <button class="modifier-btn" style="padding: 2px 4px; font-size: 0.65rem; line-height: 1; border-radius: 4px; background: none; border: 1px solid var(--border-color); cursor: pointer; color: var(--text-muted);" onclick="editPosCartItemNote('${item.id}')" title="Agregar comentarios">✏️</button>
+            </div>
+            <span style="font-size:0.75rem; color: var(--text-muted); margin-top: 2px;">$${item.price.toFixed(2)} c/u</span>
+            ${noteText}
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="modifier-btn" style="padding: 2px 6px; font-size:0.75rem;" onclick="changePosCartQty('${item.id}', -1)">-</button>
+            <strong style="font-size:0.9rem;">${item.qty}</strong>
+            <button class="modifier-btn" style="padding: 2px 6px; font-size:0.75rem;" onclick="changePosCartQty('${item.id}', 1)">+</button>
+          </div>
+          <strong style="font-size:0.85rem; width: 60px; text-align: right;">$${itemTotal.toFixed(2)}</strong>
+        `;
+        container.appendChild(li);
+      });
+
+      document.getElementById('pos-cart-total').textContent = `$${total.toFixed(2)}`;
+    }
+
+    function updatePosTableBadge() {
+      const val = document.getElementById('pos-table-select').value;
+      document.getElementById('pos-table-badge').textContent = val === 'Llevar' ? 'Para Llevar' : `Mesa: ${val.split(' ')[1]}`;
+    }
+
+    async function submitPosOrder(status) {
+      if (posCart.length === 0) {
+        alert('Por favor agrega artículos al pedido.');
+        return;
+      }
+
+      const table = document.getElementById('pos-table-select').value;
+      const total = posCart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+      
+      const orderData = {
+        table: table + (currentSession.username ? ` (${currentSession.username})` : ''),
+        items: posCart,
+        total,
+        status // 'Pendiente'
+      };
+
+      try {
+        sendWsEvent('CREATE_ORDER', orderData);
+        closePosCaptureModal();
+        alert('Pedido enviado a Cocina KDS correctamente.');
+      } catch (err) {
+        console.error('Error al enviar comanda:', err);
+      }
+    }
+
+    function editPosCartItemNote(productId) {
+      const item = posCart.find(x => x.id === productId);
+      if (!item) return;
+      
+      posCartItemEditingId = productId;
+      document.getElementById('pos-note-item-name').textContent = item.name;
+      document.getElementById('pos-note-input').value = item.note || '';
+      
+      const tagsContainer = document.getElementById('pos-note-quick-tags');
+      tagsContainer.innerHTML = '';
+      POS_QUICK_TAGS.forEach(tag => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'modifier-btn';
+        btn.style.padding = '4px 10px';
+        btn.style.fontSize = '0.75rem';
+        btn.style.borderRadius = '50px';
+        btn.textContent = tag;
+        
+        if (tag === '⚠️ ALERGIA') {
+          btn.style.borderColor = 'var(--accent-red)';
+          btn.style.color = 'var(--accent-red)';
+        }
+
+        btn.onclick = () => {
+          const input = document.getElementById('pos-note-input');
+          if (tag === '⚠️ ALERGIA') {
+            input.value = '⚠️ ALERGIA: ' + input.value;
+          } else {
+            input.value = input.value ? input.value + ', ' + tag : tag;
+          }
+        };
+        tagsContainer.appendChild(btn);
+      });
+
+      document.getElementById('pos-note-modal').style.display = 'flex';
+    }
+
+    function closePosNoteModal() {
+      document.getElementById('pos-note-modal').style.display = 'none';
+      posCartItemEditingId = null;
+    }
+
+    function savePosCartItemNote() {
+      if (!posCartItemEditingId) return;
+      const item = posCart.find(x => x.id === posCartItemEditingId);
+      if (item) {
+        item.note = document.getElementById('pos-note-input').value.trim();
+        updatePosCartUI();
+      }
+      closePosNoteModal();
+    }
+
+    // Filtrar etiquetas rápidas al teclear
+    document.addEventListener('DOMContentLoaded', () => {
+      const noteInput = document.getElementById('pos-note-input');
+      if (noteInput) {
+        noteInput.addEventListener('input', (e) => {
+          const query = e.target.value.toLowerCase().split(',').pop().trim();
+          filterPosQuickTags(query);
+        });
+      }
+    });
+
+    function filterPosQuickTags(query) {
+      const tagsContainer = document.getElementById('pos-note-quick-tags');
+      const buttons = tagsContainer.getElementsByClassName('modifier-btn');
+      for (let btn of buttons) {
+        const text = btn.textContent.toLowerCase();
+        if (text === '⚠️ alergia' || !query || text.includes(query)) {
+          btn.style.display = 'inline-block';
+        } else {
+          btn.style.display = 'none';
+        }
+      }
+    }
+
+    // --- Métodos de Pedidos QR y Aprobación de Meseros ---
+    function openQrPendingModal() {
+      renderQrPendingList();
+      document.getElementById('qr-pending-modal').style.display = 'flex';
+    }
+
+    function closeQrPendingModal() {
+      document.getElementById('qr-pending-modal').style.display = 'none';
+    }
+
+    function renderQrPendingList() {
+      const pendingOrders = ordersList.filter(o => o.status === 'Por Aprobar');
+      
+      document.getElementById('qr-pending-count').textContent = pendingOrders.length;
+      document.getElementById('qr-modal-count-tag').textContent = `${pendingOrders.length} Pedido(s)`;
+
+      const container = document.getElementById('qr-pending-list');
+      container.innerHTML = '';
+
+      if (pendingOrders.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; color: var(--text-muted); padding: 40px; border: 1px dashed var(--border-color); border-radius: var(--border-radius);">
+            No hay pedidos QR pendientes de aprobación.
+          </div>
+        `;
+        return;
+      }
+
+      pendingOrders.forEach(o => {
+        const card = document.createElement('div');
+        card.style.backgroundColor = 'var(--bg-secondary)';
+        card.style.border = '1px solid var(--border-color)';
+        card.style.borderRadius = '12px';
+        card.style.padding = '16px';
+        card.style.display = 'flex';
+        card.style.flexDirection = 'column';
+        card.style.gap = '12px';
+
+        let itemsHtml = '';
+        o.items.forEach(i => {
+          const noteText = i.note ? `<br><small style="color: var(--accent-orange); font-style: italic; font-weight: 600; margin-left: 12px;">👉 ${i.note}</small>` : '';
+          itemsHtml += `<li style="font-size: 0.9rem; font-weight: 600;">${i.qty}x ${i.name}${noteText}</li>`;
+        });
+
+        card.innerHTML = `
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+            <strong style="font-size: 1.15rem; color: #8b5cf6;">${o.table}</strong>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">${new Date(o.timestamp).toLocaleTimeString()}</span>
+          </div>
+          <ul style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px;">
+            ${itemsHtml}
+          </ul>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 8px; margin-top: 4px;">
+            <span style="font-weight: 600; color: var(--text-muted);">Total:</span>
+            <strong style="color: var(--accent-orange); font-size: 1.2rem;">$${o.total.toFixed(2)}</strong>
+          </div>
+          <div style="display: flex; gap: 10px; margin-top: 8px;">
+            <button class="btn btn-success" onclick="approveQrOrder('${o.id}')" style="flex: 1.5; padding: 8px; font-size: 0.85rem; font-weight: 800;">Aprobar ✔</button>
+            <button class="btn btn-danger" onclick="rejectQrOrder('${o.id}')" style="flex: 1; padding: 8px; font-size: 0.85rem; font-weight: 800;">Rechazar ✖</button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function approveQrOrder(orderId) {
+      sendWsEvent('UPDATE_STATUS', { orderId, status: 'En Cocina' });
+      setTimeout(() => {
+        renderQrPendingList();
+        const pending = ordersList.filter(o => o.status === 'Por Aprobar');
+        if (pending.length === 0) closeQrPendingModal();
+      }, 100);
+    }
+
+    function rejectQrOrder(orderId) {
+      if (confirm('¿Estás seguro de rechazar este pedido?')) {
+        sendWsEvent('UPDATE_STATUS', { orderId, status: 'Cancelado' });
+        setTimeout(() => {
+          renderQrPendingList();
+          const pending = ordersList.filter(o => o.status === 'Por Aprobar');
+          if (pending.length === 0) closeQrPendingModal();
+        }, 100);
+      }
+    }
+
+    function updateQrBadgeCount() {
+      const count = ordersList.filter(o => o.status === 'Por Aprobar').length;
+      const badgeEl = document.getElementById('qr-pending-count');
+      if (badgeEl) badgeEl.textContent = count;
+    }
+
+    // Cargar config al iniciar
+    loadConfig();
+  </script>
+</body>
+</html>

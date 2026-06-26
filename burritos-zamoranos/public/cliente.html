@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Menú Digital - Burritos Zamoranos Hermanos Gómez</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Estilo específico para adaptar al modo claro en cliente si se desea */
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+    }
+  </style>
+</head>
+<body class="light-theme">
+  <!-- Modal de Identificación del Cliente (Onboarding) -->
+  <div class="modal-overlay" id="client-onboarding-modal" style="display: flex; z-index: 2000; background-color: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px);">
+    <div class="modal-card" style="max-width: 400px; padding: 24px; text-align: center; border: 2px solid var(--accent-orange); background-color: var(--bg-secondary);">
+      <div style="margin-bottom: 20px;">
+        <img src="logo.png" alt="Logo" style="height: 70px; margin-bottom: 12px;" onerror="this.src='https://placehold.co/100x100/f25c05/ffffff?text=BZ'">
+        <h2 style="font-family: var(--font-serif); font-size: 1.8rem; margin: 0; color: var(--text-main);">¡Bienvenido!</h2>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 8px;">Por favor ingresa tus datos para poder ordenar desde tu mesa.</p>
+      </div>
+      <form id="onboarding-form" onsubmit="saveClientOnboarding(event)">
+        <div class="form-group" style="text-align: left; margin-bottom: 16px;">
+          <label for="client-name" style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">Tu Nombre</label>
+          <input type="text" id="client-name" class="form-control" placeholder="Ej. Carlos" required autofocus style="background-color: var(--bg-tertiary); color: var(--text-main); border: 1px solid var(--border-color);">
+        </div>
+        <div class="form-group" style="text-align: left; margin-bottom: 24px;">
+          <label for="client-table" style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">Mesa / Ubicación</label>
+          <select id="client-table" class="form-control" required style="background-color: var(--bg-tertiary); color: var(--text-main); border: 1px solid var(--border-color); appearance: auto;">
+            <option value="Llevar">Para Llevar</option>
+            <option value="Mesa 1">Mesa 1</option>
+            <option value="Mesa 2">Mesa 2</option>
+            <option value="Mesa 3">Mesa 3</option>
+            <option value="Mesa 4">Mesa 4</option>
+            <option value="Mesa 5">Mesa 5</option>
+            <option value="Mesa 6">Mesa 6</option>
+            <option value="Mesa 7">Mesa 7</option>
+            <option value="Mesa 8">Mesa 8</option>
+            <option value="Mesa 9">Mesa 9</option>
+            <option value="Mesa 10">Mesa 10</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 1rem; font-weight: 800;">Ver Menú y Ordenar 📝</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Cabecera de Cliente -->
+  <header class="app-header" style="background-color: var(--bg-secondary); border-bottom: 1px solid var(--border-color);">
+    <div class="brand-section">
+      <img src="logo.png" alt="Burritos Zamoranos" class="brand-logo" onerror="this.src='https://placehold.co/100x100/f25c05/ffffff?text=BZ'">
+      <div class="brand-name">
+        <h1 style="color: var(--text-main);">Burritos Zamoranos</h1>
+        <p style="color: var(--accent-orange); font-weight: 800;">Hnos. Gómez</p>
+      </div>
+    </div>
+    <div class="user-badge" style="background-color: var(--bg-tertiary); cursor: pointer;" onclick="showOnboardingAgain()" title="Cambiar Nombre o Mesa">
+      <span style="font-weight: 800; color: var(--accent-orange);" id="table-display">Mesa: Detectando...</span>
+    </div>
+  </header>
+
+  <!-- Hero principal -->
+  <div class="client-hero">
+    <h2>Tradición Desde 1970</h2>
+    <p style="color: var(--text-muted);">El auténtico sabor zamorano directo a tu mesa</p>
+  </div>
+
+  <!-- Navegación por Categorías -->
+  <nav class="category-nav" id="category-nav-container">
+    <!-- Se generará dinámicamente -->
+  </nav>
+
+  <!-- Catálogo de Productos -->
+  <main class="menu-grid" id="products-container">
+    <!-- Se generará dinámicamente -->
+  </main>
+
+  <!-- Carrito de Compras Flotante -->
+  <div class="cart-floating" id="cart-floating" style="display: none;">
+    <div>
+      <span id="cart-count" style="background-color: var(--accent-orange); color: white; padding: 4px 8px; border-radius: 50%; font-size: 0.85rem; font-weight: 800; margin-right: 8px;">0</span>
+      <span style="font-weight: 600; color: var(--text-main);">Mi Pedido</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 16px;">
+      <span id="cart-total" style="font-size: 1.2rem; font-weight: 800; color: var(--accent-orange);">$0.00</span>
+      <button class="btn btn-primary" onclick="openOrderModal()" style="width: auto; padding: 10px 20px;">Ver Carrito</button>
+    </div>
+  </div>
+
+  <!-- Modal de Upselling IA -->
+  <div class="modal-overlay" id="upsell-modal" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header-ia">
+        <div class="ia-badge">🤖 Recomendación Inteligente</div>
+        <h3>¿Quieres acompañarlo?</h3>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-muted); font-size: 0.95rem; line-height: 1.4;">El 80% de nuestros clientes acompaña este burrito con nuestro platillo estrella:</p>
+        <div class="upsell-product-box">
+          <img src="papas.png" alt="Papas con Queso" class="upsell-product-img" onerror="this.src='https://placehold.co/70x70/f25c05/ffffff?text=Papas'">
+          <div class="upsell-product-info">
+            <h4>Papas con Queso</h4>
+            <p>Crujientes papas fritas bañadas en queso cheddar fundido.</p>
+          </div>
+          <div class="upsell-product-price">$45</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="declineUpsell()" style="flex: 1;">No, gracias</button>
+        <button class="btn btn-primary" onclick="acceptUpsell()" style="flex: 1;">Sí, ¡agregar!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Resumen y Confirmación de Pedido -->
+  <div class="modal-overlay" id="order-modal" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header-ia" style="background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);">
+        <h3 style="color: var(--text-main);">Resumen de Pedido</h3>
+      </div>
+      <div class="modal-body" style="text-align: left;">
+        <ul id="order-summary-list" style="list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; max-height: 200px; overflow-y: auto; padding: 4px;">
+          <!-- Items del carrito -->
+        </ul>
+        <div class="ticket-divider"></div>
+        <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 1.3rem; color: var(--text-main); margin-top: 12px;">
+          <span>Total:</span>
+          <span id="summary-total" style="color: var(--accent-orange);">$0.00</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeOrderModal()" style="flex: 1;">Volver al Menú</button>
+        <button class="btn btn-primary" onclick="submitOrder()" style="flex: 1;">Confirmar y Enviar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Éxito de Pedido -->
+  <div class="modal-overlay" id="success-modal" style="display: none;">
+    <div class="modal-card" style="border-color: var(--accent-green);">
+      <div class="modal-header-ia" style="background: linear-gradient(135deg, var(--accent-green) 0%, #146c33 100%);">
+        <h3>¡Pedido Recibido!</h3>
+      </div>
+      <div class="modal-body" style="padding: 32px 24px;">
+        <p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 12px;">Tu pedido ha sido enviado directamente a la Cocina.</p>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">El mesero lo llevará a tu mesa lo antes posible. ¡Buen provecho!</p>
+        <button class="btn btn-success" onclick="closeSuccessModal()" style="margin-top: 24px;">Entendido</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para Editar Nota de Artículo (Cliente) -->
+  <div class="modal-overlay" id="client-note-modal" style="display: none; z-index: 1100;">
+    <div class="modal-card" style="max-width: 400px; border: 2px solid var(--accent-orange);">
+      <div class="modal-header-ia" style="background: linear-gradient(135deg, var(--accent-orange) 0%, #a83d03 100%); padding: 16px 20px;">
+        <h3 style="margin: 0; color: white; font-family: var(--font-serif); font-size: 1.25rem;">Especificaciones</h3>
+      </div>
+      <div class="modal-body" style="padding: 20px; text-align: left;">
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px; font-weight: bold;" id="client-note-item-name">-</p>
+        
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label for="client-note-input" style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">¿Cómo te gustaría tu platillo?</label>
+          <input type="text" id="client-note-input" class="form-control" placeholder="Ej. Sin cebolla, salsa aparte" style="font-size: 0.9rem;">
+        </div>
+
+        <div style="margin-bottom: 8px;">
+          <label style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Opciones Rápidas</label>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px;" id="client-note-quick-tags">
+            <!-- Botones de etiquetas rápidas -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="padding: 16px; background-color: var(--bg-tertiary);">
+        <button type="button" class="btn btn-secondary" onclick="closeClientNoteModal()" style="flex: 1; padding: 8px;">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="saveCustomerItemNote()" style="flex: 1; padding: 8px;">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="client.js"></script>
+  <script>
+    // Catálogo de Productos y Categorías Dinámicos
+    let PRODUCTS = [];
+    let CATEGORIES = [];
+    let tableId = 'Llevar';
+    let customerName = '';
+    let cart = [];
+    let isAiUpsellLogger = {
+      suggested: null,
+      accepted: false,
+      triggeredBy: null
+    };
+
+    function saveClientOnboarding(event) {
+      if (event) event.preventDefault();
+      customerName = document.getElementById('client-name').value.trim();
+      tableId = document.getElementById('client-table').value;
+      
+      localStorage.setItem('zamoranos_client_name', customerName);
+      localStorage.setItem('zamoranos_client_table', tableId);
+      
+      document.getElementById('table-display').textContent = `${tableId} - ${customerName}`;
+      document.getElementById('client-onboarding-modal').style.display = 'none';
+    }
+
+    function showOnboardingAgain() {
+      document.getElementById('client-name').value = customerName || '';
+      document.getElementById('client-table').value = tableId || 'Llevar';
+      document.getElementById('client-onboarding-modal').style.display = 'flex';
+    }
+
+    // Detectar mesa desde el parámetro de URL y cargar catálogo
+    window.onload = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const mesa = params.get('mesa');
+      
+      // Intentar restaurar sesión de cliente
+      const savedName = localStorage.getItem('zamoranos_client_name');
+      const savedTable = localStorage.getItem('zamoranos_client_table');
+
+      if (mesa) {
+        tableId = `Mesa ${mesa}`;
+        document.getElementById('client-table').value = tableId;
+      } else if (savedTable) {
+        tableId = savedTable;
+        document.getElementById('client-table').value = tableId;
+      }
+
+      if (savedName) {
+        customerName = savedName;
+        document.getElementById('client-name').value = customerName;
+        document.getElementById('client-onboarding-modal').style.display = 'none';
+        document.getElementById('table-display').textContent = `${tableId} - ${customerName}`;
+      } else {
+        document.getElementById('client-onboarding-modal').style.display = 'flex';
+        document.getElementById('table-display').textContent = 'Falta Nombre/Mesa';
+      }
+
+      await loadConfig();
+      await loadCatalog();
+
+      // Cargar carrito persistido localmente (Sugerencia 1)
+      const savedCart = localStorage.getItem('zamoranos_cart');
+      if (savedCart) {
+        try {
+          cart = JSON.parse(savedCart);
+        } catch (e) {
+          console.error('Error al restaurar carrito local:', e);
+        }
+      }
+
+      updateCartUI();
+
+      // Conectar WebSocket
+      connectWebSocket();
+    };
+
+    let configData = null;
+
+    async function loadConfig() {
+      try {
+        const response = await fetch('/api/config');
+        configData = await response.json();
+        if (configData && configData.quickTags) {
+          CLIENT_QUICK_TAGS = [...configData.quickTags, '⚠️ ALERGIA'];
+        }
+      } catch (err) {
+        console.error('Error al cargar config:', err);
+      }
+    }
+
+    async function loadCatalog() {
+      try {
+        const response = await fetch('/api/catalog');
+        const data = await response.json();
+        PRODUCTS = data.products || [];
+        CATEGORIES = data.categories || [];
+        
+        renderCategoryButtons();
+        renderProducts(PRODUCTS);
+      } catch (err) {
+        console.error('Error al cargar catálogo:', err);
+      }
+    }
+
+    function renderCategoryButtons() {
+      const container = document.getElementById('category-nav-container');
+      container.innerHTML = `<button class="category-btn active" onclick="filterCategory('todos', this)">Todos</button>`;
+      
+      CATEGORIES.forEach(cat => {
+        const btn = document.createElement('button');
+        btn.className = 'category-btn';
+        btn.textContent = cat.name;
+        btn.onclick = (e) => filterCategory(cat.id, e.target);
+        container.appendChild(btn);
+      });
+    }
+
+    // Renderizar Catálogo
+    function renderProducts(productsList) {
+      const container = document.getElementById('products-container');
+      container.innerHTML = '';
+
+      if (productsList.length === 0) {
+        container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">No hay productos disponibles en esta categoría.</div>';
+        return;
+      }
+
+      productsList.forEach(p => {
+        const card = document.createElement('div');
+        card.className = `menu-card ${p.category}`;
+        card.innerHTML = `
+          <div class="menu-card-img-container">
+            <img src="${p.img}" alt="${p.name}" class="menu-card-img" onerror="this.src='https://placehold.co/300x180/f25c05/ffffff?text=${p.name}'">
+          </div>
+          <div class="menu-card-body">
+            <h3 class="menu-card-title">${p.name}</h3>
+            <p class="menu-card-desc">${p.desc}</p>
+            <div class="menu-card-footer">
+              <span class="menu-card-price">$${p.price.toFixed(2)}</span>
+              <button class="btn btn-primary btn-add-item" onclick="handleAddItem('${p.id}')">Agregar</button>
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    // Filtrar por Categoría
+    function filterCategory(category, targetBtn) {
+      document.querySelectorAll('.category-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      
+      if (targetBtn) {
+        targetBtn.classList.add('active');
+      } else {
+        const buttons = document.querySelectorAll('.category-btn');
+        if (buttons.length > 0) buttons[0].classList.add('active');
+      }
+
+      if (category === 'todos') {
+        renderProducts(PRODUCTS);
+      } else {
+        const filtered = PRODUCTS.filter(p => p.category === category);
+        renderProducts(filtered);
+      }
+    }
+
+    // Agregar Item al Carrito (y disparar motor de upselling de IA si es burrito)
+    function handleAddItem(productId) {
+      const item = PRODUCTS.find(p => p.id === productId);
+      if (!item) return;
+
+      // Si es un Burrito y no hemos ofrecido upselling de papas aún
+      if (item.category === 'burritos' && !isAiUpsellLogger.suggested) {
+        // Preparar log de IA
+        isAiUpsellLogger.suggested = 'Papas con Queso';
+        isAiUpsellLogger.triggeredBy = item.name;
+        
+        // Mostrar Modal de IA
+        document.getElementById('upsell-modal').style.display = 'flex';
+        // Agregamos primero el burrito
+        addToCartDirectly(item);
+      } else {
+        addToCartDirectly(item);
+      }
+    }
+
+    function addToCartDirectly(item) {
+      const existing = cart.find(i => i.id === item.id);
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        cart.push({ ...item, qty: 1 });
+      }
+      updateCartUI();
+    }
+
+    // Aceptar o rechazar recomendación de IA (Sugerencia 3)
+    function acceptUpsell() {
+      const upsellItem = PRODUCTS.find(p => p.name === 'Papas con Queso');
+      if (upsellItem) {
+        addToCartDirectly(upsellItem);
+        isAiUpsellLogger.accepted = true;
+      }
+      document.getElementById('upsell-modal').style.display = 'none';
+      playNotificationSound('success');
+    }
+
+    function declineUpsell() {
+      isAiUpsellLogger.accepted = false;
+      document.getElementById('upsell-modal').style.display = 'none';
+    }
+
+    // Actualizar UI de Carrito
+    function updateCartUI() {
+      const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
+      const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+
+      document.getElementById('cart-count').textContent = totalItems;
+      document.getElementById('cart-total').textContent = `$${totalPrice.toFixed(2)}`;
+
+      const cartFloating = document.getElementById('cart-floating');
+      if (totalItems > 0) {
+        cartFloating.style.display = 'flex';
+      } else {
+        cartFloating.style.display = 'none';
+      }
+
+      // Guardar carrito en LocalStorage para redundancia (Sugerencia 1)
+      localStorage.setItem('zamoranos_cart', JSON.stringify(cart));
+    }
+
+    // Abrir Modal de Confirmación
+    function openOrderModal() {
+      const list = document.getElementById('order-summary-list');
+      list.innerHTML = '';
+      
+      cart.forEach(item => {
+        if (item.qty <= 0) return;
+        const li = document.createElement('li');
+        li.style.display = 'flex';
+        li.style.flexDirection = 'column';
+        li.style.gap = '4px';
+        li.style.padding = '8px 0';
+        li.style.borderBottom = '1px solid var(--border-color)';
+        
+        const noteText = item.note ? `<div style="font-size:0.8rem; color: var(--accent-orange); font-weight: 600; font-style: italic; margin-left: 28px; text-align: left;">Nota: ${item.note}</div>` : '';
+        
+        li.innerHTML = `
+          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-weight: 800; color: var(--accent-orange);">${item.qty}x</span>
+              <span style="color: var(--text-main); font-weight: 600;">${item.name}</span>
+              <button class="category-btn" style="padding: 2px 6px; font-size: 0.7rem; margin: 0; cursor: pointer; height: auto; width: auto;" onclick="editCustomerItemNote('${item.id}')" title="Agregar especificación">✏️</button>
+            </div>
+            <span style="font-weight: 600; color: var(--text-main);">$${(item.price * item.qty).toFixed(2)}</span>
+          </div>
+          ${noteText}
+        `;
+        list.appendChild(li);
+      });
+
+      const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+      document.getElementById('summary-total').textContent = `$${totalPrice.toFixed(2)}`;
+      document.getElementById('order-modal').style.display = 'flex';
+    }
+
+    let clientCartItemEditingId = null;
+    let CLIENT_QUICK_TAGS = ['Sin cebolla', 'Sin cilantro', 'Sin picante', 'Extra queso', 'Salsa aparte', '⚠️ ALERGIA'];
+
+    function editCustomerItemNote(productId) {
+      const item = cart.find(x => x.id === productId);
+      if (!item) return;
+      
+      clientCartItemEditingId = productId;
+      document.getElementById('client-note-item-name').textContent = item.name;
+      document.getElementById('client-note-input').value = item.note || '';
+      
+      // Renderizar etiquetas rápidas
+      const tagsContainer = document.getElementById('client-note-quick-tags');
+      tagsContainer.innerHTML = '';
+      CLIENT_QUICK_TAGS.forEach(tag => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'modifier-btn';
+        btn.style.padding = '4px 10px';
+        btn.style.fontSize = '0.75rem';
+        btn.style.borderRadius = '50px';
+        btn.textContent = tag;
+        
+        if (tag === '⚠️ ALERGIA') {
+          btn.style.borderColor = 'var(--accent-red)';
+          btn.style.color = 'var(--accent-red)';
+        }
+
+        btn.onclick = () => {
+          const input = document.getElementById('client-note-input');
+          if (tag === '⚠️ ALERGIA') {
+            input.value = '⚠️ ALERGIA: ' + input.value;
+          } else {
+            input.value = input.value ? input.value + ', ' + tag : tag;
+          }
+        };
+        tagsContainer.appendChild(btn);
+      });
+
+      document.getElementById('client-note-modal').style.display = 'flex';
+    }
+
+    function closeClientNoteModal() {
+      document.getElementById('client-note-modal').style.display = 'none';
+      clientCartItemEditingId = null;
+    }
+
+    function saveCustomerItemNote() {
+      if (!clientCartItemEditingId) return;
+      const item = cart.find(x => x.id === clientCartItemEditingId);
+      if (item) {
+        item.note = document.getElementById('client-note-input').value.trim();
+        localStorage.setItem('zamoranos_cart', JSON.stringify(cart));
+        openOrderModal();
+      }
+      closeClientNoteModal();
+    }
+
+    function closeOrderModal() {
+      document.getElementById('order-modal').style.display = 'none';
+    }
+
+    // Enviar Pedido
+    function submitOrder() {
+      const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+      
+      const orderData = {
+        table: tableId + (customerName ? ` (${customerName})` : ''),
+        customerName: customerName || null,
+        items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty, note: i.note || null })),
+        total: total,
+        status: 'Por Aprobar', // Inicialmente por aprobar
+        origin: 'QR',
+        upsellSuggested: isAiUpsellLogger.suggested,
+        upsellAccepted: isAiUpsellLogger.accepted,
+        upsellTriggeredBy: isAiUpsellLogger.triggeredBy
+      };
+
+      // Enviar por WebSocket al backend en tiempo real
+      const success = sendWsEvent('CREATE_ORDER', orderData);
+      
+      if (success) {
+        // Limpiar carrito y estado local
+        cart = [];
+        localStorage.removeItem('zamoranos_cart');
+        isAiUpsellLogger = { suggested: null, accepted: false, triggeredBy: null };
+        updateCartUI();
+        closeOrderModal();
+        
+        // Mostrar pantalla de éxito
+        document.getElementById('success-modal').style.display = 'flex';
+        playNotificationSound('success');
+      } else {
+        alert('Error al conectar con la red del restaurante. Por favor intente de nuevo o llame al mesero.');
+      }
+    }
+
+    function closeSuccessModal() {
+      document.getElementById('success-modal').style.display = 'none';
+    }
+
+    // Habilitar filtrado de etiquetas rápidas al teclear (Sugerencia 3)
+    document.getElementById('client-note-input').addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase().split(',').pop().trim();
+      filterClientQuickTags(query);
+    });
+
+    function filterClientQuickTags(query) {
+      const tagsContainer = document.getElementById('client-note-quick-tags');
+      const buttons = tagsContainer.getElementsByClassName('modifier-btn');
+      for (let btn of buttons) {
+        const text = btn.textContent.toLowerCase();
+        if (text === '⚠️ alergia' || !query || text.includes(query)) {
+          btn.style.display = 'inline-block';
+        } else {
+          btn.style.display = 'none';
+        }
+      }
+    }
+  </script>
+</body>
+</html>
